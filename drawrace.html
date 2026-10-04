@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DrawRace 3D - Next-Gen Arcade Racing</title>
+    <title>DrawRace 3D - Ultimate Diorama Arcade</title>
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- Three.js r128 Local Engine -->
@@ -41,7 +41,7 @@
             transform: translateX(-50%);
             width: 92%;
             max-width: 840px;
-            background: rgba(12, 16, 26, 0.88);
+            background: rgba(12, 16, 26, 0.90);
             border: 1px solid rgba(0, 245, 212, 0.45);
             border-radius: 12px;
             padding: 10px 20px;
@@ -74,8 +74,96 @@
             color: #fee440;
             font-size: 24px;
         }
+        .hud-speed-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
         .hud-speed {
             color: #00f5d4;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+        .gear-badge {
+            background: #ff5252;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 900;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+        .rpm-bar-container {
+            width: 90px;
+            height: 5px;
+            background: #1e2433;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 3px;
+        }
+        #rpm-fill {
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, #00e676, #fee440, #ff1744);
+            border-radius: 3px;
+            transition: width 0.05s ease;
+        }
+
+        /* Live Race Leaderboard Widget (Top-Left) */
+        #leaderboard-box {
+            position: absolute;
+            top: 78px;
+            left: 14px;
+            background: rgba(12, 16, 26, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 8px 12px;
+            z-index: 50;
+            backdrop-filter: blur(8px);
+            font-size: 11px;
+            font-family: monospace, sans-serif;
+            min-width: 175px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        .lb-title {
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            color: #00f5d4;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+        }
+        .lb-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 2px 0;
+            color: #cbd5e1;
+        }
+        .lb-row.player {
+            color: #fee440;
+            font-weight: 900;
+            background: rgba(254, 228, 64, 0.12);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+        .lb-pos {
+            font-weight: 800;
+            width: 18px;
+        }
+        .lb-name {
+            flex-grow: 1;
+            margin-left: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90px;
+        }
+        .lb-gap {
+            font-size: 10px;
+            color: #94a3b8;
         }
 
         /* Turbo Gauge */
@@ -83,8 +171,8 @@
             position: absolute;
             bottom: 24px;
             left: 20px;
-            background: rgba(12, 16, 26, 0.88);
-            border: 1px solid rgba(255, 75, 43, 0.5);
+            background: rgba(12, 16, 26, 0.90);
+            border: 1px solid rgba(255, 75, 43, 0.6);
             border-radius: 10px;
             padding: 8px 14px;
             z-index: 50;
@@ -117,6 +205,22 @@
             transition: width 0.05s linear;
         }
 
+        /* Speed Vignette for Nitro */
+        #speed-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 120px rgba(0, 245, 212, 0);
+            transition: box-shadow 0.2s ease;
+            z-index: 40;
+        }
+        #speed-vignette.nitro-active {
+            box-shadow: inset 0 0 140px rgba(0, 245, 212, 0.45);
+        }
+
         /* Touch Controls for Mobile / Telegram */
         .touch-ui {
             position: absolute;
@@ -138,7 +242,7 @@
             width: 66px;
             height: 66px;
             border-radius: 50%;
-            background: rgba(18, 24, 38, 0.85);
+            background: rgba(18, 24, 38, 0.88);
             border: 2px solid rgba(0, 245, 212, 0.6);
             color: #fff;
             font-size: 15px;
@@ -155,11 +259,11 @@
             transform: scale(0.92);
         }
         .btn-turbo {
-            background: linear-gradient(135deg, rgba(255, 60, 0, 0.85), rgba(255, 140, 0, 0.85));
+            background: linear-gradient(135deg, rgba(255, 60, 0, 0.9), rgba(255, 140, 0, 0.9));
             border-color: #ff9100;
             font-size: 12px;
             border-radius: 16px;
-            box-shadow: 0 0 16px rgba(255, 80, 0, 0.5);
+            box-shadow: 0 0 16px rgba(255, 80, 0, 0.6);
         }
 
         /* Top Right Switcher */
@@ -172,7 +276,7 @@
             gap: 8px;
         }
         .nav-btn {
-            background: rgba(15, 20, 32, 0.85);
+            background: rgba(15, 20, 32, 0.88);
             border: 1px solid rgba(255, 255, 255, 0.3);
             color: #fff;
             padding: 7px 14px;
@@ -197,7 +301,7 @@
             right: 20px;
             width: 140px;
             height: 110px;
-            background: rgba(10, 14, 22, 0.85);
+            background: rgba(10, 14, 22, 0.90);
             border: 1.5px solid rgba(0, 245, 212, 0.5);
             border-radius: 10px;
             z-index: 50;
@@ -227,6 +331,9 @@
         </a>
     </div>
 
+    <!-- Nitro Speed Vignette -->
+    <div id="speed-vignette"></div>
+
     <!-- 3D Canvas -->
     <canvas id="webgl-canvas"></canvas>
 
@@ -244,9 +351,26 @@
             <span class="hud-label">TIEMPO</span>
             <span id="hud-time" class="hud-val">00:00.00</span>
         </div>
-        <div class="hud-col">
+        <div class="hud-speed-box">
             <span class="hud-label">VELOCIDAD</span>
-            <span id="hud-speed" class="hud-val hud-speed">0 KM/H</span>
+            <div class="hud-speed">
+                <span id="hud-speed" class="hud-val">0 KM/H</span>
+                <span id="hud-gear" class="gear-badge">1ª</span>
+            </div>
+            <div class="rpm-bar-container">
+                <div id="rpm-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Leaderboard Widget -->
+    <div id="leaderboard-box">
+        <div class="lb-title">
+            <span>🏁 CLASIFICACIÓN</span>
+            <span>V1</span>
+        </div>
+        <div id="lb-entries">
+            <!-- Dynamically populated by engine -->
         </div>
     </div>
 
@@ -280,7 +404,7 @@
         </div>
     </div>
 
-    <!-- Motor 3D DrawRace -->
-    <script src="drawrace_engine.js?v=2"></script>
+    <!-- Motor 3D DrawRace AAA -->
+    <script src="drawrace_engine.js?v=3"></script>
 </body>
 </html>
