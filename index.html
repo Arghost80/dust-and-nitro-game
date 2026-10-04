@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cyber Rally 2D - Neo Tokyo Grand Prix</title>
+    <title>Real GP Motorsport - Official GT3 Edition</title>
     <link rel="stylesheet" href="style.css">
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -17,11 +17,45 @@
             <span>🏎️ JUGAR MODO 3D (CYBER-APEX)</span>
             <span>▶</span>
         </a>
-        <a href="dustrac_classic.html" style="background:rgba(15, 23, 42, 0.9); color:#94a3b8; font-family:sans-serif; font-size:11px; font-weight:800; padding:8px 12px; border-radius:20px; text-decoration:none; display:flex; align-items:center; gap:4px; border:1px solid rgba(148, 163, 184, 0.4);">
-            <span>🏁 MODO RETRO 2005</span>
-        </a>
     </div>
     <div id="game-container"></div>
+
+    <!-- Telemetría Oficial de Retransmisión GT3 -->
+    <div id="gt-hud-bar">
+        <div class="gt-hud-col">
+            <span class="gt-hud-label">POS</span>
+            <div class="gt-hud-val gt-hud-pos"><span id="hud-pos">P1</span><span style="font-size:12px; color:#64748b;">/6</span></div>
+        </div>
+        <div class="gt-hud-col">
+            <span class="gt-hud-label">VUELTA</span>
+            <div class="gt-hud-val" id="hud-lap">1/3</div>
+        </div>
+        <div class="gt-hud-col">
+            <span class="gt-hud-label">TIEMPO VUELTA</span>
+            <div class="gt-hud-val" id="hud-time" style="color:#38bdf8;">00:00.0</div>
+        </div>
+        <div class="gt-hud-col" style="align-items:flex-end;">
+            <span class="gt-hud-label">TELEMETRÍA</span>
+            <div class="gt-hud-val gt-hud-speed">
+                <span id="hud-speed">0</span>
+                <span style="font-size:11px; color:#94a3b8;">KM/H</span>
+                <span class="gt-gear-badge" id="hud-gear">G1</span>
+            </div>
+            <div class="gt-rpm-bar-container"><div id="gt-rpm-fill"></div></div>
+        </div>
+    </div>
+
+    <!-- Tabla de Posiciones en Directo -->
+    <div id="gt-leaderboard">
+        <div class="lb-title">🏁 GP GRID CLASSIFICATION</div>
+        <div id="lb-entries"></div>
+    </div>
+
+    <!-- Advertencia de Fuera de Pista (Gravilla/Césped) -->
+    <div id="gt-offtrack">⚠️ FUERA DE PISTA (GRASS / GRAVEL)</div>
+
+    <!-- Minimapa Radar en tiempo real -->
+    <canvas id="gt-radar-canvas" width="140" height="90"></canvas>
 
     <!-- Controles táctiles pantalla para móviles en Telegram -->
     <div id="touch-controls" class="touch-controls">
@@ -35,7 +69,7 @@
         </div>
     </div>
 
-    <!-- Motor de Juego Cyber Rally 2D Hi-Res -->
-    <script src="cyber_race_2d.js?v=2"></script>
+    <!-- Motor de Juego Real GP GT3 Motorsport (Basado en la foto de referencia) -->
+    <script src="real_gt_race.js?v=2"></script>
 </body>
 </html>
