@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DrawRace 3D - Next-Gen Arcade Racing</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Three.js r128 Local Engine -->
+    <script src="assets/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0c1017;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            color: #ffffff;
+        }
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Top HUD Bar */
+        #hud-top {
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 92%;
+            max-width: 840px;
+            background: rgba(12, 16, 26, 0.88);
+            border: 1px solid rgba(0, 245, 212, 0.45);
+            border-radius: 12px;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            z-index: 50;
+        }
+        .hud-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .hud-label {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: #889bb5;
+            text-transform: uppercase;
+        }
+        .hud-val {
+            font-size: 20px;
+            font-weight: 900;
+            font-family: monospace, sans-serif;
+            color: #ffffff;
+        }
+        .hud-pos {
+            color: #fee440;
+            font-size: 24px;
+        }
+        .hud-speed {
+            color: #00f5d4;
+        }
+
+        /* Turbo Gauge */
+        #turbo-container {
+            position: absolute;
+            bottom: 24px;
+            left: 20px;
+            background: rgba(12, 16, 26, 0.88);
+            border: 1px solid rgba(255, 75, 43, 0.5);
+            border-radius: 10px;
+            padding: 8px 14px;
+            z-index: 50;
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 160px;
+        }
+        .turbo-title {
+            font-size: 10px;
+            font-weight: 900;
+            color: #ff5252;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .turbo-track {
+            width: 100%;
+            height: 10px;
+            background: #1e2433;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #turbo-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff7b00, #ff1744);
+            border-radius: 5px;
+            transition: width 0.05s linear;
+        }
+
+        /* Touch Controls for Mobile / Telegram */
+        .touch-ui {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: none;
+            z-index: 60;
+        }
+        .touch-group {
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+        }
+        .touch-btn {
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            background: rgba(18, 24, 38, 0.85);
+            border: 2px solid rgba(0, 245, 212, 0.6);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 900;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(6px);
+        }
+        .touch-btn:active {
+            background: rgba(0, 245, 212, 0.35);
+            transform: scale(0.92);
+        }
+        .btn-turbo {
+            background: linear-gradient(135deg, rgba(255, 60, 0, 0.85), rgba(255, 140, 0, 0.85));
+            border-color: #ff9100;
+            font-size: 12px;
+            border-radius: 16px;
+            box-shadow: 0 0 16px rgba(255, 80, 0, 0.5);
+        }
+
+        /* Top Right Switcher */
+        .top-nav {
+            position: fixed;
+            top: 14px;
+            right: 14px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+        }
+        .nav-btn {
+            background: rgba(15, 20, 32, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 7px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(6px);
+        }
+        .nav-btn:hover {
+            border-color: #00f5d4;
+            color: #00f5d4;
+        }
+
+        /* Mini-map */
+        #radar-canvas {
+            position: absolute;
+            bottom: 24px;
+            right: 20px;
+            width: 140px;
+            height: 110px;
+            background: rgba(10, 14, 22, 0.85);
+            border: 1.5px solid rgba(0, 245, 212, 0.5);
+            border-radius: 10px;
+            z-index: 50;
+            backdrop-filter: blur(6px);
+        }
+
+        /* Countdown Overlay */
+        #countdown-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: 900;
+            color: #fee440;
+            text-shadow: 0 0 30px rgba(254, 228, 64, 0.8), 0 4px 10px rgba(0, 0, 0, 0.8);
+            z-index: 80;
+            display: none;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="/" class="nav-btn">
+            <span>🏁 MODO 2D (DUSTRAC)</span>
+        </a>
+    </div>
+
+    <!-- 3D Canvas -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- HUD Top Bar -->
+    <div id="hud-top">
+        <div class="hud-col">
+            <span class="hud-label">POS</span>
+            <span id="hud-pos" class="hud-val hud-pos">1 / 6</span>
+        </div>
+        <div class="hud-col">
+            <span class="hud-label">LAP</span>
+            <span id="hud-lap" class="hud-val">1 / 3</span>
+        </div>
+        <div class="hud-col">
+            <span class="hud-label">TIEMPO</span>
+            <span id="hud-time" class="hud-val">00:00.00</span>
+        </div>
+        <div class="hud-col">
+            <span class="hud-label">VELOCIDAD</span>
+            <span id="hud-speed" class="hud-val hud-speed">0 KM/H</span>
+        </div>
+    </div>
+
+    <!-- Turbo Boost Gauge -->
+    <div id="turbo-container">
+        <div class="turbo-title">
+            <span>🚀 TURBO BOOST</span>
+            <span id="turbo-pct">100%</span>
+        </div>
+        <div class="turbo-track">
+            <div id="turbo-fill"></div>
+        </div>
+    </div>
+
+    <!-- Minimapa Radar -->
+    <canvas id="radar-canvas" width="140" height="110"></canvas>
+
+    <!-- Semáforo Countdown -->
+    <div id="countdown-overlay">3</div>
+
+    <!-- Touch Controls for Mobile -->
+    <div class="touch-ui">
+        <div class="touch-group">
+            <button id="btn-left" class="touch-btn">◀</button>
+            <button id="btn-right" class="touch-btn">▶</button>
+        </div>
+        <div class="touch-group">
+            <button id="btn-turbo" class="touch-btn btn-turbo">🚀 BOOST</button>
+            <button id="btn-gas" class="touch-btn" style="border-color:#00e676; background:rgba(0,180,60,0.35);">GAS</button>
+            <button id="btn-brake" class="touch-btn" style="border-color:#ff1744; background:rgba(200,20,40,0.35);">FRENO</button>
+        </div>
+    </div>
+
+    <!-- Motor 3D DrawRace -->
+    <script src="drawrace_engine.js?v=1"></script>
+</body>
+</html>
