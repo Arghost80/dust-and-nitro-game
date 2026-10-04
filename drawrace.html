@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DrawRace 3D - Ultimate Diorama Arcade</title>
+    <title>DrawRace 3D - Next-Gen Diorama Racer</title>
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- Three.js r128 Local Engine -->
@@ -288,6 +288,7 @@
             align-items: center;
             gap: 6px;
             backdrop-filter: blur(6px);
+            cursor: pointer;
         }
         .nav-btn:hover {
             border-color: #00f5d4;
@@ -326,6 +327,9 @@
 </head>
 <body>
     <div class="top-nav">
+        <button id="btn-cam-toggle" class="nav-btn">
+            <span>📷 CÁMARA: CHASE</span>
+        </button>
         <a href="/" class="nav-btn">
             <span>🏁 MODO 2D (DUSTRAC)</span>
         </a>
@@ -404,7 +408,7 @@
         </div>
     </div>
 
-    <!-- Motor 3D DrawRace AAA -->
-    <script src="drawrace_engine.js?v=3"></script>
+    <!-- Motor 3D DrawRace AAA V4 -->
+    <script src="drawrace_engine.js?v=4"></script>
 </body>
 </html>
