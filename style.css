@@ -101,3 +101,10 @@ body, html {
 .btn-green { background: rgba(0, 180, 50, 0.85); border-color: #00ff55; }
 .btn-yellow { background: rgba(220, 160, 0, 0.85); border-color: #ffcc00; }
 .btn-red { background: rgba(200, 30, 30, 0.85); border-color: #ff3333; }
+.btn-kers { 
+    background: linear-gradient(135deg, #00f5d4, #00b4d8); 
+    border-color: #00f5d4; 
+    color: #0a0e17 !important; 
+    font-weight: 900;
+    box-shadow: 0 0 12px rgba(0, 245, 212, 0.5);
+}
