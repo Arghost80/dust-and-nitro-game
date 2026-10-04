@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dust Racing 2D - Modo Retro 2005</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Phaser 3.60 Canvas Game Engine -->
+    <script src="assets/phaser.min.js"></script>
+</head>
+<body>
+    <div style="position:fixed; top:12px; right:12px; z-index:999; display:flex; gap:8px;">
+        <a href="/" style="background:linear-gradient(135deg, #00f5d4, #ff007f); color:#020617; font-family:sans-serif; font-size:12px; font-weight:900; padding:8px 16px; border-radius:20px; text-decoration:none; box-shadow:0 0 16px rgba(0,245,212,0.8); display:flex; align-items:center; gap:6px;">
+            <span>🏁 VOLVER A MODO HI-RES 2D</span>
+        </a>
+    </div>
+    <div id="game-container"></div>
+    <div id="touch-controls" class="touch-controls">
+        <div class="control-group left-group">
+            <button id="btn-left" class="btn-touch">◀ A</button>
+            <button id="btn-right" class="btn-touch">▶ D</button>
+        </div>
+        <div class="control-group right-group">
+            <button id="btn-accel" class="btn-touch btn-action btn-green">GAS (W / ↑)</button>
+            <button id="btn-brake" class="btn-touch btn-action btn-yellow">FRENO (S / ↓)</button>
+        </div>
+    </div>
+    <script src="tracks_data.js?v=12"></script>
+    <script src="dustrac_game.js?v=12"></script>
+</body>
+</html>
