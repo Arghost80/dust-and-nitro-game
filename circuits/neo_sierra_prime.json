@@ -1,0 +1,31 @@
+﻿{
+  "project": "Dust & Nitro Racing",
+  "engine_compatibility": ["GDevelop 5", "Phaser 3", "microStudio", "Godot 2D"],
+  "circuit": {
+    "id": "neo_sierra_prime_4lanes",
+    "name": "Neo-Sierra Prime (Gran Autopista 4 Carriles)",
+    "road_width_px": 140,
+    "lanes": 4,
+    "car_sprite_resolution": "48x48",
+    "collision_system": {
+      "type": "exact_road_boundary_clamping",
+      "guardrail_restitution": 0.82,
+      "wall_sparks": true,
+      "offroad_escape_prevention": true
+    },
+    "waypoints": [
+      { "id": "p00", "x": 300, "y": 150, "name": "Prime Gate 4-Carriles (Meta)" },
+      { "id": "p01", "x": 550, "y": 150, "name": "Solar Strip (Recta de aceleración)" },
+      { "id": "p02", "x": 740, "y": 180, "name": "Entrada Curva Omega Amplia" },
+      { "id": "p03", "x": 840, "y": 270, "name": "Ápex Curva Omega (4 Carriles peraltados)" },
+      { "id": "p04", "x": 780, "y": 390, "name": "Salida hacia Skyline Arc" },
+      { "id": "p05", "x": 600, "y": 410, "name": "Túnel Photon Drive" },
+      { "id": "p06", "x": 450, "y": 370, "name": "Sierra S-Turns 1" },
+      { "id": "p07", "x": 330, "y": 330, "name": "Sierra S-Turns 2" },
+      { "id": "p08", "x": 220, "y": 380, "name": "Sierra S-Turns 3" },
+      { "id": "p09", "x": 130, "y": 350, "name": "Entrada Nebula Loop" },
+      { "id": "p10", "x": 110, "y": 250, "name": "Ápex Nebula Loop" },
+      { "id": "p11", "x": 180, "y": 160, "name": "Conexión a Recta Principal" }
+    ]
+  }
+}

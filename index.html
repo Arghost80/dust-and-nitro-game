@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dust Racing 2D - Telegram Mini App Edition</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Phaser 3.60 Canvas Game Engine -->
+    <script src="assets/phaser.min.js"></script>
+</head>
+<body>
+    <div style="position:fixed; top:12px; right:12px; z-index:999;">
+        <a href="battle_derby.html" style="background:linear-gradient(135deg, #e53935, #ff1744); color:white; font-family:sans-serif; font-size:12px; font-weight:800; padding:8px 16px; border-radius:20px; text-decoration:none; box-shadow:0 4px 15px rgba(229,57,53,0.7); display:flex; align-items:center; gap:6px; border:1px solid #ffffff;">
+            <span>💥 JUGAR BATTLE DERBY 3D</span>
+            <span>▶</span>
+        </a>
+    </div>
+    <div id="game-container"></div>
+
+    <!-- Controles táctiles pantalla para móviles en Telegram -->
+    <div id="touch-controls" class="touch-controls">
+        <div class="control-group left-group">
+            <button id="btn-left" class="btn-touch">◀ A</button>
+            <button id="btn-right" class="btn-touch">▶ D</button>
+        </div>
+        <div class="control-group right-group">
+            <button id="btn-accel" class="btn-touch btn-action btn-green">GAS (W / ESPACIO)</button>
+            <button id="btn-brake" class="btn-touch btn-action btn-yellow">FRENO (S)</button>
+        </div>
+    </div>
+
+    <!-- Cargar Circuitos Oficiales (.trk) y Motor de Juego Dust Racing 2D -->
+    <script src="tracks_data.js?v=8"></script>
+    <script src="dustrac_game.js?v=8"></script>
+</body>
+</html>

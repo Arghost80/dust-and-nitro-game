@@ -1,0 +1,59 @@
+﻿// ========================================================
+// CIRCUITO NEO-SIERRA PRIME PARA MICROSTUDIO (MICROSCRIPT)
+// Arcade Retro-Moderno Top-Down (OutRun / Horizon Chase)
+// ========================================================
+
+init = function()
+  this.circuit_name = "Neo-Sierra Prime"
+  this.track_theme = "OutRun Synthwave"
+  this.laps = 3
+  this.current_lap = 1
+  this.drift_factor = 0.88
+  this.nitro_boost = 1.45
+
+  // Puntos clave del trazado orgánico en microStudio
+  this.points = [
+    [ -80,   75 ], // Meta Prime Gate
+    [  35,   77 ], // Recta Solar Strip
+    [ 120,   72 ], // Entrada Omega
+    [ 165,   35 ], // Ápex Omega (120°)
+    [ 135,  -10 ], // Puente Skyline Arc
+    [  70,  -18 ], // Túnel Photon Drive
+    [   0,   -2 ], // Sierra S-Turns 1
+    [ -50,   18 ], // Sierra S-Turns 2
+    [-100,   -3 ], // Sierra S-Turns 3
+    [-145,  -15 ], // Aproximación Nebula
+    [-180,   32 ], // Curva Nebula Loop (160°)
+    [-160,   72 ]  // Retorno a Recta de Meta
+  ]
+
+  this.neon_blink = 0
+end
+
+update = function()
+  this.neon_blink += 0.05
+end
+
+draw = function()
+  // 1. Cielo Atardecer y Montañas Retro
+  screen.fillRect(0, 0, screen.width, screen.height, "#140c24")
+  screen.drawText("NEO-SIERRA PRIME // OUTRUN SYNTHWAVE", 0, 115, 12, "#ff007f")
+
+  // 2. Renderizado de la Carretera
+  for i=0 to this.points.length-1
+    local p1 = this.points[i]
+    local p2 = this.points[(i+1) % this.points.length]
+    // Arcén exterior reflectante
+    screen.drawLine(p1[0], p1[1], p2[0], p2[1], "#ff0055", 38)
+    // Asfalto principal
+    screen.drawLine(p1[0], p1[1], p2[0], p2[1], "#1c1a29", 32)
+    // Línea central de neón animada
+    local neonColor = if Math.sin(this.neon_blink + i) > 0 then "#00f5d4" else "#fee440"
+    screen.drawLine(p1[0], p1[1], p2[0], p2[1], neonColor, 2)
+  end
+
+  // 3. Arco de Meta Prime Gate
+  local gate = this.points[0]
+  screen.fillRect(gate[0], gate[1], 8, 42, "#ff007f")
+  screen.drawText("PRIME GATE", gate[0], gate[1] + 25, 8, "#ffffff")
+end

@@ -1,0 +1,40 @@
+﻿========================================================================================
+🏁 CIRCUITO "NEO-SIERRA PRIME" // MAPA ASCII TOP-DOWN ARCADE
+========================================================================================
+                          /\_/\_/\    [SOL DE ATARDECER]    _/\_/\_
+                         /  RETRO \        (   O   )       / MONTAÑAS\
++-----------------------+----------+----------------------+-----------+----------------+
+|                       |                                 |                            |
+|       [RACE]          |     >>> SOLAR STRIP >>>         |   [OUTRUN]      [DRIVE]    |
+|   =======================================================================            |
+|  ||                   |                                 |               \\           |
+|  ||  [PRIME GATE]     |                                 |                \\  CURVA   |
+|  ||  🏁🏁 META 🏁🏁   |                                 |                 || OMEGA   |
+|  ||  =============    |                                 |                 || (120°)  |
+|  ||                   |                                 |                //          |
+|  ||                   +---------------------------------+               //           |
+|  ||                                                            ========              |
+|  ||                                                           // PUENTE              |
+|  ||                                                          // SKYLINE ARC          |
+|  ||                                         =================                        |
+|  ||                                        //  TÚNEL PHOTON DRIVE                    |
+|  ||                  SIERRA S-TURNS       //   (Luces LED Cyan/Rosa)                 |
+|  ||                 /\      /\           //                                          |
+|  ||                /  \    /  \=========                                             |
+|  ||   CURVA       /    \  /                                                          |
+|  ||   NEBULA     /      \/                                                           |
+|  ||   LOOP (160°/                                                                    |
+|  ||  ==========/                                                                     |
+|  \\ //                                                                               |
+|   ===                                                                                |
+|                                                                                      |
++--------------------------------------------------------------------------------------+
+  Leyenda:
+  [PRIME GATE] : Arco de meta con luces LED y damero luminoso
+  SOLAR STRIP  : Recta a 280 km/h con graderíos de público y neón amarillo
+  CURVA OMEGA  : Giro amplio peraltado con señales fluorescentes reflectantes
+  SKYLINE ARC  : Puente aéreo con vistas panorámicas al valle synthwave
+  PHOTON DRIVE : Túnel cerrado con iluminación rítmica ultravioleta
+  SIERRA S     : Zona técnica de 3 chicanes enlazadas para derrapes encadenados
+  NEBULA LOOP  : Horquilla cerrada hacia la recta de meta
+========================================================================================

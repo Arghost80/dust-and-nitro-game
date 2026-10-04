@@ -1,0 +1,95 @@
+{
+  "users": {},
+  "leaderboard": [
+    {
+      "username": "Piloto Retro",
+      "track": "Neo-Sierra Prime (Gran Autopista 4 Carriles)",
+      "time": 12.43,
+      "car": "v8_interceptor"
+    },
+    {
+      "username": "Piloto Retro",
+      "track": "🌀 Hyper-Loop Vertex (Trackmania & Hot Wheels)",
+      "time": 36.18,
+      "car": "v8_interceptor"
+    },
+    {
+      "username": "AlexPro_89",
+      "track": "Apex Valley",
+      "time": 42.15,
+      "car": "Interceptor V8"
+    },
+    {
+      "username": "Piloto Retro",
+      "track": "✨ Apex Valley PBR (Iluminación & Parallax Real)",
+      "time": 42.63,
+      "car": "v8_interceptor"
+    },
+    {
+      "username": "DriftQueen",
+      "track": "Apex Valley",
+      "time": 43.4,
+      "car": "Cyan Phantom"
+    },
+    {
+      "username": "Piloto Retro",
+      "track": "🌲 Alpine Ridge Rally (Cámara Dinámica L.T.E.)",
+      "time": 43.55,
+      "car": "v8_interceptor"
+    },
+    {
+      "username": "Badlander",
+      "track": "Apex Valley",
+      "time": 45.1,
+      "car": "Road Monster"
+    },
+    {
+      "username": "Piloto Retro",
+      "track": "🌀 Hyper-Loop Vertex (Trackmania & Hot Wheels)",
+      "time": 48.04,
+      "car": "v8_interceptor"
+    }
+  ],
+  "carsCatalog": [
+    {
+      "id": "v8_interceptor",
+      "name": "INTERCEPTOR V8",
+      "price": 0,
+      "speed": 380,
+      "handling": 4.8,
+      "accel": 320,
+      "color": "#e63946",
+      "unlocked": true
+    },
+    {
+      "id": "cyan_phantom",
+      "name": "CYAN PHANTOM",
+      "price": 500,
+      "speed": 410,
+      "handling": 4.5,
+      "accel": 350,
+      "color": "#00f5d4",
+      "unlocked": false
+    },
+    {
+      "id": "neon_viper",
+      "name": "NEON VIPER",
+      "price": 1200,
+      "speed": 430,
+      "handling": 5.2,
+      "accel": 380,
+      "color": "#fee440",
+      "unlocked": false
+    },
+    {
+      "id": "shadow_titan",
+      "name": "SHADOW TITAN",
+      "price": 2500,
+      "speed": 450,
+      "handling": 4.2,
+      "accel": 420,
+      "color": "#7209b7",
+      "unlocked": false
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+﻿[
+  {
+    "id": "neo_sierra_prime",
+    "name": "Neo-Sierra Prime",
+    "theme": "OutRun Synthwave Sunset",
+    "difficulty": "Media",
+    "length": "2.8 km",
+    "features": ["Prime Gate", "Túnel Photon Drive", "Sierra S-Turns", "Curva Omega"]
+  },
+  {
+    "id": "cyber_tokyo",
+    "name": "Cyber Tokyo Underground",
+    "theme": "Lluvia Nocturna & Neones",
+    "difficulty": "Difícil",
+    "length": "3.1 km",
+    "features": ["Autopistas Shuto", "Reflejos de lluvia", "Túneles de metro", "Chicanes estrechas"]
+  },
+  {
+    "id": "red_rock_badlands",
+    "name": "Red Rock Badlands",
+    "theme": "Cañón Desértico Clásico 89",
+    "difficulty": "Media",
+    "length": "2.4 km",
+    "features": ["Baches de tierra", "Curvas peraltadas", "Polvo rojo intenso", "Puentes de roca"]
+  },
+  {
+    "id": "frozen_valkyrie",
+    "name": "Frozen Valkyrie Ridge",
+    "theme": "Nieve & Hielo Ártico",
+    "difficulty": "Muy Difícil",
+    "length": "3.4 km",
+    "features": ["Aurora boreal", "Zonas de hielo resbaladizo", "Curvas en horquilla", "Quitamiedos congelados"]
+  },
+  {
+    "id": "monte_carlo_marina",
+    "name": "Monte Carlo Marina",
+    "theme": "Paseo Marítimo & Yates",
+    "difficulty": "Fácil-Media",
+    "length": "2.6 km",
+    "features": ["Bordillos de Gran Premio", "Paseo de palmeras", "Túnel marítimo", "Público VIP"]
+  },
+  {
+    "id": "magma_caldera",
+    "name": "Magma Caldera GP",
+    "theme": "Volcán & Asfalto Negro",
+    "difficulty": "Experto",
+    "length": "3.0 km",
+    "features": ["Ríos de lava viva", "Chispas y humo volcánico", "Bordes ardientes", "Puente colgante"]
+  },
+  {
+    "id": "neo_sahara",
+    "name": "Neo Sahara Oasis",
+    "theme": "Dunas Doradas & Ciber-Oasis",
+    "difficulty": "Media",
+    "length": "2.9 km",
+    "features": ["Arena fina derrapante", "Palmerales iluminados", "Ruinas tecnológicas", "Salto de duna"]
+  },
+  {
+    "id": "emerald_forest",
+    "name": "Emerald Forest Rally",
+    "theme": "Bosque Lluvioso & Barro",
+    "difficulty": "Media",
+    "length": "2.7 km",
+    "features": ["Charcos de barro denso", "Árboles centenarios", "Puente de tablones", "Niebla ambiental"]
+  },
+  {
+    "id": "sector7_orbital",
+    "name": "Sector 7 Orbital Speedway",
+    "theme": "Estación Espacial & Cero G",
+    "difficulty": "Difícil",
+    "length": "3.6 km",
+    "features": ["Cúpula de estrellas", "Bandas de aceleración magnética", "Tubo transparente", "Gravedad alterada"]
+  },
+  {
+    "id": "industrial_steel",
+    "name": "Industrial Steelworks",
+    "theme": "Fábrica Siderúrgica & Óxido",
+    "difficulty": "Media",
+    "length": "2.5 km",
+    "features": ["Hornos al rojo vivo", "Chispas de soldadura", "Suelos de chapa metálica", "Grúas gigantes"]
+  },
+  {
+    "id": "miami_vice_blvd",
+    "name": "Miami Vice 86 Boulevard",
+    "theme": "Art-Déco Rosa & Palmeras Neón",
+    "difficulty": "Fácil",
+    "length": "2.2 km",
+    "features": ["Avenida de 4 carriles", "Hoteles con neones pastel", "Paseo de la playa", "Música synthwave"]
+  },
+  {
+    "id": "thunderbolt_base",
+    "name": "Thunderbolt Airbase",
+    "theme": "Pistas de Cazas Militares",
+    "difficulty": "Media",
+    "length": "3.2 km",
+    "features": ["Hangares gigantes", "Luces de balizamiento de pista", "Rectas supersónicas", "Zonas de radar"]
+  }
+]

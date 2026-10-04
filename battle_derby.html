@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Battle Derby 3D - Telegram Mini App Edition</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Three.js 3D WebGL Engine (Local garantizado) -->
+    <script src="assets/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0c0e14;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #webgl-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        /* HUD 3D Glassmorphism */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .hud-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: linear-gradient(180deg, rgba(10, 12, 18, 0.85) 0%, rgba(10, 12, 18, 0) 100%);
+        }
+        .hud-badge {
+            background: rgba(18, 22, 34, 0.85);
+            border: 1px solid rgba(0, 245, 212, 0.5);
+            border-radius: 8px;
+            padding: 6px 14px;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .health-bar-container {
+            width: 160px;
+            height: 14px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid #ffffff;
+            border-radius: 7px;
+            overflow: hidden;
+        }
+        .health-bar-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff1744, #00e676);
+            transition: width 0.15s ease;
+        }
+        /* Controles móviles táctiles */
+        .touch-ui {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 20;
+        }
+        .touch-group {
+            display: flex;
+            gap: 12px;
+            pointer-events: auto;
+        }
+        .btn-derby {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: rgba(20, 25, 38, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            cursor: pointer;
+            outline: none;
+            touch-action: manipulation;
+        }
+        .btn-derby:active {
+            transform: scale(0.92);
+            background: rgba(0, 245, 212, 0.4);
+            border-color: #00f5d4;
+        }
+        .btn-gas { background: rgba(0, 200, 83, 0.85); border-color: #00e676; }
+        .btn-fire { background: rgba(213, 0, 0, 0.85); border-color: #ff1744; font-size: 18px; }
+        .btn-nitro { background: rgba(255, 145, 0, 0.85); border-color: #ffea00; }
+        
+        /* Menú de selección 3D */
+        #derby-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 12, 18, 0.92);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .menu-title {
+            font-size: 38px;
+            font-weight: 900;
+            color: #ffffff;
+            text-shadow: 0 0 20px #ff1744, 0 0 40px #ff9100;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .menu-subtitle {
+            font-size: 13px;
+            font-weight: 700;
+            color: #00f5d4;
+            letter-spacing: 3px;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+        }
+        .cars-carousel {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        .car-card {
+            background: rgba(25, 30, 45, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            width: 130px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .car-card.selected {
+            border-color: #ffea00;
+            background: rgba(40, 50, 75, 0.95);
+            transform: scale(1.08);
+            box-shadow: 0 0 25px rgba(255, 234, 0, 0.4);
+        }
+        .car-card-name {
+            font-size: 13px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-top: 8px;
+        }
+        .car-card-stat {
+            font-size: 11px;
+            color: #90a4ae;
+            margin-top: 4px;
+        }
+        .btn-play-game {
+            background: linear-gradient(135deg, #00c853 0%, #00e676 100%);
+            border: 2px solid #ffffff;
+            border-radius: 30px;
+            padding: 14px 44px;
+            font-size: 18px;
+            font-weight: 900;
+            color: #ffffff;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(0, 230, 118, 0.5);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn-play-game:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 40px rgba(0, 230, 118, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <div id="webgl-container"></div>
+
+    <!-- HUD del Combate -->
+    <div class="hud-overlay" id="hud-overlay" style="display: none;">
+        <div class="hud-topbar">
+            <div class="hud-badge">
+                <span>❤️ SALUD:</span>
+                <div class="health-bar-container">
+                    <div class="health-bar-fill" id="player-hp-bar"></div>
+                </div>
+                <span id="player-hp-text">100 HP</span>
+            </div>
+            <div class="hud-badge" style="border-color: #fee440;">
+                <span>⚡ NITRO:</span>
+                <span id="nitro-text" style="color: #fee440;">100%</span>
+            </div>
+            <div class="hud-badge" style="border-color: #ff1744;">
+                <span>💀 KILLS:</span>
+                <span id="kills-text" style="color: #ff1744;">0</span>
+            </div>
+            <div class="hud-badge">
+                <span>🏆 VIVOS:</span>
+                <span id="alive-text" style="color: #00f5d4;">6 / 6</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controles táctiles móviles -->
+    <div class="touch-ui" id="touch-ui" style="display: none;">
+        <div class="touch-group">
+            <button class="btn-derby" id="b-left">◀</button>
+            <button class="btn-derby" id="b-right">▶</button>
+        </div>
+        <div class="touch-group">
+            <button class="btn-derby btn-nitro" id="b-nitro">⚡</button>
+            <button class="btn-derby btn-fire" id="b-fire">🔥</button>
+            <button class="btn-derby btn-gas" id="b-gas">GAS</button>
+            <button class="btn-derby" id="b-brake">FRENO</button>
+        </div>
+    </div>
+
+    <!-- Menú de Selección 3D de Battle Derby -->
+    <div id="derby-menu">
+        <div class="menu-title">💥 BATTLE DERBY 3D 💥</div>
+        <div class="menu-subtitle">COMBATE DE DEMOLICIÓN & CARRERAS • ESTILO BRAWL STARS / MOBILE 3D</div>
+
+        <div class="cars-carousel">
+            <div class="car-card selected" onclick="selectDerbyCar(0)">
+                <div style="font-size: 32px;">🏎️</div>
+                <div class="car-card-name">INTERCEPTOR</div>
+                <div class="car-card-stat">Velocidad: 95</div>
+                <div class="car-card-stat">Blindaje: 80</div>
+            </div>
+            <div class="car-card" onclick="selectDerbyCar(1)">
+                <div style="font-size: 32px;">🚙</div>
+                <div class="car-card-name">BULLDOZER V8</div>
+                <div class="car-card-stat">Velocidad: 82</div>
+                <div class="car-card-stat">Blindaje: 120</div>
+            </div>
+            <div class="car-card" onclick="selectDerbyCar(2)">
+                <div style="font-size: 32px;">🛻</div>
+                <div class="car-card-name">CYBER TRUCK</div>
+                <div class="car-card-stat">Velocidad: 88</div>
+                <div class="car-card-stat">Blindaje: 110</div>
+            </div>
+            <div class="car-card" onclick="selectDerbyCar(3)">
+                <div style="font-size: 32px;">🏎️</div>
+                <div class="car-card-name">DESERT BUGGY</div>
+                <div class="car-card-stat">Velocidad: 98</div>
+                <div class="car-card-stat">Blindaje: 70</div>
+            </div>
+        </div>
+
+        <button class="btn-play-game" onclick="startBattleDerby()">¡ENTRAR AL COMBATE 3D! ▶</button>
+    </div>
+
+    <script src="battle_derby.js?v=1"></script>
+</body>
+</html>
