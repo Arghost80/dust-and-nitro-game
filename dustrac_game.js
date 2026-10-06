@@ -621,11 +621,136 @@ function buildHDRoadTextures(scene) {
     });
 }
 
+// Generar textura procedural fotorrealista para el tablero del puente elevado
+function buildHDBridgeTextures(scene) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    // Limpiar canvas para que las zonas fuera del tablero del puente sean 100% transparentes
+    ctx.clearRect(0, 0, 256, 256);
+
+    // 1. Asfalto de la calzada superior del puente (y: 44 a 212)
+    ctx.fillStyle = '#1c2128';
+    ctx.fillRect(0, 44, 256, 168);
+
+    // Grano de asfalto fino y árido denso
+    const imgData = ctx.getImageData(0, 44, 256, 168);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+        const noise = ((Math.random() - 0.5) * 14) | 0;
+        d[i] = Math.max(12, Math.min(60, d[i] + noise));
+        d[i+1] = Math.max(14, Math.min(65, d[i+1] + noise));
+        d[i+2] = Math.max(18, Math.min(75, d[i+2] + noise));
+    }
+    ctx.putImageData(imgData, 0, 44);
+
+    // 2. Líneas de goma y trazada central engomada
+    const grad = ctx.createLinearGradient(0, 60, 0, 196);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.25, 'rgba(10,12,18,0.45)');
+    grad.addColorStop(0.5, 'rgba(5,7,12,0.65)');
+    grad.addColorStop(0.75, 'rgba(10,12,18,0.45)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 60, 256, 136);
+
+    // 3. Pintura vial: Líneas de borde continuo amarillas y línea discontinua central
+    ctx.fillStyle = '#f59e0b'; // Amarillo FIA
+    ctx.fillRect(0, 48, 256, 3);
+    ctx.fillRect(0, 205, 256, 3);
+
+    // Línea discontinua blanca central
+    ctx.fillStyle = '#f8fafc';
+    for (let x = 8; x < 256; x += 32) {
+        ctx.fillRect(x, 126, 18, 4);
+    }
+
+    // 4. Pianos / Rumble Strips FIA en los bordes de la calzada (rojo y blanco con relieve)
+    for (let x = 0; x < 256; x += 16) {
+        const isRed = (x / 16) % 2 === 0;
+        // Piano superior
+        ctx.fillStyle = isRed ? '#dc2626' : '#ffffff';
+        ctx.fillRect(x, 38, 16, 8);
+        ctx.fillStyle = isRed ? '#991b1b' : '#cbd5e1'; // Relieve inferior del piano
+        ctx.fillRect(x, 44, 16, 2);
+
+        // Piano inferior
+        ctx.fillStyle = isRed ? '#dc2626' : '#ffffff';
+        ctx.fillRect(x, 210, 16, 8);
+        ctx.fillStyle = isRed ? '#991b1b' : '#cbd5e1';
+        ctx.fillRect(x, 210, 16, 2);
+    }
+
+    // 5. Juntas de dilatación metálicas dentadas (Finger expansion joints) en los estribos
+    // Extremo izquierdo y derecho del puente
+    [0, 246].forEach(jx => {
+        ctx.fillStyle = '#0f172a'; // Hueco profundo de separación
+        ctx.fillRect(jx, 36, 10, 184);
+
+        ctx.fillStyle = '#475569'; // Peine de acero
+        ctx.fillRect(jx + 1, 38, 8, 180);
+
+        ctx.fillStyle = '#94a3b8'; // Dientes metálicos entrelazados
+        for (let y = 40; y < 216; y += 10) {
+            ctx.fillRect(jx + 2, y, 6, 5);
+        }
+    });
+
+    // 6. Vigas maestras de acero de soporte lateral (Vigas I de perfil arquitectónico)
+    // Viga Superior
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 28, 256, 10);
+    ctx.fillStyle = '#64748b'; // Bisel metálico superior con reflejo
+    ctx.fillRect(0, 28, 256, 2);
+    ctx.fillStyle = '#090d16'; // Sombra inferior de la viga
+    ctx.fillRect(0, 36, 256, 2);
+
+    // Viga Inferior
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 218, 256, 10);
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(0, 218, 256, 2);
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(0, 226, 256, 2);
+
+    // Remaches de acero estructurales en las vigas
+    ctx.fillStyle = '#cbd5e1';
+    for (let x = 12; x < 252; x += 16) {
+        ctx.beginPath(); ctx.arc(x, 33, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x, 223, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 7. Quitamiendos y Barandilla FIA con franjas de advertencia amarillo/negro
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(0, 22, 256, 6);
+    ctx.fillRect(0, 228, 256, 6);
+
+    for (let x = 0; x < 256; x += 24) {
+        ctx.fillStyle = '#eab308'; // Amarillo chevron
+        ctx.fillRect(x, 22, 12, 6);
+        ctx.fillRect(x, 228, 12, 6);
+        ctx.fillStyle = '#18181b'; // Negro
+        ctx.fillRect(x + 12, 22, 12, 6);
+        ctx.fillRect(x + 12, 228, 12, 6);
+    }
+
+    // Pasamanos superior cromado
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 21, 256, 1.5);
+    ctx.fillRect(0, 233.5, 256, 1.5);
+
+    if (scene.textures.exists('dt_bridge_deck')) scene.textures.remove('dt_bridge_deck');
+    scene.textures.addCanvas('dt_bridge_deck', canvas);
+}
+
 function dustCreate() {
     raceScene = this;
     buildGT3CarTextures(this);
     buildHDEnvironmentTextures(this);
     buildHDRoadTextures(this);
+    buildHDBridgeTextures(this);
 
     // Configuración de Teclado
     keys = this.input.keyboard.addKeys({
@@ -881,39 +1006,55 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day') {
             scene.add.sprite(tx, ty, 'dt_straight45Female').setDisplaySize(256, 256).setAngle(tile.o).setDepth(2);
         } else if (tile.t === 'bridge') {
             // El puente elevado cruza a desnivel sobre la pista:
-            // 1. Asfalto inferior por el que cruzan los coches por debajo (orientación perpendicular o recta)
-            const underAngle = (tile.o + 90) % 360;
+            // En Suzuka y Crossroads el tablero elevado transcurre de Norte a Sur (90 deg),
+            // y la calzada inferior del túnel transcurre de Este a Oeste (0 deg).
+            const deckAngle = 90;
+            const underAngle = 0;
+
+            // 1. Asfalto inferior por el que cruzan los coches por el túnel
             scene.add.sprite(tx, ty, 'dt_straight').setDisplaySize(256, 256).setAngle(underAngle).setDepth(2);
 
-            // 2. Sombra estructural que proyecta la plataforma del puente sobre la pista inferior
-            const shadowRad = Phaser.Math.DegToRad(tile.o);
-            const perpShadowX = -Math.sin(shadowRad) * 16;
-            const perpShadowY = Math.cos(shadowRad) * 16;
-            scene.add.rectangle(tx + perpShadowX, ty + perpShadowY, 256, 170, 0x000000, 0.45)
-                .setAngle(tile.o)
-                .setDepth(14);
+            // 2. Sombra de oclusión ambiental profunda en el paso inferior del túnel
+            scene.add.rectangle(tx, ty, 208, 256, 0x000000, 0.45).setDepth(3);
 
-            // 3. Tablero del puente elevado (donde cruzan los coches por arriba)
-            const bridgeDeck = scene.add.sprite(tx, ty, 'dt_straight')
-                .setDisplaySize(256, 256)
-                .setAngle(tile.o)
-                .setDepth(15);
-            bridgeDeck.setTint(0xe2e8f0);
+            // 3. Sombra arquitectónica proyectada por la altura del puente sobre el suelo
+            scene.add.rectangle(tx + 14, ty + 12, 192, 256, 0x000000, 0.42).setDepth(14);
 
-            // 4. Barandillas y quitamiedos metálicos laterales del puente
-            const bWidth = 256;
-            const bHalfSpan = 80;
-            const bWallLeft = scene.add.rectangle(
-                tx - Math.sin(shadowRad) * bHalfSpan,
-                ty + Math.cos(shadowRad) * bHalfSpan,
-                bWidth, 8, 0x90a4ae, 1
-            ).setAngle(tile.o).setDepth(17);
+            // 4. Tablero del puente elevado con textura fotorrealista HD
+            scene.add.sprite(tx, ty, 'dt_bridge_deck').setDisplaySize(256, 256).setAngle(deckAngle).setDepth(15);
 
-            const bWallRight = scene.add.rectangle(
-                tx + Math.sin(shadowRad) * bHalfSpan,
-                ty - Math.cos(shadowRad) * bHalfSpan,
-                bWidth, 8, 0x90a4ae, 1
-            ).setAngle(tile.o).setDepth(17);
+            // 5. Pilares y estribos de hormigón reforzado (Concrete Abutments) en los 4 extremos del túnel
+            const pillarW = 28;
+            const pillarH = 34;
+            const pillars = [
+                { x: tx - 104, y: ty - 88 },
+                { x: tx + 104, y: ty - 88 },
+                { x: tx - 104, y: ty + 88 },
+                { x: tx + 104, y: ty + 88 }
+            ];
+
+            pillars.forEach(p => {
+                // Sombra del pilar
+                scene.add.rectangle(p.x + 4, p.y + 4, pillarW, pillarH, 0x000000, 0.45).setDepth(15);
+                // Bloque de hormigón con relieve y franja de seguridad FIA
+                const col = scene.add.graphics().setDepth(16);
+                col.fillStyle(0x64748b, 1);
+                col.fillRoundedRect(p.x - pillarW/2, p.y - pillarH/2, pillarW, pillarH, 4);
+                col.fillStyle(0x94a3b8, 1);
+                col.fillRect(p.x - pillarW/2 + 2, p.y - pillarH/2 + 2, pillarW - 4, 6);
+                col.fillStyle(0xfacc15, 1);
+                col.fillRect(p.x - pillarW/2 + 2, p.y + pillarH/2 - 8, pillarW - 4, 6);
+                col.fillStyle(0x0f172a, 1);
+                col.fillRect(p.x - pillarW/2 + 6, p.y + pillarH/2 - 8, 4, 6);
+                col.fillRect(p.x - pillarW/2 + 16, p.y + pillarH/2 - 8, 4, 6);
+            });
+
+            // 6. Pórtico de señalización FIA / Gran Premio sobre la barandilla del puente
+            const gantry = scene.add.graphics().setDepth(17);
+            gantry.fillStyle(0x0f172a, 0.95);
+            gantry.fillRoundedRect(tx - 70, ty - 6, 140, 12, 3);
+            gantry.lineStyle(1.5, 0x00f5d4, 1);
+            gantry.strokeRoundedRect(tx - 70, ty - 6, 140, 12, 3);
         }
     });
 
@@ -966,33 +1107,67 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day') {
         }
     });
 
-    // 5. PARRILLA DE SALIDA Y SPAWN DE COCHES
-    const n0 = track.nodes[0] || { x: 500, y: 500 };
-    const n1 = track.nodes[1] || { x: n0.x, y: n0.y - 100 };
-    const startAngleRad = Math.atan2(n1.y - n0.y, n1.x - n0.x);
+    // 5. PARRILLA DE SALIDA Y SPAWN DE COCHES OFICIAL
+    // Ubicación oficial de meta: todos los coches salen DETRÁS de la línea de meta mirando hacia adelante
+    const finishTile = track.tiles.find(t => t.t === 'finish');
+    const fx = finishTile ? finishTile.i * 256 + 128 : (track.nodes[0] ? track.nodes[0].x : 500);
+    const fy = finishTile ? finishTile.j * 256 + 128 : (track.nodes[0] ? track.nodes[0].y : 500);
+
+    const n0 = track.nodes[0] || { x: fx, y: fy - 100 };
+    let dirX = n0.x - fx;
+    let dirY = n0.y - fy;
+    const len = Math.hypot(dirX, dirY);
+    if (len > 0.001) {
+        dirX /= len;
+        dirY /= len;
+    } else {
+        dirX = 0;
+        dirY = -1;
+    }
+    const startAngleRad = Math.atan2(dirY, dirX);
     const startAngleDeg = Phaser.Math.RadToDeg(startAngleRad);
 
-    const dirX = Math.cos(startAngleRad);
-    const dirY = Math.sin(startAngleRad);
-    const perpX = -Math.sin(startAngleRad);
-    const perpY = Math.cos(startAngleRad);
+    const perpX = -dirY;
+    const perpY = dirX;
 
-    // Coche del Jugador (Pole Position)
+    // Resetear variables de carrera
+    playerLap = 1;
+    playerSpeed = 0;
+    playerNextNodeIdx = 0;
+    bestLapTime = null;
+
+    // Coche del Jugador (Pole Position, colocado detrás de la línea de meta)
     const pCarData = DUST_CARS[carIdx];
-    playerCar = spawnVehicle(scene, n0.x + perpX * 22, n0.y + perpY * 22, pCarData.texture, startAngleDeg, true, pCarData);
+    const playerDistBehind = 55;
+    const playerSideOffset = 22;
+    playerCar = spawnVehicle(
+        scene,
+        fx - dirX * playerDistBehind + perpX * playerSideOffset,
+        fy - dirY * playerDistBehind + perpY * playerSideOffset,
+        pCarData.texture,
+        startAngleDeg,
+        true,
+        pCarData
+    );
+    playerCar.targetNodeIdx = 0;
+    playerCar.lastCheckpoint = -1;
 
-    // 5 Rivales con Inteligencia Artificial
+    // 5 Rivales con Inteligencia Artificial colocados en la parrilla detrás del jugador
     aiCars = [];
     const rivals = DUST_CARS.filter((_, i) => i !== carIdx);
     for (let i = 0; i < 5; i++) {
         const aiData = rivals[i % rivals.length];
         const row = Math.floor((i + 1) / 2);
         const col = (i + 1) % 2 === 1 ? -1 : 1;
-        const sx = n0.x - dirX * (row * 65) + perpX * (col * 35);
-        const sy = n0.y - dirY * (row * 65) + perpY * (col * 35);
+        const aiDistBehind = playerDistBehind + (row * 50);
+        const aiSideOffset = col * 22;
+
+        const sx = fx - dirX * aiDistBehind + perpX * aiSideOffset;
+        const sy = fy - dirY * aiDistBehind + perpY * aiSideOffset;
 
         const ai = spawnVehicle(scene, sx, sy, aiData.texture, startAngleDeg, false, aiData);
-        ai.targetNodeIdx = 1;
+        ai.targetNodeIdx = 0;
+        ai.lastCheckpoint = -1;
         ai.aiVelocity = 0;
         aiCars.push(ai);
     }
@@ -1272,9 +1447,12 @@ function updateAiCar(ai, dt, track) {
 
     const dist = Math.hypot(ai.x - targetNode.x, ai.y - targetNode.y);
     if (dist < 150) {
-        ai.lastCheckpoint = ai.targetNodeIdx;
+        const prevAiIdx = ai.targetNodeIdx;
+        ai.lastCheckpoint = prevAiIdx;
         ai.targetNodeIdx = (ai.targetNodeIdx + 1) % nodes.length;
-        if (ai.targetNodeIdx === 0) ai.currentLap++;
+        if (prevAiIdx === nodes.length - 1) {
+            ai.currentLap++;
+        }
     }
 }
 
@@ -1394,10 +1572,12 @@ function checkLap(car, track) {
     const dist = Math.hypot(car.x - targetNode.x, car.y - targetNode.y);
 
     if (dist < 180) {
-        car.lastCheckpoint = playerNextNodeIdx;
+        const prevIdx = playerNextNodeIdx;
+        car.lastCheckpoint = prevIdx;
         playerNextNodeIdx = (playerNextNodeIdx + 1) % nodes.length;
 
-        if (playerNextNodeIdx === 1) {
+        // Vuelta completada al completar todo el circuito y cruzar meta de nuevo
+        if (prevIdx === nodes.length - 1) {
             dustAudio.playLap();
             playerLap++;
 
@@ -1450,36 +1630,36 @@ function updateCarsBridgeLayers(track) {
 
     const bx = bridgeTile.i * 256 + 128;
     const by = bridgeTile.j * 256 + 128;
-    const bridgeAngle = bridgeTile.o; // 0 para Suzuka (este-oeste arriba), 90 para Crossroads (este-oeste arriba)
+    // En Suzuka y Crossroads el puente elevado transcurre de Norte a Sur (90 deg)
+    const deckAngle = 90;
     const all = [playerCar, ...aiCars];
 
     all.forEach(car => {
         if (!car || !car.active) return;
         const d = Math.hypot(car.x - bx, car.y - by);
 
-        if (d < 165) {
-            // El coche está dentro del tile del puente:
-            // Comprobamos su orientación angular de desplazamiento respecto a la plataforma del puente
+        if (d < 175) {
+            // El coche está dentro del cruce del puente:
             const carRad = Phaser.Math.DegToRad(car.angle);
             const carDirX = Math.cos(carRad);
             const carDirY = Math.sin(carRad);
 
-            // Dirección de la pasarela elevada del puente
-            const bridgeRad = Phaser.Math.DegToRad(bridgeAngle);
-            const bDirX = Math.cos(bridgeRad);
-            const bDirY = Math.sin(bridgeRad);
+            // Dirección de la pasarela elevada del puente (Norte-Sur, 90 deg)
+            const deckRad = Phaser.Math.DegToRad(deckAngle);
+            const bDirX = Math.cos(deckRad);
+            const bDirY = Math.sin(deckRad);
 
-            // Producto escalar (|dot| > 0.6 indica que va alineado con la pasarela elevada superior)
+            // Producto escalar (|dot| > 0.55 indica alineación con el puente superior Norte-Sur)
             const dot = Math.abs(carDirX * bDirX + carDirY * bDirY);
 
             if (dot > 0.55) {
-                // Va en el sentido de la carretera elevada -> ¡Pasa POR ARRIBA del puente!
+                // Va en el sentido Norte-Sur -> ¡Pasa POR ARRIBA del puente elevado!
                 car.setDepth(18);
                 if (car.shadow) car.shadow.setDepth(16);
                 if (car.headlights) car.headlights.setDepth(17);
                 car.onBridgeDeck = true;
             } else {
-                // Va en el sentido perpendicular del túnel -> ¡Pasa POR DEBAJO del puente!
+                // Va en el sentido Este-Oeste -> ¡Pasa POR DEBAJO por el túnel inferior!
                 car.setDepth(10);
                 if (car.shadow) car.shadow.setDepth(9);
                 if (car.headlights) car.headlights.setDepth(8);
