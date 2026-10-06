@@ -159,6 +159,9 @@ class DustAudio {
         // Petardeo de escape al subir de marcha
         if (gear !== this.lastGear && ratio > 0.20) {
             this.playBackfire();
+            if (typeof spawnBackfireFlame === 'function' && typeof raceScene !== 'undefined' && playerCar) {
+                spawnBackfireFlame(raceScene, playerCar);
+            }
             this.lastGear = gear;
         }
 
@@ -317,6 +320,7 @@ const DUST_CARS = [
 
 let currentTrackId = 'monza';
 let selectedCarIndex = 0;
+let selectedTimeOfDay = 'day'; // 'day' | 'sunset' | 'night'
 let gameState = 'MENU'; // 'MENU' | 'COUNTDOWN' | 'RACE' | 'FINISHED'
 
 let raceScene;
@@ -729,30 +733,30 @@ function showMenu(scene) {
     });
 
     // Selección de Coches Oficiales de Dust Racing 2D
-    scene.add.text(480, 320, '--- SELECCIONA VEHÍCULO OFICIAL ---', {
-        font: '900 13px Arial', fill: '#fee440'
+    scene.add.text(480, 290, '--- SELECCIONA VEHÍCULO OFICIAL ---', {
+        font: '900 12px Arial', fill: '#fee440'
     }).setOrigin(0.5);
 
     DUST_CARS.forEach((car, idx) => {
         const cx = 160 + idx * 128;
-        const cy = 380;
+        const cy = 340;
         const isSel = selectedCarIndex === idx;
 
         const cBox = scene.add.graphics();
         cBox.fillStyle(isSel ? 0x2e7d32 : 0x151922, 0.9);
-        cBox.fillRoundedRect(cx - 55, cy - 35, 110, 75, 8);
+        cBox.fillRoundedRect(cx - 55, cy - 30, 110, 64, 8);
         cBox.lineStyle(2, isSel ? 0x00f5d4 : 0x2e384d, 1);
-        cBox.strokeRoundedRect(cx - 55, cy - 35, 110, 75, 8);
+        cBox.strokeRoundedRect(cx - 55, cy - 30, 110, 64, 8);
 
         // Sprite oficial del coche escalado a 48x25
-        scene.add.sprite(cx, cy - 10, car.texture).setDisplaySize(48, 25).setAngle(-90);
+        scene.add.sprite(cx, cy - 8, car.texture).setDisplaySize(48, 25).setAngle(-90);
 
-        scene.add.text(cx, cy + 20, car.name.split(' ')[0], {
+        scene.add.text(cx, cy + 18, car.name.split(' ')[0], {
             font: 'bold 11px Arial',
             fill: isSel ? '#ffffff' : '#90a4ae'
         }).setOrigin(0.5);
 
-        const hit = scene.add.rectangle(cx, cy, 110, 75).setInteractive({ useHandCursor: true });
+        const hit = scene.add.rectangle(cx, cy, 110, 64).setInteractive({ useHandCursor: true });
         hit.on('pointerdown', () => {
             dustAudio.init();
             selectedCarIndex = idx;
@@ -760,26 +764,62 @@ function showMenu(scene) {
         });
     });
 
+    // Selector de Iluminación y Horario (Día / Atardecer / Noche)
+    scene.add.text(480, 400, '--- CONDICIÓN DE LUZ Y AMBIENTE ---', {
+        font: '900 12px Arial', fill: '#00f5d4'
+    }).setOrigin(0.5);
+
+    const timesOfDay = [
+        { id: 'day', label: '☀️ MODO DÍA (Faros Off)', desc: 'Luz natural clara' },
+        { id: 'sunset', label: '🌅 ATARDECER (Golden Hour)', desc: 'Tono cálido y sombras' },
+        { id: 'night', label: '🌙 MODO NOCHE (Faros Xenón)', desc: 'Iluminación nocturna' }
+    ];
+
+    timesOfDay.forEach((tod, idx) => {
+        const bx = 260 + idx * 220;
+        const by = 435;
+        const isSel = selectedTimeOfDay === tod.id;
+
+        const tBox = scene.add.graphics();
+        tBox.fillStyle(isSel ? (tod.id === 'night' ? 0x1a237e : 0xef6c00) : 0x151922, 0.95);
+        tBox.fillRoundedRect(bx - 100, by - 18, 200, 36, 6);
+        tBox.lineStyle(2, isSel ? 0xfee440 : 0x2e384d, 1);
+        tBox.strokeRoundedRect(bx - 100, by - 18, 200, 36, 6);
+
+        const tBtn = scene.add.text(bx, by, tod.label, {
+            font: 'bold 11px Arial',
+            fill: isSel ? '#ffffff' : '#b0bec5'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        tBtn.on('pointerdown', () => {
+            dustAudio.init();
+            selectedTimeOfDay = tod.id;
+            showMenu(scene);
+        });
+    });
+
     // Botón Iniciar Gran Premio
     const startBox = scene.add.graphics();
     startBox.fillStyle(0x00c853, 1);
-    startBox.fillRoundedRect(340, 465, 280, 48, 10);
+    startBox.fillRoundedRect(340, 480, 280, 44, 10);
     startBox.lineStyle(2, 0xffffff, 0.8);
-    startBox.strokeRoundedRect(340, 465, 280, 48, 10);
+    startBox.strokeRoundedRect(340, 480, 280, 44, 10);
 
-    const startBtn = scene.add.text(480, 489, '¡INICIAR GRAN PREMIO! ▶', {
-        font: '900 18px Arial', fill: '#ffffff'
+    const startBtn = scene.add.text(480, 502, '¡INICIAR GRAN PREMIO! ▶', {
+        font: '900 17px Arial', fill: '#ffffff'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     startBtn.on('pointerdown', () => {
         dustAudio.init();
-        startRace(scene, currentTrackId, selectedCarIndex);
+        startRace(scene, currentTrackId, selectedCarIndex, selectedTimeOfDay);
     });
 }
 
 // ===== INICIAR CARRERA Y CONSTRUIR MUNDO DUSTRAC OFICIAL =====
-function startRace(scene, trackId, carIdx) {
+function startRace(scene, trackId, carIdx, timeOfDay = 'day') {
     scene.children.removeAll();
+
+    selectedTimeOfDay = timeOfDay;
 
     const tracks = window.DustracTracks || {};
     const track = tracks[trackId];
@@ -840,9 +880,40 @@ function startRace(scene, trackId, carIdx) {
         } else if (tile.t === 'straight45Female') {
             scene.add.sprite(tx, ty, 'dt_straight45Female').setDisplaySize(256, 256).setAngle(tile.o).setDepth(2);
         } else if (tile.t === 'bridge') {
-            // El puente elevado cruza por encima de la pista
-            const bridge = scene.add.sprite(tx, ty, 'dt_straight').setDisplaySize(256, 256).setAngle(tile.o).setDepth(20);
-            bridge.setTint(0x90caf9);
+            // El puente elevado cruza a desnivel sobre la pista:
+            // 1. Asfalto inferior por el que cruzan los coches por debajo (orientación perpendicular o recta)
+            const underAngle = (tile.o + 90) % 360;
+            scene.add.sprite(tx, ty, 'dt_straight').setDisplaySize(256, 256).setAngle(underAngle).setDepth(2);
+
+            // 2. Sombra estructural que proyecta la plataforma del puente sobre la pista inferior
+            const shadowRad = Phaser.Math.DegToRad(tile.o);
+            const perpShadowX = -Math.sin(shadowRad) * 16;
+            const perpShadowY = Math.cos(shadowRad) * 16;
+            scene.add.rectangle(tx + perpShadowX, ty + perpShadowY, 256, 170, 0x000000, 0.45)
+                .setAngle(tile.o)
+                .setDepth(14);
+
+            // 3. Tablero del puente elevado (donde cruzan los coches por arriba)
+            const bridgeDeck = scene.add.sprite(tx, ty, 'dt_straight')
+                .setDisplaySize(256, 256)
+                .setAngle(tile.o)
+                .setDepth(15);
+            bridgeDeck.setTint(0xe2e8f0);
+
+            // 4. Barandillas y quitamiedos metálicos laterales del puente
+            const bWidth = 256;
+            const bHalfSpan = 80;
+            const bWallLeft = scene.add.rectangle(
+                tx - Math.sin(shadowRad) * bHalfSpan,
+                ty + Math.cos(shadowRad) * bHalfSpan,
+                bWidth, 8, 0x90a4ae, 1
+            ).setAngle(tile.o).setDepth(17);
+
+            const bWallRight = scene.add.rectangle(
+                tx + Math.sin(shadowRad) * bHalfSpan,
+                ty - Math.cos(shadowRad) * bHalfSpan,
+                bWidth, 8, 0x90a4ae, 1
+            ).setAngle(tile.o).setDepth(17);
         }
     });
 
@@ -924,6 +995,23 @@ function startRace(scene, trackId, carIdx) {
         ai.targetNodeIdx = 1;
         ai.aiVelocity = 0;
         aiCars.push(ai);
+    }
+
+    // 6. CAPA AMBIENTAL DE ILUMINACIÓN Y OSCURIDAD (Día / Atardecer / Noche)
+    if (selectedTimeOfDay === 'night') {
+        // Velo nocturno azul profundo cinematográfico sobre el asfalto y entorno
+        const nightAmbient = scene.add.rectangle(
+            track.worldWidth / 2, track.worldHeight / 2,
+            track.worldWidth, track.worldHeight,
+            0x050814, 0.78
+        ).setDepth(8);
+    } else if (selectedTimeOfDay === 'sunset') {
+        // Tono dorado cálido al atardecer
+        const sunsetAmbient = scene.add.rectangle(
+            track.worldWidth / 2, track.worldHeight / 2,
+            track.worldWidth, track.worldHeight,
+            0xd97706, 0.24
+        ).setDepth(8);
     }
 
     // Cámara con seguimiento suave y look-ahead
@@ -1059,7 +1147,10 @@ function dustUpdate(time, delta) {
     // 3. Colisiones entre vehículos
     handleCollisions();
 
-    // 4. Luces y sombras de los vehículos
+    // 4. Elevación dinámica de coches en puentes (por arriba o por abajo)
+    updateCarsBridgeLayers(track);
+
+    // 5. Luces y sombras de los vehículos (Faros Día/Noche)
     updateCarVisuals();
 
     // 5. Radar Minimapa
@@ -1095,6 +1186,9 @@ function updatePlayer(dt, track) {
             grip = 0.65;
             surfaceLabel = 'TRANSICIÓN ARENA-CÉSPED';
             spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xd7ccc8);
+        } else if (tile.t === 'bridge') {
+            grip = 1.0;
+            surfaceLabel = playerCar.onBridgeDeck ? 'PUENTE ELEVADO (CRUCE SUPERIOR)' : 'TÚNEL DE PISTA (CRUCE INFERIOR)';
         } else if (tile.t === 'straight' || tile.t === 'finish' || tile.t.startsWith('corner') || tile.t.startsWith('straight45')) {
             // Comprobar si pisa los pianos de borde
             const distCenter = Math.hypot(playerCar.x - (ti * 256 + 128), playerCar.y - (tj * 256 + 128));
@@ -1127,11 +1221,13 @@ function updatePlayer(dt, track) {
             if (left || right) {
                 dustAudio.playDrift();
                 drawSkid(playerCar.x, playerCar.y, playerCar.angle);
+                spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
             }
         } else if (brake) {
             playerSpeed = Math.max(-topSpeed * 0.35, playerSpeed - accelRate * 2.2 * dt);
             dustAudio.playDrift();
             drawSkid(playerCar.x, playerCar.y, playerCar.angle);
+            spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
         } else {
             playerSpeed *= 0.982;
         }
@@ -1210,6 +1306,61 @@ function spawnDust(scene, x, y, textureKey, tintHex) {
         scale: 1.8,
         duration: 250,
         onComplete: () => p.destroy()
+    });
+}
+
+// Emisor de humo blanco/gris de derrape en neumáticos (Tire Smoke)
+function spawnTireSmoke(scene, x, y, angleDeg) {
+    if (!scene || Math.random() > 0.42) return;
+    const rad = Phaser.Math.DegToRad(angleDeg + 90);
+    const px = Math.cos(rad) * 10;
+    const py = Math.sin(rad) * 10;
+    const offsetSide = Math.random() > 0.5 ? 1 : -1;
+
+    const smoke = scene.add.sprite(
+        x + px * offsetSide + (Math.random() - 0.5) * 6,
+        y + py * offsetSide + (Math.random() - 0.5) * 6,
+        'dt_smoke'
+    ).setDisplaySize(14, 14).setDepth(8).setAlpha(0.65);
+
+    smoke.setTint(0xf1f5f9);
+
+    scene.tweens.add({
+        targets: smoke,
+        alpha: 0,
+        scale: 2.8,
+        x: smoke.x + (Math.random() - 0.5) * 14,
+        y: smoke.y + (Math.random() - 0.5) * 14,
+        duration: 380,
+        ease: 'Quad.easeOut',
+        onComplete: () => smoke.destroy()
+    });
+}
+
+// Llamarada de escape (Backfire Flame) al cambiar de marcha o soltar gas a altas RPM
+function spawnBackfireFlame(scene, car) {
+    if (!scene || !car || !car.active) return;
+    const rad = Phaser.Math.DegToRad(car.angle);
+    const rx = car.x - Math.cos(rad) * 23;
+    const ry = car.y - Math.sin(rad) * 23;
+    const perp = rad + Math.PI / 2;
+
+    [-6, 6].forEach(offset => {
+        const fx = rx + Math.cos(perp) * offset;
+        const fy = ry + Math.sin(perp) * offset;
+
+        const flame = scene.add.sprite(fx, fy, 'dt_sparkle')
+            .setDisplaySize(18, 18)
+            .setDepth(13)
+            .setTint(0x00f5d4); // Fuego azul/cian de competición GT3
+
+        scene.tweens.add({
+            targets: flame,
+            scale: 2.4,
+            alpha: 0,
+            duration: 120,
+            onComplete: () => flame.destroy()
+        });
     });
 }
 
@@ -1292,10 +1443,64 @@ function endRace() {
     });
 }
 
-// Actualizar sombras y faros de todos los coches
+// Actualizar elevación dinámica en cruces con puente (por arriba o por abajo)
+function updateCarsBridgeLayers(track) {
+    const bridgeTile = track.tiles ? track.tiles.find(t => t.t === 'bridge') : null;
+    if (!bridgeTile) return;
+
+    const bx = bridgeTile.i * 256 + 128;
+    const by = bridgeTile.j * 256 + 128;
+    const bridgeAngle = bridgeTile.o; // 0 para Suzuka (este-oeste arriba), 90 para Crossroads (este-oeste arriba)
+    const all = [playerCar, ...aiCars];
+
+    all.forEach(car => {
+        if (!car || !car.active) return;
+        const d = Math.hypot(car.x - bx, car.y - by);
+
+        if (d < 165) {
+            // El coche está dentro del tile del puente:
+            // Comprobamos su orientación angular de desplazamiento respecto a la plataforma del puente
+            const carRad = Phaser.Math.DegToRad(car.angle);
+            const carDirX = Math.cos(carRad);
+            const carDirY = Math.sin(carRad);
+
+            // Dirección de la pasarela elevada del puente
+            const bridgeRad = Phaser.Math.DegToRad(bridgeAngle);
+            const bDirX = Math.cos(bridgeRad);
+            const bDirY = Math.sin(bridgeRad);
+
+            // Producto escalar (|dot| > 0.6 indica que va alineado con la pasarela elevada superior)
+            const dot = Math.abs(carDirX * bDirX + carDirY * bDirY);
+
+            if (dot > 0.55) {
+                // Va en el sentido de la carretera elevada -> ¡Pasa POR ARRIBA del puente!
+                car.setDepth(18);
+                if (car.shadow) car.shadow.setDepth(16);
+                if (car.headlights) car.headlights.setDepth(17);
+                car.onBridgeDeck = true;
+            } else {
+                // Va en el sentido perpendicular del túnel -> ¡Pasa POR DEBAJO del puente!
+                car.setDepth(10);
+                if (car.shadow) car.shadow.setDepth(9);
+                if (car.headlights) car.headlights.setDepth(8);
+                car.onBridgeDeck = false;
+            }
+        } else {
+            // Fuera del área de cruce del puente: profundidad normal sobre la pista
+            car.setDepth(10);
+            if (car.shadow) car.shadow.setDepth(9);
+            if (car.headlights) car.headlights.setDepth(selectedTimeOfDay === 'night' ? 9.5 : 7);
+            car.onBridgeDeck = false;
+        }
+    });
+}
+
+// Actualizar sombras, faros día/noche y llamaradas de escape de todos los coches
 function updateCarVisuals() {
     const all = [playerCar, ...aiCars];
     const isPlayerBraking = keys.down.isDown || keys.s.isDown || touchBrake;
+    const isNight = selectedTimeOfDay === 'night';
+    const isSunset = selectedTimeOfDay === 'sunset';
 
     all.forEach(car => {
         if (!car || !car.active) return;
@@ -1312,34 +1517,58 @@ function updateCarVisuals() {
             const fx = car.x + Math.cos(rad) * 22;
             const fy = car.y + Math.sin(rad) * 22;
 
-            // Haz de luz amplio de faros de xenón
-            const cone = 0.35;
-            const dist = 115;
-            car.headlights.fillStyle(0xfff9c4, 0.11);
-            car.headlights.beginPath();
-            car.headlights.moveTo(fx, fy);
-            car.headlights.lineTo(fx + Math.cos(rad - cone) * dist, fy + Math.sin(rad - cone) * dist);
-            car.headlights.lineTo(fx + Math.cos(rad + cone) * dist, fy + Math.sin(rad + cone) * dist);
-            car.headlights.closePath();
-            car.headlights.fill();
+            // Iluminación frontal de faros:
+            // DE DÍA: Los faros delanteros están APAGADOS (0 conos).
+            // DE NOCHE o ATARDECER: Faros encendidos con haz amplio que rasga la oscuridad.
+            if (isNight || isSunset) {
+                const cone = 0.38;
+                const dist = isNight ? 160 : 110;
+                const beamAlpha = isNight ? 0.38 : 0.15;
+                const coreAlpha = isNight ? 0.65 : 0.25;
 
-            // Haz central brillante
-            car.headlights.fillStyle(0xffffff, 0.16);
-            car.headlights.beginPath();
-            car.headlights.moveTo(fx, fy);
-            car.headlights.lineTo(fx + Math.cos(rad - 0.18) * (dist * 0.7), fy + Math.sin(rad - 0.18) * (dist * 0.7));
-            car.headlights.lineTo(fx + Math.cos(rad + 0.18) * (dist * 0.7), fy + Math.sin(rad + 0.18) * (dist * 0.7));
-            car.headlights.closePath();
-            car.headlights.fill();
+                // Haz ambiental exterior
+                car.headlights.fillStyle(0xfff9c4, beamAlpha);
+                car.headlights.beginPath();
+                car.headlights.moveTo(fx, fy);
+                car.headlights.lineTo(fx + Math.cos(rad - cone) * dist, fy + Math.sin(rad - cone) * dist);
+                car.headlights.lineTo(fx + Math.cos(rad + cone) * dist, fy + Math.sin(rad + cone) * dist);
+                car.headlights.closePath();
+                car.headlights.fill();
 
-            // Luces de freno traseras rojas activas al decelerar
-            if (car.isPlayer && isPlayerBraking) {
-                const rx = car.x - Math.cos(rad) * 20;
-                const ry = car.y - Math.sin(rad) * 20;
+                // Haz central concentrado de xenón / LED
+                car.headlights.fillStyle(0xffffff, coreAlpha);
+                car.headlights.beginPath();
+                car.headlights.moveTo(fx, fy);
+                car.headlights.lineTo(fx + Math.cos(rad - 0.18) * (dist * 0.75), fy + Math.sin(rad - 0.18) * (dist * 0.75));
+                car.headlights.lineTo(fx + Math.cos(rad + 0.18) * (dist * 0.75), fy + Math.sin(rad + 0.18) * (dist * 0.75));
+                car.headlights.closePath();
+                car.headlights.fill();
+
+                // Proyectores ópticos dobles en el morro del GT3
                 const perp = rad + Math.PI / 2;
-                car.headlights.fillStyle(0xff1744, 0.5);
-                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 8);
-                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 8);
+                car.headlights.fillStyle(0xffffff, 0.95);
+                car.headlights.fillCircle(fx + Math.cos(perp) * 6, fy + Math.sin(perp) * 6, 2.8);
+                car.headlights.fillCircle(fx - Math.cos(perp) * 6, fy - Math.sin(perp) * 6, 2.8);
+            }
+
+            // Luces de posición y freno traseras rojas
+            const rx = car.x - Math.cos(rad) * 20;
+            const ry = car.y - Math.sin(rad) * 20;
+            const perp = rad + Math.PI / 2;
+
+            if (car.isPlayer && isPlayerBraking) {
+                // Frenada intensa: pilotos traseros de freno al 100% de intensidad
+                car.headlights.fillStyle(0xff1744, 0.85);
+                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 5);
+                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 5);
+                car.headlights.fillStyle(0xffffff, 0.9);
+                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 2);
+                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 2);
+            } else if (isNight || isSunset) {
+                // Luz de posición trasera suave permanente de noche o atardecer
+                car.headlights.fillStyle(0xd50000, 0.45);
+                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 2.5);
+                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 2.5);
             }
         }
     });
