@@ -162,12 +162,12 @@ const game = new Phaser.Game(CONFIG);
 
 // Catálogo de coches con assets originales de Dust Racing 2D
 const DUST_CARS = [
-    { id: 'car_red', texture: 'car_red', name: 'RED PHANTOM GT', speed: 470, accel: 390, handling: 4.8 },
-    { id: 'car_blue', texture: 'car_blue', name: 'GULF RACER GT', speed: 460, accel: 400, handling: 5.0 },
-    { id: 'car_yellow', texture: 'car_yellow', name: 'VIPER NEON GT', speed: 490, accel: 420, handling: 4.6 },
-    { id: 'car_green', texture: 'car_green', name: 'LOTUS APEX GT', speed: 450, accel: 410, handling: 5.4 },
-    { id: 'car_cyan', texture: 'car_cyan', name: 'TURBO CYAN GT', speed: 480, accel: 380, handling: 4.9 },
-    { id: 'car_orange', texture: 'car_orange', name: 'SUNSET TORQUE GT', speed: 475, accel: 395, handling: 4.7 }
+    { id: 'car_red', texture: 'car_red', name: 'FERRARI 488 GT3', speed: 470, accel: 390, handling: 4.8 },
+    { id: 'car_blue', texture: 'car_blue', name: 'ASTON VANTAGE GT3', speed: 460, accel: 400, handling: 5.0 },
+    { id: 'car_yellow', texture: 'car_yellow', name: 'PORSCHE 911 GT3', speed: 490, accel: 420, handling: 4.6 },
+    { id: 'car_green', texture: 'car_green', name: 'BMW M4 GT3', speed: 450, accel: 410, handling: 5.4 },
+    { id: 'car_cyan', texture: 'car_cyan', name: 'MCLAREN 720S GT3', speed: 480, accel: 380, handling: 4.9 },
+    { id: 'car_orange', texture: 'car_orange', name: 'IRON DAMES GT3', speed: 475, accel: 395, handling: 4.7 }
 ];
 
 let currentTrackId = 'monza';
@@ -223,17 +223,90 @@ function dustPreload() {
     this.load.image('dt_startLightOn', p + 'startLightOn.png');
     this.load.image('dt_startLightOff', p + 'startLightOff.png');
 
-    // Coches Oficiales Originales
-    this.load.image('car_red', p + 'carRed.png');
-    this.load.image('car_blue', p + 'carBlue.png');
-    this.load.image('car_yellow', p + 'carYellow.png');
-    this.load.image('car_green', p + 'carGreen.png');
-    this.load.image('car_cyan', p + 'carCyan.png');
-    this.load.image('car_orange', p + 'carOrange.png');
+    // Coches GT3 fotorrealistas (hoja de sprites nueva)
+    this.load.image('gt_cars_sheet', 'assets/real_gt_cars.jpg');
+}
+
+// Recorta los 6 GT3 de la hoja, quita el fondo negro, recorta al contorno
+// y los voltea para que el morro apunte a la derecha (convención de Dust Racing).
+// Genera las texturas con las mismas claves que usaba el juego (car_red, car_blue...).
+function buildGT3CarTextures(scene) {
+    const src = scene.textures.get('gt_cars_sheet').getSourceImage();
+    const cellW = 500, cellH = 330;
+    const cells = [
+        { key: 'car_yellow', c: 0, r: 0 }, // Manthey Porsche 911 GT3 Grello
+        { key: 'car_red',    c: 1, r: 0 }, // Ferrari 488 GT3
+        { key: 'car_blue',   c: 0, r: 1 }, // Aston Martin Vantage Valvoline
+        { key: 'car_green',  c: 1, r: 1 }, // BMW M4 GT3 Rowe
+        { key: 'car_orange', c: 0, r: 2 }, // Iron Dames GT3
+        { key: 'car_cyan',   c: 1, r: 2 }  // McLaren 720S Gulf
+    ];
+    const rowY = [20, 350, 690];
+
+    cells.forEach(cell => {
+        const sx = cell.c * 512 + 6;
+        const sy = rowY[cell.r];
+        const w = Math.min(cellW, src.width - sx);
+        const h = Math.min(cellH, src.height - sy);
+
+        const tmp = document.createElement('canvas');
+        tmp.width = w; tmp.height = h;
+        const tctx = tmp.getContext('2d');
+        tctx.drawImage(src, sx, sy, w, h, 0, 0, w, h);
+
+        const img = tctx.getImageData(0, 0, w, h);
+        const d = img.data;
+        const lumAt = (p) => Math.max(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]);
+        // Flood-fill desde los bordes: solo se borra el fondo/sombra oscura conectada al exterior,
+        // así las partes negras del propio coche (cristales, libreas negras) no se agujerean.
+        const BG = 42;
+        const seen = new Uint8Array(w * h);
+        const stack = [];
+        for (let x = 0; x < w; x++) { stack.push(x, (h - 1) * w + x); }
+        for (let y = 0; y < h; y++) { stack.push(y * w, y * w + w - 1); }
+        while (stack.length) {
+            const p = stack.pop();
+            if (seen[p]) continue;
+            seen[p] = 1;
+            if (lumAt(p) >= BG) continue;
+            d[p * 4 + 3] = 0;
+            const x = p % w, y = (p / w) | 0;
+            if (x > 0) stack.push(p - 1);
+            if (x < w - 1) stack.push(p + 1);
+            if (y > 0) stack.push(p - w);
+            if (y < h - 1) stack.push(p + w);
+        }
+        let minX = w, minY = h, maxX = 0, maxY = 0;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                if (d[(y * w + x) * 4 + 3] > 0) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        tctx.putImageData(img, 0, 0);
+
+        const bw = Math.max(1, maxX - minX + 1);
+        const bh = Math.max(1, maxY - minY + 1);
+        const out = document.createElement('canvas');
+        out.width = bw; out.height = bh;
+        const octx = out.getContext('2d');
+        // Volteo horizontal: en la hoja el morro mira a la izquierda
+        octx.translate(bw, 0);
+        octx.scale(-1, 1);
+        octx.drawImage(tmp, minX, minY, bw, bh, 0, 0, bw, bh);
+
+        if (scene.textures.exists(cell.key)) scene.textures.remove(cell.key);
+        scene.textures.addCanvas(cell.key, out);
+    });
 }
 
 function dustCreate() {
     raceScene = this;
+    buildGT3CarTextures(this);
 
     // Configuración de Teclado
     keys = this.input.keyboard.addKeys({
