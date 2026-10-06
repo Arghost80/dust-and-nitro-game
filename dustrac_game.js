@@ -865,9 +865,22 @@ function startRace(scene, trackId, carIdx) {
                 ease: 'Sine.easeInOut'
             });
         } else if (obj.r === 'grandstand') {
-            // Tribuna con público en alta definición
-            scene.add.rectangle(obj.x + 8, obj.y + 12, 175, 125, 0x000000, 0.35).setAngle(obj.o).setDepth(11);
-            scene.add.sprite(obj.x, obj.y, 'dt_grandstand').setDisplaySize(180, 130).setAngle(obj.o).setDepth(12);
+            // Tribuna con público en alta definición:
+            // Detectamos si es una sección modular conectada (paso ~128-150px) o una tribuna aislada
+            const isIsolated = !track.objects.some(other => other !== obj && other.r === 'grandstand' && Math.hypot(obj.x - other.x, obj.y - other.y) < 220);
+            const gsW = isIsolated ? 230 : 160;
+            const gsH = isIsolated ? 160 : 130;
+
+            // Sombra arquitectónica proyectada
+            scene.add.rectangle(obj.x + 12, obj.y + 16, gsW - 5, gsH - 5, 0x000000, 0.40)
+                .setAngle(obj.o)
+                .setDepth(11);
+
+            // Sprite de grada en alta definición
+            scene.add.sprite(obj.x, obj.y, 'dt_grandstand')
+                .setDisplaySize(gsW, gsH)
+                .setAngle(obj.o)
+                .setDepth(12);
         } else if (obj.r === 'tire') {
             scene.add.ellipse(obj.x + 2, obj.y + 3, 26, 26, 0x000000, 0.42).setDepth(5);
             scene.add.sprite(obj.x, obj.y, 'dt_tire').setDisplaySize(28, 28).setAngle(obj.o).setDepth(6);
