@@ -9,14 +9,25 @@ if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.expand();
 }
 
-// ===== SINTETIZADOR DE AUDIO WEB AUDIO API =====
+// ===== SINTETIZADOR DE AUDIO GT3 MULTI-CAPA MODERNO =====
 class DustAudio {
     constructor() {
         this.ctx = null;
-        this.engineOsc = null;
-        this.engineGain = null;
         this.isReady = false;
+        this.engineOsc1 = null;
+        this.engineOsc2 = null;
+        this.subOsc = null;
+        this.noiseNode = null;
+        this.engineFilter = null;
+        this.engineGain = null;
+        this.distortion = null;
+        this.driftNoise = null;
+        this.driftFilter = null;
+        this.driftGain = null;
+        this.gearRatios = [0.18, 0.38, 0.58, 0.78, 1.0];
+        this.lastGear = 1;
     }
+
     init() {
         if (this.isReady) return;
         try {
@@ -24,89 +35,222 @@ class DustAudio {
             if (!AudioCtx) return;
             this.ctx = new AudioCtx();
 
-            this.engineOsc = this.ctx.createOscillator();
+            // 1. Motor Oscilador Primario V8 / Bóxer (Sawtooth)
+            this.engineOsc1 = this.ctx.createOscillator();
+            this.engineOsc1.type = 'sawtooth';
+            this.engineOsc1.frequency.setValueAtTime(54, this.ctx.currentTime);
+
+            // 2. Armónicos de escape (Triangle con armónicos pares)
+            this.engineOsc2 = this.ctx.createOscillator();
+            this.engineOsc2.type = 'triangle';
+            this.engineOsc2.frequency.setValueAtTime(108, this.ctx.currentTime);
+
+            // 3. Sub-bajos de escape (Sine profundo a 27 Hz)
+            this.subOsc = this.ctx.createOscillator();
+            this.subOsc.type = 'sine';
+            this.subOsc.frequency.setValueAtTime(27, this.ctx.currentTime);
+
+            // 4. Generador de ruido de combustión (buffer de ruido filtrado)
+            const bufferSize = this.ctx.sampleRate * 2;
+            const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = (Math.random() * 2 - 1) * 0.18;
+            }
+            this.noiseNode = this.ctx.createBufferSource();
+            this.noiseNode.buffer = noiseBuffer;
+            this.noiseNode.loop = true;
+
+            const noiseFilter = this.ctx.createBiquadFilter();
+            noiseFilter.type = 'bandpass';
+            noiseFilter.frequency.setValueAtTime(260, this.ctx.currentTime);
+            noiseFilter.Q.setValueAtTime(2.2, this.ctx.currentTime);
+
+            const noiseGain = this.ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.045, this.ctx.currentTime);
+
+            this.noiseNode.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+
+            // 5. Filtro dinámico de motor y saturación suave
+            this.engineFilter = this.ctx.createBiquadFilter();
+            this.engineFilter.type = 'lowpass';
+            this.engineFilter.frequency.setValueAtTime(420, this.ctx.currentTime);
+            this.engineFilter.Q.setValueAtTime(1.8, this.ctx.currentTime);
+
+            this.distortion = this.ctx.createWaveShaper();
+            this.distortion.curve = this.makeDistortionCurve(16);
+
             this.engineGain = this.ctx.createGain();
-            this.engineOsc.type = 'sawtooth';
-            this.engineOsc.frequency.setValueAtTime(65, this.ctx.currentTime);
-            this.engineGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+            this.engineGain.gain.setValueAtTime(0.052, this.ctx.currentTime);
 
-            const filter = this.ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(450, this.ctx.currentTime);
+            this.engineOsc1.connect(this.engineFilter);
+            this.engineOsc2.connect(this.engineFilter);
+            this.subOsc.connect(this.engineFilter);
+            noiseGain.connect(this.engineFilter);
 
-            this.engineOsc.connect(filter);
-            filter.connect(this.engineGain);
+            this.engineFilter.connect(this.distortion);
+            this.distortion.connect(this.engineGain);
             this.engineGain.connect(this.ctx.destination);
-            this.engineOsc.start();
+
+            this.engineOsc1.start();
+            this.engineOsc2.start();
+            this.subOsc.start();
+            this.noiseNode.start();
+
+            // 6. Neumáticos : generador continuo de chirrido realista (ruido filtrado)
+            const dBuf = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const dData = dBuf.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                dData[i] = (Math.random() * 2 - 1) * 0.25;
+            }
+            this.driftNoise = this.ctx.createBufferSource();
+            this.driftNoise.buffer = dBuf;
+            this.driftNoise.loop = true;
+
+            this.driftFilter = this.ctx.createBiquadFilter();
+            this.driftFilter.type = 'bandpass';
+            this.driftFilter.frequency.setValueAtTime(1150, this.ctx.currentTime);
+            this.driftFilter.Q.setValueAtTime(3.8, this.ctx.currentTime);
+
+            this.driftGain = this.ctx.createGain();
+            this.driftGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+
+            this.driftNoise.connect(this.driftFilter);
+            this.driftFilter.connect(this.driftGain);
+            this.driftGain.connect(this.ctx.destination);
+            this.driftNoise.start();
+
             this.isReady = true;
         } catch (e) {
-            console.log('Audio esperando interacción');
+            console.log('Audio esperando interacción del usuario');
         }
     }
-    updateEngine(speed, maxSpeed) {
-        if (!this.ctx || !this.engineOsc) return;
-        const ratio = Math.max(0, Math.min(1, Math.abs(speed) / maxSpeed));
-        const freq = 65 + ratio * 190;
-        this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.04);
+
+    makeDistortionCurve(amount) {
+        const k = amount;
+        const n_samples = 44100;
+        const curve = new Float32Array(n_samples);
+        const deg = Math.PI / 180;
+        for (let i = 0; i < n_samples; ++i) {
+            const x = (i * 2) / n_samples - 1;
+            curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+        }
+        return curve;
     }
-    playDrift() {
+
+    updateEngine(speed, maxSpeed) {
+        if (!this.ctx || !this.engineOsc1) return;
+        const now = this.ctx.currentTime;
+        const ratio = Math.max(0, Math.min(1, Math.abs(speed) / maxSpeed));
+
+        // Marchas automáticas (1ª a 5ª)
+        let gear = 1;
+        let gRatio = ratio / this.gearRatios[0];
+        for (let g = 0; g < this.gearRatios.length; g++) {
+            if (ratio <= this.gearRatios[g] || g === this.gearRatios.length - 1) {
+                const prev = g === 0 ? 0 : this.gearRatios[g - 1];
+                gRatio = (ratio - prev) / (this.gearRatios[g] - prev);
+                gear = g + 1;
+                break;
+            }
+        }
+
+        // Petardeo de escape al subir de marcha
+        if (gear !== this.lastGear && ratio > 0.20) {
+            this.playBackfire();
+            this.lastGear = gear;
+        }
+
+        const baseFreq = 52;
+        const targetFreq = baseFreq + gRatio * 165;
+        this.engineOsc1.frequency.setTargetAtTime(targetFreq, now, 0.04);
+        this.engineOsc2.frequency.setTargetAtTime(targetFreq * 1.5, now, 0.04);
+        this.subOsc.frequency.setTargetAtTime(targetFreq * 0.5, now, 0.04);
+
+        const filterFreq = 380 + ratio * 1350;
+        this.engineFilter.frequency.setTargetAtTime(filterFreq, now, 0.05);
+
+        const gainVal = 0.040 + ratio * 0.035;
+        this.engineGain.gain.setTargetAtTime(gainVal, now, 0.06);
+    }
+
+    setDriftVolume(intensity) {
+        if (!this.ctx || !this.driftGain) return;
+        const clamped = Math.max(0, Math.min(1, intensity));
+        this.driftGain.gain.setTargetAtTime(clamped * 0.045, this.ctx.currentTime, 0.03);
+        if (clamped > 0.1) {
+            this.driftFilter.frequency.setTargetAtTime(950 + clamped * 350, this.ctx.currentTime, 0.03);
+        }
+    }
+
+    playBackfire() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(460 + Math.random() * 80, now);
-        gain.gain.setValueAtTime(0.02, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(32, now + 0.08);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.09);
+        osc.stop(now + 0.08);
     }
+
+    playDrift() {
+        this.setDriftVolume(0.8);
+    }
+
     playKerb() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(90, now);
-        osc.frequency.setValueAtTime(140, now + 0.03);
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.frequency.setValueAtTime(80, now);
+        osc.frequency.setValueAtTime(130, now + 0.03);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.06);
+        osc.stop(now + 0.07);
     }
+
     playSand() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(100, now);
-        gain.gain.setValueAtTime(0.025, now);
+        osc.frequency.setValueAtTime(95, now);
+        gain.gain.setValueAtTime(0.03, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
         osc.stop(now + 0.1);
     }
+
     playCrash() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(35, now + 0.15);
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.frequency.setValueAtTime(170, now);
+        osc.frequency.exponentialRampToValueAtTime(32, now + 0.16);
+        gain.gain.setValueAtTime(0.20, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.15);
+        osc.stop(now + 0.16);
     }
+
     playLap() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
@@ -117,21 +261,22 @@ class DustAudio {
         osc.frequency.setValueAtTime(659, now + 0.08);
         osc.frequency.setValueAtTime(784, now + 0.16);
         osc.frequency.setValueAtTime(1046, now + 0.24);
-        gain.gain.setValueAtTime(0.09, now);
+        gain.gain.setValueAtTime(0.10, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
         osc.stop(now + 0.45);
     }
+
     playCountdown(isGo) {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.type = 'sine';
+        osc.type = isGo ? 'sawtooth' : 'sine';
         osc.frequency.setValueAtTime(isGo ? 880 : 440, now);
-        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.setValueAtTime(0.14, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + (isGo ? 0.35 : 0.15));
         osc.connect(gain);
         gain.connect(this.ctx.destination);
@@ -225,6 +370,15 @@ function dustPreload() {
 
     // Coches GT3 fotorrealistas (hoja de sprites nueva)
     this.load.image('gt_cars_sheet', 'assets/real_gt_cars.jpg');
+
+    // Assets HD de Entorno y Escenario
+    this.load.image('hd_grass_src', 'assets/dust_hd/hd_grass.jpg');
+    this.load.image('hd_sand_src', 'assets/dust_hd/hd_sand.jpg');
+    this.load.image('hd_tree_src', 'assets/dust_hd/hd_tree.jpg');
+    this.load.image('hd_grandstand_src', 'assets/dust_hd/hd_grandstand.jpg');
+    this.load.image('hd_tire_src', 'assets/dust_hd/hd_tire.jpg');
+    this.load.image('hd_rock_src', 'assets/dust_hd/hd_rock.jpg');
+    this.load.image('hd_bush_src', 'assets/dust_hd/hd_bush.jpg');
 }
 
 // Recorta los 6 GT3 de la hoja, quita el fondo negro, recorta al contorno
@@ -304,9 +458,170 @@ function buildGT3CarTextures(scene) {
     });
 }
 
+// Genera texturas HD fotorrealistas de césped, grava y objetos ambientales con sombras
+function buildHDEnvironmentTextures(scene) {
+    // 1. Césped HD Fotorrealista (Mowed Lawn)
+    if (scene.textures.exists('hd_grass_src')) {
+        const src = scene.textures.get('hd_grass_src').getSourceImage();
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(src, 0, 0, 512, 512);
+        if (scene.textures.exists('dt_grass')) scene.textures.remove('dt_grass');
+        scene.textures.addCanvas('dt_grass', canvas);
+    }
+
+    // 2. Gravilla / Arena HD de Escapatoria (Gravel Runoff)
+    if (scene.textures.exists('hd_sand_src')) {
+        const src = scene.textures.get('hd_sand_src').getSourceImage();
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(src, 0, 0, 512, 512);
+        if (scene.textures.exists('dt_sand')) scene.textures.remove('dt_sand');
+        scene.textures.addCanvas('dt_sand', canvas);
+    }
+
+    // 3. Limpiador de fondo blanco con preservación de sombra realista
+    const cleanWhiteBg = (srcImg, targetKey, whiteThresh = 240, shadowFactor = 0.5) => {
+        const w = srcImg.width;
+        const h = srcImg.height;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(srcImg, 0, 0);
+
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+
+        const seen = new Uint8Array(w * h);
+        const stack = [];
+        for (let x = 0; x < w; x++) { stack.push(x, (h - 1) * w + x); }
+        for (let y = 0; y < h; y++) { stack.push(y * w, y * w + w - 1); }
+
+        while (stack.length) {
+            const p = stack.pop();
+            if (seen[p]) continue;
+            seen[p] = 1;
+            const r = d[p*4], g = d[p*4+1], b = d[p*4+2];
+            const maxC = Math.max(r, g, b);
+            const minC = Math.min(r, g, b);
+
+            if (maxC > 230 && (maxC - minC < 30)) {
+                d[p*4+3] = 0; // Fondo blanco eliminado
+                const x = p % w, y = (p / w) | 0;
+                if (x > 0) stack.push(p - 1);
+                if (x < w - 1) stack.push(p + 1);
+                if (y > 0) stack.push(p - w);
+                if (y < h - 1) stack.push(p + w);
+            } else if (maxC > 140 && (maxC - minC < 30)) {
+                // Sombra suave proyectada -> convertir a sombra alfa
+                const shadowStrength = 1.0 - (maxC / 255);
+                d[p*4] = 8;
+                d[p*4+1] = 12;
+                d[p*4+2] = 18;
+                d[p*4+3] = Math.round(shadowStrength * 200 * shadowFactor);
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+        if (scene.textures.exists(targetKey)) scene.textures.remove(targetKey);
+        scene.textures.addCanvas(targetKey, canvas);
+    };
+
+    if (scene.textures.exists('hd_tree_src')) {
+        cleanWhiteBg(scene.textures.get('hd_tree_src').getSourceImage(), 'dt_tree', 242, 0.45);
+    }
+    if (scene.textures.exists('hd_grandstand_src')) {
+        cleanWhiteBg(scene.textures.get('hd_grandstand_src').getSourceImage(), 'dt_grandstand', 238, 0.55);
+    }
+    if (scene.textures.exists('hd_tire_src')) {
+        cleanWhiteBg(scene.textures.get('hd_tire_src').getSourceImage(), 'dt_tire', 240, 0.50);
+    }
+    if (scene.textures.exists('hd_rock_src')) {
+        cleanWhiteBg(scene.textures.get('hd_rock_src').getSourceImage(), 'dt_rock', 242, 0.45);
+    }
+    if (scene.textures.exists('hd_bush_src')) {
+        cleanWhiteBg(scene.textures.get('hd_bush_src').getSourceImage(), 'dt_bushArea', 240, 0.40);
+    }
+}
+
+// Remasteriza las piezas de asfalto y pianos de Dust Racing 2D con textura moderna
+function buildHDRoadTextures(scene) {
+    const roadTiles = [
+        'dt_straight',
+        'dt_corner90',
+        'dt_corner45Left',
+        'dt_corner45Right',
+        'dt_straight45Male',
+        'dt_straight45Female',
+        'dt_finish'
+    ];
+
+    roadTiles.forEach(tileKey => {
+        if (!scene.textures.exists(tileKey)) return;
+        const orig = scene.textures.get(tileKey).getSourceImage();
+        const w = orig.width;
+        const h = orig.height;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(orig, 0, 0);
+
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const d = imgData.data;
+
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                const a = d[i+3];
+                if (a === 0) continue;
+
+                const r = d[i], g = d[i+1], b = d[i+2];
+
+                // Pianos rojos FIA con relieve 3D
+                if (r > 150 && g < 90 && b < 90) {
+                    const bevel = ((x + y) % 8 < 4) ? 22 : -22;
+                    d[i] = Math.max(0, Math.min(255, 220 + bevel));
+                    d[i+1] = Math.max(0, Math.min(255, 28 + bevel));
+                    d[i+2] = Math.max(0, Math.min(255, 42 + bevel));
+                }
+                // Pianos blancos con relieve
+                else if (r > 190 && g > 190 && b > 190) {
+                    const bevel = ((x + y) % 8 < 4) ? 14 : -14;
+                    d[i] = Math.max(0, Math.min(255, 245 + bevel));
+                    d[i+1] = Math.max(0, Math.min(255, 248 + bevel));
+                    d[i+2] = Math.max(0, Math.min(255, 252 + bevel));
+                }
+                // Asfalto moderno con textura de áridos y trazada engomada
+                else if (Math.abs(r - g) < 22 && Math.abs(g - b) < 22) {
+                    const noise = ((Math.random() - 0.5) * 14) | 0;
+                    const centerFactor = Math.sin((x / w) * Math.PI) * Math.sin((y / h) * Math.PI);
+                    const rubberTireDarken = Math.round(centerFactor * 16);
+
+                    d[i] = Math.max(12, 36 + noise - rubberTireDarken);
+                    d[i+1] = Math.max(14, 40 + noise - rubberTireDarken);
+                    d[i+2] = Math.max(18, 48 + noise - rubberTireDarken);
+                }
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+        scene.textures.remove(tileKey);
+        scene.textures.addCanvas(tileKey, canvas);
+    });
+}
+
 function dustCreate() {
     raceScene = this;
     buildGT3CarTextures(this);
+    buildHDEnvironmentTextures(this);
+    buildHDRoadTextures(this);
 
     // Configuración de Teclado
     keys = this.input.keyboard.addKeys({
@@ -538,29 +853,30 @@ function startRace(scene, trackId, carIdx) {
     track.objects.forEach(obj => {
         if (obj.r === 'tree') {
             // Sombra suave ambiental proyectada a 45 grados
-            scene.add.ellipse(obj.x + 8, obj.y + 10, 48, 40, 0x000000, 0.35).setDepth(13);
-            const tree = scene.add.sprite(obj.x, obj.y, 'dt_tree').setDisplaySize(56, 56).setDepth(14);
+            scene.add.ellipse(obj.x + 8, obj.y + 10, 58, 48, 0x000000, 0.40).setDepth(13);
+            const tree = scene.add.sprite(obj.x, obj.y, 'dt_tree').setDisplaySize(72, 72).setDepth(14);
             // Balanceo sutil de viento
             scene.tweens.add({
                 targets: tree,
-                angle: (Math.random() - 0.5) * 3,
-                duration: 2400 + Math.random() * 1200,
+                angle: (Math.random() - 0.5) * 4,
+                duration: 2600 + Math.random() * 1200,
                 yoyo: true,
                 repeat: -1,
                 ease: 'Sine.easeInOut'
             });
         } else if (obj.r === 'grandstand') {
-            // Sombra de tribuna
-            scene.add.rectangle(obj.x + 8, obj.y + 12, 140, 140, 0x000000, 0.3).setAngle(obj.o).setDepth(11);
-            scene.add.sprite(obj.x, obj.y, 'dt_grandstand').setDisplaySize(140, 140).setAngle(obj.o).setDepth(12);
+            // Tribuna con público en alta definición
+            scene.add.rectangle(obj.x + 8, obj.y + 12, 175, 125, 0x000000, 0.35).setAngle(obj.o).setDepth(11);
+            scene.add.sprite(obj.x, obj.y, 'dt_grandstand').setDisplaySize(180, 130).setAngle(obj.o).setDepth(12);
         } else if (obj.r === 'tire') {
-            scene.add.ellipse(obj.x + 2, obj.y + 3, 18, 18, 0x000000, 0.4).setDepth(5);
-            scene.add.sprite(obj.x, obj.y, 'dt_tire').setDisplaySize(18, 18).setAngle(obj.o).setDepth(6);
+            scene.add.ellipse(obj.x + 2, obj.y + 3, 26, 26, 0x000000, 0.42).setDepth(5);
+            scene.add.sprite(obj.x, obj.y, 'dt_tire').setDisplaySize(28, 28).setAngle(obj.o).setDepth(6);
         } else if (obj.r === 'rock') {
-            scene.add.ellipse(obj.x + 2, obj.y + 3, 20, 16, 0x000000, 0.35).setDepth(5);
-            scene.add.sprite(obj.x, obj.y, 'dt_rock').setDisplaySize(20, 20).setAngle(obj.o).setDepth(6);
+            scene.add.ellipse(obj.x + 2, obj.y + 3, 28, 24, 0x000000, 0.38).setDepth(5);
+            scene.add.sprite(obj.x, obj.y, 'dt_rock').setDisplaySize(32, 32).setAngle(obj.o).setDepth(6);
         } else if (obj.r === 'bushArea') {
-            scene.add.sprite(obj.x, obj.y, 'dt_bushArea').setDisplaySize(90, 90).setAngle(obj.o).setDepth(5);
+            scene.add.ellipse(obj.x + 3, obj.y + 4, 96, 96, 0x000000, 0.30).setDepth(4);
+            scene.add.sprite(obj.x, obj.y, 'dt_bushArea').setDisplaySize(100, 100).setAngle(obj.o).setDepth(5);
         } else if (obj.r === 'pit') {
             scene.add.sprite(obj.x, obj.y, 'dt_pit').setDisplaySize(256, 54).setAngle(obj.o).setDepth(5);
         }
