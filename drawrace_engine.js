@@ -198,7 +198,7 @@ let holographicBillboards = [];
 let skySearchlights = [];
 let sciFiWindmillBlades;
 
-let cameraMode = 'CHASE'; // 'CHASE' o 'ISOMETRIC'
+let cameraMode = 'ISOMETRIC'; // 'ISOMETRIC' (Diorama estilo DrawRace 2) o 'CHASE'
 let camLookAtTarget = new THREE.Vector3();
 let camShake = new THREE.Vector3();
 

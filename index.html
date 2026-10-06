@@ -12,12 +12,21 @@
 </head>
 <body>
     <!-- Barra superior de navegación entre modos -->
-    <div style="position:fixed; top:12px; right:12px; z-index:999; display:flex; gap:8px;">
-        <a href="drawrace.html" style="background:linear-gradient(135deg, #00f5d4, #ff007f); color:#020617; font-family:sans-serif; font-size:12px; font-weight:900; padding:8px 16px; border-radius:20px; text-decoration:none; box-shadow:0 0 20px rgba(0,245,212,0.8); display:flex; align-items:center; gap:6px; border:1px solid #ffffff;">
-            <span>🏎️ JUGAR MODO 3D (CYBER-APEX)</span>
+    <!-- Barra superior de navegación entre modos -->
+    <div class="mode-switch-bar">
+        <a href="drawrace.html" class="mode-btn-active">
+            <span>🎮 MODO 3D (DRAWRACE DIORAMA)</span>
             <span>▶</span>
         </a>
     </div>
+
+    <!-- Indicador de Próxima Curva y Guía -->
+    <div id="next-corner-box">
+        <span id="corner-icon">↰</span>
+        <span id="corner-name">CURVA 1</span>
+        <span id="corner-action" class="brake">FRENAR</span>
+    </div>
+
     <div id="game-container"></div>
 
     <!-- Telemetría Oficial de Retransmisión GT3 -->
@@ -69,7 +78,7 @@
         </div>
     </div>
 
-    <!-- Motor de Juego Real GP GT3 Motorsport (Basado en la foto de referencia) -->
-    <script src="real_gt_race.js?v=2"></script>
+    <!-- Motor de Juego Real GP GT3 Motorsport con Vallas y Trazada Guiada -->
+    <script src="real_gt_race.js?v=3"></script>
 </body>
 </html>

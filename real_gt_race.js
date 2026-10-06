@@ -1,10 +1,11 @@
 // ============================================================================
-// REAL GP MOTORSPORT : OFFICIAL GT3 EDITION (Phaser 3 Engine)
-// Construido directamente a partir de la fotografía aérea de referencia:
-// - Circuito fotorrealista GP con trazada engomada, pianos azul/blanco, escapatorias y colina con pinos y sombras.
-// - 6 Superdeportivos GT3 reales (Ferrari 488 GT3, Porsche 911 GT3 Grello, Aston Martin, BMW M4 GT3, McLaren Gulf, Iron Dames).
-// - Telemetría de retransmisión televisiva oficial (Velocímetro, Marchas, RPM, Clasificación en vivo, Radar Minimapa).
-// - Físicas con detección de fuera de pista (gravel/césped) y partículas de humo y polvo.
+// REAL GP MOTORSPORT : OFFICIAL GT3 EDITION (Phaser 3 Engine V3)
+// - Circuito Gran Premio con VALLAS METÁLICAS DE CONTENCIÓN Y MUROS 3D.
+// - Trazada Dinámica Guiada (Verde = Acelerar, Rojo = Frenar).
+// - Flechas y Carteles Chevron de Curva (<<< y >>>) en cada frenada.
+// - Sistema de Navegación de Curvas en el HUD ("HORQUILLA IZQ: FRENAR").
+// - Físicas con Rebote en Guardarraíl (el coche NUNCA se pierde del circuito).
+// - 6 Superdeportivos GT3 Oficiales con Telemetría de Retransmisión y Minimapa Radar.
 // ============================================================================
 
 if (window.Telegram && window.Telegram.WebApp) {
@@ -39,17 +40,15 @@ class GT3AudioEngine {
             if (!AudioCtx) return;
             this.ctx = new AudioCtx();
 
-            // Aullido principal motor GT3 (Sawtooth)
+            // Aullido motor GT3
             this.engineOsc1 = this.ctx.createOscillator();
             this.engineOsc1.type = 'sawtooth';
             this.engineOsc1.frequency.setValueAtTime(62, this.ctx.currentTime);
 
-            // Armónicos (Triangle)
             this.engineOsc2 = this.ctx.createOscillator();
             this.engineOsc2.type = 'triangle';
             this.engineOsc2.frequency.setValueAtTime(124, this.ctx.currentTime);
 
-            // Sub-bajos de escape
             this.subOsc = this.ctx.createOscillator();
             this.subOsc.type = 'sine';
             this.subOsc.frequency.setValueAtTime(31, this.ctx.currentTime);
@@ -89,9 +88,7 @@ class GT3AudioEngine {
             this.driftOsc.start();
 
             this.isReady = true;
-        } catch (e) {
-            console.log('Audio esperando interacción del usuario');
-        }
+        } catch (e) {}
     }
 
     update(speed, maxSpeed, isGas) {
@@ -137,14 +134,14 @@ class GT3AudioEngine {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(32, now + 0.15);
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.frequency.setValueAtTime(170, now);
+        osc.frequency.exponentialRampToValueAtTime(34, now + 0.16);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.15);
+        osc.stop(now + 0.16);
     }
 
     playCountdown(isGo) {
@@ -165,32 +162,33 @@ class GT3AudioEngine {
 const gtAudio = new GT3AudioEngine();
 
 // ----------------------------------------------------------------------------
-// 2. CONFIGURACIÓN DEL CIRCUITO FOTORREALISTA (1376 x 768)
+// 2. CONFIGURACIÓN DEL CIRCUITO Y TRAZADA DE ALTA PRECISIÓN (1376 x 768)
 // ----------------------------------------------------------------------------
 const TRACK_WIDTH = 1376;
 const TRACK_HEIGHT = 768;
+const ROAD_HALF_WIDTH = 48; // Ancho máximo de la calzada de asfalto
 
-// Trazado de alta fidelidad que recorre exactamente la trazada de asfalto de real_gp_circuit.jpg
+// Puntos de la trazada con metadatos de curvas, frenadas y consejos
 const GP_CIRCUIT_PATH = [
-    { x: 688, y: 635 }, // 0. Meta y parrilla principal (recta de meta hacia la izquierda)
-    { x: 500, y: 635 }, // 1. Recta principal
-    { x: 340, y: 630 }, // 2. Zona de frenada para Curva 1
-    { x: 200, y: 600 }, // 3. Entrada Curva Grande (curvón parabólico izquierdo)
-    { x: 130, y: 520 }, // 4. Apoyo Curva Grande
-    { x: 90, y: 400 },  // 5. Vértice Curva Grande oeste
-    { x: 110, y: 280 }, // 6. Salida curvón
-    { x: 180, y: 200 }, // 7. Enlace hacia recta trasera
-    { x: 320, y: 165 }, // 8. Entrada recta norte (DRS 1)
-    { x: 550, y: 160 }, // 9. Máxima aceleración recta norte
-    { x: 800, y: 160 }, // 10. Centro recta norte
-    { x: 1040, y: 170 },// 11. Frenada para sector Estadio
-    { x: 1160, y: 210 },// 12. Curva parabólica este
-    { x: 1225, y: 300 },// 13. Vértice exterior estadio
-    { x: 1230, y: 410 },// 14. Apoyo peraltado este
-    { x: 1180, y: 520 },// 15. Salida de estadio hacia chicane
-    { x: 1070, y: 600 },// 16. Curva final de entrada a recta
-    { x: 940, y: 635 }, // 17. Aceleración a fondo hacia meta
-    { x: 820, y: 635 }  // 18. Línea de llegada
+    { x: 688, y: 635, name: 'RECTA DE META', type: 'straight', icon: '⬆', advice: 'GAS A FONDO' },
+    { x: 500, y: 635, name: 'RECTA PRINCIPAL', type: 'straight', icon: '⬆', advice: 'GAS A FONDO' },
+    { x: 340, y: 630, name: 'FRENADA CURVA 1', type: 'brake', icon: '↰', advice: 'FRENAR' },
+    { x: 200, y: 600, name: 'CURVÓN IZQUIERDO', type: 'turn_left', icon: '↰', advice: 'VÉRTICE' },
+    { x: 130, y: 520, name: 'CURVA GRANDE', type: 'turn_left', icon: '↰', advice: 'MANTENER' },
+    { x: 90, y: 400,  name: 'VÉRTICE OESTE', type: 'turn_left', icon: '↰', advice: 'ACELERAR' },
+    { x: 110, y: 280, name: 'SALIDA CURVA 1', type: 'straight', icon: '⬆', advice: 'GAS' },
+    { x: 180, y: 200, name: 'ENLACE TRASERO', type: 'turn_right', icon: '↱', advice: 'GIRO SUAVE' },
+    { x: 320, y: 165, name: 'RECTA TRASERA (DRS)', type: 'straight', icon: '⬆', advice: 'MÁXIMA VEL' },
+    { x: 550, y: 160, name: 'RECTA NORTE', type: 'straight', icon: '⬆', advice: 'GAS A FONDO' },
+    { x: 800, y: 160, name: 'CENTRO RECTA NORTE', type: 'straight', icon: '⬆', advice: 'MÁXIMA VEL' },
+    { x: 1040, y: 170, name: 'FRENADA HORQUILLA', type: 'brake', icon: '↱', advice: 'FRENAR FUERTE' },
+    { x: 1160, y: 210, name: 'HORQUILLA ESTE', type: 'turn_right', icon: '↱', advice: 'VÉRTICE' },
+    { x: 1225, y: 300, name: 'CURVA ESTADIO', type: 'turn_right', icon: '↱', advice: 'PERALTE' },
+    { x: 1230, y: 410, name: 'DESCENSO ESTADIO', type: 'turn_right', icon: '↱', advice: 'ACELERAR' },
+    { x: 1180, y: 520, name: 'CHICANE SUR', type: 'turn_right', icon: '↱', advice: 'TRAZADA' },
+    { x: 1070, y: 600, name: 'CURVA FINAL', type: 'turn_right', icon: '↱', advice: 'ENCARAR META' },
+    { x: 940, y: 635,  name: 'ACELERACIÓN META', type: 'straight', icon: '⬆', advice: 'GAS A FONDO' },
+    { x: 820, y: 635,  name: 'APROXIMACIÓN META', type: 'straight', icon: '⬆', advice: 'A FONDO' }
 ];
 
 const config = {
@@ -216,7 +214,11 @@ let mainScene;
 let playerCar;
 let aiCars = [];
 let skidLayer;
+let barrierLayer;
+let racingLineLayer;
+let chevronLayer;
 let particlesLayer;
+let camTarget;
 let gameState = 'COUNTDOWN';
 
 let playerSpeed = 0;
@@ -225,13 +227,13 @@ let playerLap = 1;
 const TOTAL_LAPS = 3;
 let currentWaypointIdx = 0;
 let lapStartTime = 0;
-let isOffTrack = false;
 
 let keys = {};
 let touchLeft = false, touchRight = false, touchGas = false, touchBrake = false;
 
 // Elementos del DOM HUD
 let domSpeed, domGear, domRpm, domPos, domLap, domTime, domLeaderboard, domOfftrack, radarCanvas, radarCtx;
+let cornerIconEl, cornerNameEl, cornerActionEl;
 
 // ----------------------------------------------------------------------------
 // 3. PRELOAD
@@ -247,30 +249,37 @@ function realPreload() {
 function realCreate() {
     mainScene = this;
 
-    // 1. Fondo del Circuito Fotorrealista
+    // 1. Fondo de circuito aéreo de base
     this.add.image(0, 0, 'real_circuit_bg').setOrigin(0, 0);
     this.physics.world.setBounds(0, 0, TRACK_WIDTH, TRACK_HEIGHT);
 
-    // 2. Extraer los 6 coches GT3 con transparencia perfecta
+    // 2. Extraer los 6 coches GT3
     sliceGT3Cars(this);
 
-    // 3. Capas de huellas y partículas
-    skidLayer = this.add.graphics().setDepth(2);
-    particlesLayer = this.add.graphics().setDepth(3);
+    // 3. Capas gráficas de circuito con jerarquía visual profesional
+    racingLineLayer = this.add.graphics().setDepth(1); // Trazada dinámica sobre el asfalto
+    skidLayer = this.add.graphics().setDepth(2);       // Marcas de goma negra permanentes
+    particlesLayer = this.add.graphics().setDepth(3);  // Humo y chispas de barrera
+    barrierLayer = this.add.graphics().setDepth(5);    // Vallas de contención Armco y pianos
+    chevronLayer = this.add.graphics().setDepth(6);    // Carteles reflectantes de curva
 
-    // 4. Configurar controles y enlaces DOM
+    // 4. Dibujar barreras físicas y trazada para delimitar 100% la pista
+    buildCircuitBarriersAndRacingLine(this);
+
+    // 5. Configurar controles y enlaces DOM
     setupControls(this);
     setupDOM();
 
-    // 5. Instanciar Jugador y Rivales IA
+    // 6. Instanciar Jugador y Rivales IA
     spawnGT3Vehicles(this);
 
-    // 6. Cámara con seguimiento suave y zoom dinámico
+    // 7. Objeto Dummy para Cámara Predictiva (Lookahead)
+    camTarget = this.add.container(playerCar.container.x, playerCar.container.y);
     this.cameras.main.setBounds(0, 0, TRACK_WIDTH, TRACK_HEIGHT);
-    this.cameras.main.startFollow(playerCar.container, true, 0.08, 0.08);
-    this.cameras.main.setZoom(1.20);
+    this.cameras.main.startFollow(camTarget, true, 0.08, 0.08);
+    this.cameras.main.setZoom(1.22);
 
-    // 7. Iniciar secuencia de salida
+    // 8. Iniciar cuenta atrás
     startCountdownSequence(this);
 }
 
@@ -285,9 +294,172 @@ function setupDOM() {
     domOfftrack = document.getElementById('gt-offtrack');
     radarCanvas = document.getElementById('gt-radar-canvas');
     if (radarCanvas) radarCtx = radarCanvas.getContext('2d');
+
+    cornerIconEl = document.getElementById('corner-icon');
+    cornerNameEl = document.getElementById('corner-name');
+    cornerActionEl = document.getElementById('corner-action');
 }
 
-// Extrae con precisión los 6 bólidos GT3 eliminando el fondo negro
+// ----------------------------------------------------------------------------
+// 5. DIBUJO DE BARRERAS ARMCO Y TRAZADA DINÁMICA ILUMINADA
+// ----------------------------------------------------------------------------
+function buildCircuitBarriersAndRacingLine(scene) {
+    const N = GP_CIRCUIT_PATH.length;
+
+    // A) TRAZADA DINÁMICA DE COMPETICIÓN (Ribbon continuo en el asfalto)
+    for (let i = 0; i < N; i++) {
+        const p1 = GP_CIRCUIT_PATH[i];
+        const p2 = GP_CIRCUIT_PATH[(i + 1) % N];
+
+        // Color según sección: Verde en rectas, Amarillo en aproximación, Rojo en frenadas
+        let lineColor = 0x22c55e; // Verde
+        let alpha = 0.65;
+        if (p1.type === 'brake') {
+            lineColor = 0xef4444; // Rojo frenada
+            alpha = 0.90;
+        } else if (p1.type === 'turn_left' || p1.type === 'turn_right') {
+            lineColor = 0xf59e0b; // Amarillo/Ámbar
+            alpha = 0.80;
+        }
+
+        // Trazada central brillante
+        racingLineLayer.lineStyle(12, lineColor, alpha);
+        racingLineLayer.beginPath();
+        racingLineLayer.moveTo(p1.x, p1.y);
+        racingLineLayer.lineTo(p2.x, p2.y);
+        racingLineLayer.strokePath();
+
+        // Núcleo blanco de alta definición
+        racingLineLayer.lineStyle(3, 0xffffff, 0.85);
+        racingLineLayer.beginPath();
+        racingLineLayer.moveTo(p1.x, p1.y);
+        racingLineLayer.lineTo(p2.x, p2.y);
+        racingLineLayer.strokePath();
+
+        // Flechitas de dirección pintadas en el asfalto cada tramo
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+        drawAsphaltChevron(racingLineLayer, midX, midY, angle, lineColor);
+    }
+
+    // B) BARRERAS FÍSICAS DE CONTENCIÓN (ARMCO GUARDRAILS & MUROS DE NEUMÁTICOS)
+    for (let i = 0; i < N; i++) {
+        const p1 = GP_CIRCUIT_PATH[i];
+        const p2 = GP_CIRCUIT_PATH[(i + 1) % N];
+
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.hypot(dx, dy);
+        const nx = -dy / len;
+        const ny = dx / len;
+
+        // Valla exterior (+ROAD_HALF_WIDTH)
+        const out1X = p1.x + nx * ROAD_HALF_WIDTH;
+        const out1Y = p1.y + ny * ROAD_HALF_WIDTH;
+        const out2X = p2.x + nx * ROAD_HALF_WIDTH;
+        const out2Y = p2.y + ny * ROAD_HALF_WIDTH;
+
+        // Valla interior (-ROAD_HALF_WIDTH)
+        const in1X = p1.x - nx * ROAD_HALF_WIDTH;
+        const in1Y = p1.y - ny * ROAD_HALF_WIDTH;
+        const in2X = p2.x - nx * ROAD_HALF_WIDTH;
+        const in2Y = p2.y - ny * ROAD_HALF_WIDTH;
+
+        // Sombra de valla exterior
+        barrierLayer.lineStyle(6, 0x000000, 0.50);
+        barrierLayer.beginPath();
+        barrierLayer.moveTo(out1X + 3, out1Y + 3);
+        barrierLayer.lineTo(out2X + 3, out2Y + 3);
+        barrierLayer.strokePath();
+
+        // Raíl metálico exterior (Armco con postes)
+        barrierLayer.lineStyle(4, (i % 2 === 0 ? 0xffffff : 0xef4444), 0.95);
+        barrierLayer.beginPath();
+        barrierLayer.moveTo(out1X, out1Y);
+        barrierLayer.lineTo(out2X, out2Y);
+        barrierLayer.strokePath();
+
+        // Raíl metálico interior
+        barrierLayer.lineStyle(4, (i % 2 === 0 ? 0xffffff : 0x3b82f6), 0.95);
+        barrierLayer.beginPath();
+        barrierLayer.moveTo(in1X, in1Y);
+        barrierLayer.lineTo(in2X, in2Y);
+        barrierLayer.strokePath();
+
+        // Postes de soporte cada segmento
+        barrierLayer.fillStyle(0x0f172a, 1);
+        barrierLayer.fillCircle(out1X, out1Y, 3.5);
+        barrierLayer.fillCircle(in1X, in1Y, 3.5);
+    }
+
+    // C) PANELES GIGANTES DE FLECHAS CHEVRON (<<< y >>>) EN LAS CURVAS
+    const chevronLocations = [
+        { x: 310, y: 645, angle: Math.PI * 0.95, text: '◀◀ CURVA 1' },
+        { x: 160, y: 580, angle: -Math.PI * 0.70, text: '◀◀ VÉRTICE' },
+        { x: 75,  y: 380, angle: -Math.PI * 0.50, text: '▲ RECTA' },
+        { x: 1060, y: 155, angle: 0.15, text: '▶▶ HORQUILLA' },
+        { x: 1245, y: 280, angle: Math.PI * 0.45, text: '▶▶ ESTADIO' },
+        { x: 1200, y: 540, angle: Math.PI * 0.85, text: '▶▶ META' }
+    ];
+
+    chevronLocations.forEach(ch => {
+        drawTrackChevronSign(chevronLayer, ch.x, ch.y, ch.angle, ch.text);
+    });
+}
+
+function drawAsphaltChevron(g, x, y, angle, color) {
+    g.fillStyle(color, 0.9);
+    const size = 10;
+    const forwardX = Math.cos(angle);
+    const forwardY = Math.sin(angle);
+    const perpX = -forwardY;
+    const perpY = forwardX;
+
+    g.beginPath();
+    g.moveTo(x + forwardX * size, y + forwardY * size);
+    g.lineTo(x - forwardX * (size * 0.5) + perpX * size, y - forwardY * (size * 0.5) + perpY * size);
+    g.lineTo(x - forwardX * (size * 0.2), y - forwardY * (size * 0.2));
+    g.lineTo(x - forwardX * (size * 0.5) - perpX * size, y - forwardY * (size * 0.5) - perpY * size);
+    g.closePath();
+    g.fill();
+}
+
+function drawTrackChevronSign(g, x, y, angle, label) {
+    g.save();
+    // Tablero rectangular con fondo negro y borde reflectante amarillo
+    g.fillStyle(0x0a0f1d, 0.95);
+    g.lineStyle(2, 0xfacc15, 1);
+
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const w = 48;
+    const h = 18;
+
+    // Caja orientada
+    g.beginPath();
+    g.moveTo(x - cos * w + sin * h, y - sin * w - cos * h);
+    g.lineTo(x + cos * w + sin * h, y + sin * w - cos * h);
+    g.lineTo(x + cos * w - sin * h, y + sin * w + cos * h);
+    g.lineTo(x - cos * w - sin * h, y - sin * w + cos * h);
+    g.closePath();
+    g.fill();
+    g.strokePath();
+
+    // Flechas reflectantes rojas/amarillas en el cartel
+    g.fillStyle(0xef4444, 1);
+    for (let k = -1; k <= 1; k++) {
+        const cx = x + cos * (k * 16);
+        const cy = y + sin * (k * 16);
+        g.fillCircle(cx, cy, 4);
+    }
+    g.restore();
+}
+
+// ----------------------------------------------------------------------------
+// 6. SLICING Y GENERACIÓN DE VEHÍCULOS GT3
+// ----------------------------------------------------------------------------
 function sliceGT3Cars(scene) {
     const sourceImg = scene.textures.get('real_cars_sheet').getSourceImage();
     const carWidth = 440;
@@ -295,12 +467,12 @@ function sliceGT3Cars(scene) {
     const startX = [30, 530];
     const startY = [40, 370, 710];
     const carIds = [
-        'gt_porsche_grello', // Manthey Porsche 911 GT3 Grello (Amarillo/Verde)
-        'gt_ferrari_scuderia',// Ferrari 488 GT3 Rosso Corsa (Rojo)
-        'gt_aston_valvoline', // Aston Martin Vantage GT3 Valvoline (Azul marino)
-        'gt_bmw_m_motorsport',// BMW M4 GT3 Rowe (Blanco M)
-        'gt_iron_dames',      // Iron Dames GT3 (Rosa/Negro)
-        'gt_mclaren_gulf'     // McLaren 720S Gulf Racing (Naranja/Azul)
+        'gt_porsche_grello',
+        'gt_ferrari_scuderia',
+        'gt_aston_valvoline',
+        'gt_bmw_m_motorsport',
+        'gt_iron_dames',
+        'gt_mclaren_gulf'
     ];
 
     let idx = 0;
@@ -312,7 +484,6 @@ function sliceGT3Cars(scene) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(sourceImg, startX[c], startY[r], carWidth, carHeight, 0, 0, carWidth, carHeight);
 
-            // Chroma Key: fondo negro transparente
             const imgData = ctx.getImageData(0, 0, carWidth, carHeight);
             const data = imgData.data;
             for (let p = 0; p < data.length; p += 4) {
@@ -328,12 +499,10 @@ function sliceGT3Cars(scene) {
 }
 
 function spawnGT3Vehicles(scene) {
-    // 1. Coche del Jugador: Ferrari 488 GT3 Rosso Corsa
     playerCar = createGTCarEntity(scene, 'gt_ferrari_scuderia', 688, 635, 'TÚ (Ferrari 488 GT3)', '#ef4444');
     playerCar.container.setDepth(10);
     playerCar.isPlayer = true;
 
-    // 2. 5 Rivales IA oficiales
     const aiConfigs = [
         { id: 'gt_porsche_grello', x: 620, y: 620, name: 'Manthey Porsche 911', color: '#a3e635', speed: 435 },
         { id: 'gt_bmw_m_motorsport', x: 560, y: 650, name: 'BMW M4 Rowe GT3', color: '#f8fafc', speed: 425 },
@@ -357,24 +526,20 @@ function spawnGT3Vehicles(scene) {
 function createGTCarEntity(scene, textureKey, x, y, name, color) {
     const container = scene.add.container(x, y);
 
-    // Sombra suave proyectada bajo el coche en el asfalto
     const shadow = scene.add.ellipse(4, 4, 68, 36, 0x000000, 0.60);
     container.add(shadow);
 
-    // Sprite fotorrealista del bólido GT3 (58x32 px)
     const sprite = scene.add.sprite(0, 0, textureKey);
     sprite.setDisplaySize(58, 34);
-    // En la textura original el morro apunta a la izquierda; lo giramos 180° para que el frente apunte a 0 rad (derecha)
     sprite.setAngle(180);
     container.add(sprite);
 
-    // Haz de faros LED frontales proyectados sobre el circuito
     const hlG = scene.add.graphics();
-    hlG.fillStyle(0xffffff, 0.18);
+    hlG.fillStyle(0xffffff, 0.20);
     hlG.beginPath();
     hlG.moveTo(26, -7);
-    hlG.lineTo(125, -34);
-    hlG.lineTo(125, 34);
+    hlG.lineTo(135, -36);
+    hlG.lineTo(135, 36);
     hlG.lineTo(26, 7);
     hlG.closePath();
     hlG.fill();
@@ -419,16 +584,15 @@ function setupControls(scene) {
     bindTouch('btn-accel', () => touchGas = true, () => touchGas = false);
     bindTouch('btn-brake', () => touchBrake = true, () => touchBrake = false);
 
-    // Iniciar audio en el primer clic o toque de la pantalla
     scene.input.on('pointerdown', () => gtAudio.init());
 }
 
 // ----------------------------------------------------------------------------
-// 5. UPDATE : FÍSICAS, OFF-TRACK, TELEMETRÍA, DERIVA Y RADAR
+// 7. UPDATE : FÍSICAS, COLISIÓN CON VALLAS Y NAVEGACIÓN
 // ----------------------------------------------------------------------------
 let lastDriftPos = null;
 let lastLeaderboardUpdate = 0;
-let dustParticles = [];
+let sparksParticles = [];
 
 function realUpdate(time, delta) {
     const dt = delta / 1000;
@@ -436,8 +600,9 @@ function realUpdate(time, delta) {
 
     updatePlayer(dt);
     updateAI(dt);
-    updateCameraZoom();
+    updateCameraLookAhead();
     updateTelemetry(time);
+    updateCornerNavigator();
     renderRadar();
     renderParticles(dt);
 }
@@ -448,88 +613,97 @@ function updatePlayer(dt) {
     const gas = keys.up.isDown || keys.w.isDown || touchGas;
     const brake = keys.down.isDown || keys.s.isDown || touchBrake;
 
-    // Comprobación de Fuera de Pista (Distancia a la trazada de asfalto)
-    const px = playerCar.container.x;
-    const py = playerCar.container.y;
-    const distToTrack = getMinDistanceToCircuit(px, py);
-    isOffTrack = distToTrack > 56;
-
-    if (domOfftrack) {
-        domOfftrack.style.display = isOffTrack ? 'block' : 'none';
-    }
-
-    // Rendimiento alterado si se sale del circuito a la hierba o gravilla
-    const maxSpeed = isOffTrack ? 220 : 490;
-    const accelRate = isOffTrack ? 190 : 400;
-    const brakeRate = 540;
+    const maxSpeed = 490;
+    const accelRate = 410;
+    const brakeRate = 560;
 
     if (gas) {
         playerSpeed = Math.min(maxSpeed, playerSpeed + accelRate * dt);
     } else if (brake) {
         playerSpeed = Math.max(-120, playerSpeed - brakeRate * dt);
     } else {
-        playerSpeed *= (isOffTrack ? 0.94 : 0.985);
+        playerSpeed *= 0.985;
     }
 
     const turnRate = 4.3;
     if (left) playerAngle -= turnRate * dt * (playerSpeed >= 0 ? 1 : -1);
     if (right) playerAngle += turnRate * dt * (playerSpeed >= 0 ? 1 : -1);
 
-    playerCar.container.x += Math.cos(playerAngle) * playerSpeed * dt;
-    playerCar.container.y += Math.sin(playerAngle) * playerSpeed * dt;
+    let nextX = playerCar.container.x + Math.cos(playerAngle) * playerSpeed * dt;
+    let nextY = playerCar.container.y + Math.sin(playerAngle) * playerSpeed * dt;
+
+    // ========================================================================
+    // BARRERA DE CONTENCIÓN FÍSICA : EL COCHE REBOTA Y DESLIZA EN LA VALLA
+    // ========================================================================
+    const circuitInfo = getClosestCircuitSegment(nextX, nextY);
+    const dist = circuitInfo.distance;
+
+    // Si el coche toca el guardarraíl (más allá de ROAD_HALF_WIDTH - 2)
+    if (dist > (ROAD_HALF_WIDTH - 3)) {
+        // Punto de colisión en la barrera
+        const clampRatio = (ROAD_HALF_WIDTH - 4) / dist;
+        nextX = circuitInfo.closestX + (nextX - circuitInfo.closestX) * clampRatio;
+        nextY = circuitInfo.closestY + (nextY - circuitInfo.closestY) * clampRatio;
+
+        // Fricción y rebote contra la valla
+        playerSpeed *= 0.88;
+        gtAudio.playCrash();
+
+        // Chispas metálicas al rozar la barrera
+        for (let s = 0; s < 4; s++) {
+            sparksParticles.push({
+                x: nextX,
+                y: nextY,
+                vx: (Math.random() - 0.5) * 80 + Math.cos(playerAngle) * 30,
+                vy: (Math.random() - 0.5) * 80 + Math.sin(playerAngle) * 30,
+                radius: 3.5,
+                alpha: 1,
+                color: Math.random() > 0.5 ? 0xfacc15 : 0xf97316,
+                life: 0.28
+            });
+        }
+    }
+
+    playerCar.container.x = nextX;
+    playerCar.container.y = nextY;
     playerCar.container.rotation = playerAngle;
     playerCar.speed = playerSpeed;
     playerCar.angle = playerAngle;
 
-    // Fricción y sonido
+    // Fricción y sonido GT3
     const isDrifting = (left || right) && Math.abs(playerSpeed) > 270;
     gtAudio.setDrift(isDrifting ? 1.0 : 0);
-    const audioState = gtAudio.update(playerSpeed, 490, gas);
+    gtAudio.update(playerSpeed, 490, gas);
 
-    // Huellas de goma sobre asfalto
+    // Huellas de goma sobre el asfalto
     if (isDrifting || (brake && Math.abs(playerSpeed) > 200)) {
         if (lastDriftPos) {
             skidLayer.lineStyle(4, 0x06080e, 0.70);
             skidLayer.beginPath();
             skidLayer.moveTo(lastDriftPos.x, lastDriftPos.y);
-            skidLayer.lineTo(px, py);
+            skidLayer.lineTo(nextX, nextY);
             skidLayer.strokePath();
         }
-        lastDriftPos = { x: px, y: py };
+        lastDriftPos = { x: nextX, y: nextY };
 
-        // Partículas de humo blanco de goma
+        // Bocanadas de humo de neumático
         if (Math.random() < 0.6) {
-            dustParticles.push({
-                x: px - Math.cos(playerAngle) * 20,
-                y: py - Math.sin(playerAngle) * 20,
+            sparksParticles.push({
+                x: nextX - Math.cos(playerAngle) * 20,
+                y: nextY - Math.sin(playerAngle) * 20,
                 vx: (Math.random() - 0.5) * 20,
                 vy: (Math.random() - 0.5) * 20,
-                radius: 4,
+                radius: 4.5,
                 alpha: 0.6,
                 color: 0xcccccc,
-                life: 0.4
+                life: 0.38
             });
         }
     } else {
         lastDriftPos = null;
     }
 
-    // Partículas de polvo si se sale a la hierba/gravilla
-    if (isOffTrack && Math.abs(playerSpeed) > 80 && Math.random() < 0.7) {
-        dustParticles.push({
-            x: px - Math.cos(playerAngle) * 22,
-            y: py - Math.sin(playerAngle) * 22,
-            vx: (Math.random() - 0.5) * 40,
-            vy: (Math.random() - 0.5) * 40,
-            radius: 5,
-            alpha: 0.75,
-            color: 0xc4a47c,
-            life: 0.5
-        });
-    }
-
-    checkLapProgression(px, py);
-    return audioState;
+    checkLapProgression(nextX, nextY);
 }
 
 function updateAI(dt) {
@@ -555,7 +729,7 @@ function updateAI(dt) {
         const pDist = Math.hypot(playerCar.container.x - ai.container.x, playerCar.container.y - ai.container.y);
         if (pDist < 44) {
             gtAudio.playCrash();
-            playerSpeed *= 0.84;
+            playerSpeed *= 0.85;
             const pushAngle = Math.atan2(playerCar.container.y - ai.container.y, playerCar.container.x - ai.container.x);
             playerCar.container.x += Math.cos(pushAngle) * 8;
             playerCar.container.y += Math.sin(pushAngle) * 8;
@@ -563,25 +737,65 @@ function updateAI(dt) {
     });
 }
 
-// Distancia mínima desde (px, py) al circuito cerrado
-function getMinDistanceToCircuit(px, py) {
-    let minDist = 999999;
+// Retorna el punto más cercano en el eje del circuito y la distancia perpendicular
+function getClosestCircuitSegment(px, py) {
+    let minDistSq = 999999;
+    let closestX = px, closestY = py;
+    let closestIdx = 0;
+
     const len = GP_CIRCUIT_PATH.length;
     for (let i = 0; i < len; i++) {
-        const p1 = GP_CIRCUIT_PATH[i];
-        const p2 = GP_CIRCUIT_PATH[(i + 1) % len];
-        const d = distToSegmentSquared({ x: px, y: py }, p1, p2);
-        if (d < minDist) minDist = d;
+        const v = GP_CIRCUIT_PATH[i];
+        const w = GP_CIRCUIT_PATH[(i + 1) % len];
+
+        const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
+        let t = l2 === 0 ? 0 : ((px - v.x) * (w.x - v.x) + (py - v.y) * (w.y - v.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+
+        const projX = v.x + t * (w.x - v.x);
+        const projY = v.y + t * (w.y - v.y);
+        const dSq = (px - projX) ** 2 + (py - projY) ** 2;
+
+        if (dSq < minDistSq) {
+            minDistSq = dSq;
+            closestX = projX;
+            closestY = projY;
+            closestIdx = i;
+        }
     }
-    return Math.sqrt(minDist);
+    return { distance: Math.sqrt(minDistSq), closestX, closestY, segmentIdx: closestIdx };
 }
 
-function distToSegmentSquared(p, v, w) {
-    const l2 = (w.x - v.x) ** 2 + (w.y - v.y) ** 2;
-    if (l2 === 0) return (p.x - v.x) ** 2 + (p.y - v.y) ** 2;
-    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
-    t = Math.max(0, Math.min(1, t));
-    return (p.x - (v.x + t * (w.x - v.x))) ** 2 + (p.y - (v.y + t * (w.y - v.y))) ** 2;
+function updateCameraLookAhead() {
+    // La cámara enfoca 220px por delante del coche para que el jugador vea la curva con antelación
+    const lookDist = Math.min(220, Math.abs(playerSpeed) * 0.45);
+    const targetX = playerCar.container.x + Math.cos(playerAngle) * lookDist;
+    const targetY = playerCar.container.y + Math.sin(playerAngle) * lookDist;
+
+    camTarget.x = Phaser.Math.Linear(camTarget.x, targetX, 0.10);
+    camTarget.y = Phaser.Math.Linear(camTarget.y, targetY, 0.10);
+
+    const ratio = Math.abs(playerSpeed) / 490;
+    const targetZoom = 1.22 - ratio * 0.18;
+    mainScene.cameras.main.zoom = Phaser.Math.Linear(mainScene.cameras.main.zoom, targetZoom, 0.04);
+}
+
+// Actualiza el cartel animado en el HUD sobre la próxima curva
+function updateCornerNavigator() {
+    if (!cornerNameEl || !cornerActionEl) return;
+    const circuitInfo = getClosestCircuitSegment(playerCar.container.x, playerCar.container.y);
+    const nextWpIdx = (circuitInfo.segmentIdx + 1) % GP_CIRCUIT_PATH.length;
+    const wp = GP_CIRCUIT_PATH[nextWpIdx];
+
+    cornerIconEl.innerText = wp.icon;
+    cornerNameEl.innerText = wp.name;
+    cornerActionEl.innerText = wp.advice;
+
+    if (wp.type === 'brake') {
+        cornerActionEl.className = 'brake';
+    } else {
+        cornerActionEl.className = '';
+    }
 }
 
 function checkLapProgression(x, y) {
@@ -609,17 +823,10 @@ function checkLapProgression(x, y) {
     }
 }
 
-function updateCameraZoom() {
-    const ratio = Math.abs(playerSpeed) / 490;
-    const targetZoom = 1.20 - ratio * 0.16;
-    mainScene.cameras.main.zoom = Phaser.Math.Linear(mainScene.cameras.main.zoom, targetZoom, 0.04);
-}
-
 // ----------------------------------------------------------------------------
-// 6. TELEMETRÍA, CLASIFICACIÓN EN DIRECTO Y RADAR
+// 8. TELEMETRÍA, CLASIFICACIÓN Y RADAR
 // ----------------------------------------------------------------------------
 function updateTelemetry(time) {
-    // 1. Velocímetro y Marcha
     const kmh = Math.round(Math.abs(playerSpeed) * 0.58);
     if (domSpeed) domSpeed.innerText = kmh.toString();
     const ratio = Math.min(1, Math.abs(playerSpeed) / 490);
@@ -627,7 +834,6 @@ function updateTelemetry(time) {
     if (domGear) domGear.innerText = 'G' + gear;
     if (domRpm) domRpm.style.width = Math.round((ratio % 0.25) / 0.25 * 100) + '%';
 
-    // 2. Vuelta y Cronómetro
     if (domLap) domLap.innerText = Math.min(playerLap, TOTAL_LAPS) + '/' + TOTAL_LAPS;
     if (domTime && lapStartTime > 0) {
         const elapsed = Math.max(0, Date.now() - lapStartTime);
@@ -637,7 +843,6 @@ function updateTelemetry(time) {
         domTime.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms}`;
     }
 
-    // 3. Clasificación (Actualizada cada 150 ms)
     if (time - lastLeaderboardUpdate > 150) {
         lastLeaderboardUpdate = time;
 
@@ -671,7 +876,6 @@ function updateTelemetry(time) {
     }
 }
 
-// Dibuja el minimapa de radar en el canvas
 function renderRadar() {
     if (!radarCtx) return;
     const w = radarCanvas.width;
@@ -681,7 +885,6 @@ function renderRadar() {
     const scaleX = w / TRACK_WIDTH;
     const scaleY = h / TRACK_HEIGHT;
 
-    // Dibujar la trazada del circuito
     radarCtx.strokeStyle = 'rgba(0, 245, 212, 0.45)';
     radarCtx.lineWidth = 2.5;
     radarCtx.beginPath();
@@ -694,7 +897,6 @@ function renderRadar() {
     radarCtx.closePath();
     radarCtx.stroke();
 
-    // Rivales IA en el radar (puntos rojos/blancos)
     aiCars.forEach(ai => {
         radarCtx.fillStyle = ai.color;
         radarCtx.beginPath();
@@ -702,7 +904,6 @@ function renderRadar() {
         radarCtx.fill();
     });
 
-    // Jugador en el radar (punto dorado brillante con halo)
     const px = playerCar.container.x * scaleX;
     const py = playerCar.container.y * scaleY;
     radarCtx.fillStyle = '#fee440';
@@ -713,16 +914,16 @@ function renderRadar() {
 
 function renderParticles(dt) {
     particlesLayer.clear();
-    for (let i = dustParticles.length - 1; i >= 0; i--) {
-        const p = dustParticles[i];
+    for (let i = sparksParticles.length - 1; i >= 0; i--) {
+        const p = sparksParticles[i];
         p.life -= dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        p.radius += dt * 8;
-        p.alpha -= dt * 1.5;
+        p.radius = Math.max(1, p.radius - dt * 4);
+        p.alpha -= dt * 2.2;
 
         if (p.life <= 0 || p.alpha <= 0) {
-            dustParticles.splice(i, 1);
+            sparksParticles.splice(i, 1);
             continue;
         }
 
@@ -732,7 +933,7 @@ function renderParticles(dt) {
 }
 
 // ----------------------------------------------------------------------------
-// 7. SECUENCIA DE SALIDA Y CELEBRACIÓN DE VICTORIA
+// 9. CUENTA ATRÁS Y CELEBRACIÓN
 // ----------------------------------------------------------------------------
 function startCountdownSequence(scene) {
     let count = 3;
