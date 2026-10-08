@@ -523,7 +523,10 @@ function dustPreload() {
 // y los voltea para que el morro apunte a la derecha (convención de Dust Racing).
 // Genera las texturas con las mismas claves que usaba el juego (car_red, car_blue...).
 function buildGT3CarTextures(scene) {
-    const src = scene.textures.get('gt_cars_sheet').getSourceImage();
+    if (!scene.textures.exists('gt_cars_sheet')) return;
+    const tex = scene.textures.get('gt_cars_sheet');
+    const src = tex ? tex.getSourceImage() : null;
+    if (!src || !src.width) return;
     const cellW = 500, cellH = 330;
     const cells = [
         { key: 'car_yellow', c: 0, r: 0 }, // Manthey Porsche 911 GT3 Grello
@@ -882,10 +885,10 @@ function buildHDBridgeTextures(scene) {
 function dustCreate() {
     raceScene = this;
     window.raceScene = this;
-    buildGT3CarTextures(this);
-    buildHDEnvironmentTextures(this);
-    buildHDRoadTextures(this);
-    buildHDBridgeTextures(this);
+    try { buildGT3CarTextures(this); } catch(e) { console.warn('GT3 car tex build error:', e); }
+    try { buildHDEnvironmentTextures(this); } catch(e) { console.warn('HD env tex build error:', e); }
+    try { buildHDRoadTextures(this); } catch(e) { console.warn('HD road tex build error:', e); }
+    try { buildHDBridgeTextures(this); } catch(e) { console.warn('HD bridge tex build error:', e); }
 
     // Configuración de Teclado
     keys = this.input.keyboard.addKeys({

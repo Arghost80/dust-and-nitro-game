@@ -130,6 +130,11 @@ function renderMainHubView() {
         <div class="hero-center-box">
             <div class="game-logo-glow">${t('game_title')}</div>
             <div class="game-subtitle-tag">${t('game_subtitle')}</div>
+            <div class="hero-cta-row" style="margin-top: 14px;">
+                <button class="btn-hero-launch-direct" onclick="launchRaceDirectly('rookie_ring')">
+                    ⚡ ¡ENTRAR DIRECTO A LA PISTA / CORRER YA! ▶
+                </button>
+            </div>
         </div>
 
         <div class="zones-grid">

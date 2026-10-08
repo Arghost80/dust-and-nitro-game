@@ -1,0 +1,13 @@
+{
+  "name": "driftlands-telegram-racing",
+  "version": "1.0.0",
+  "description": "Retro-modern 2D racing bot & WebApp for Telegram",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "bot": "node bot.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

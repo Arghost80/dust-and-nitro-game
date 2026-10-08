@@ -297,8 +297,8 @@ function loadNftUserData() {
 
     // Asegurar retrocompatibilidad para coches existentes sin los 10 atributos o piezas
     data.garage.forEach(c => {
-        if (!c.stats) {
-            const m = NFT_CAR_MODELS.find(mod => mod.id === c.modelId) || starterModel;
+        if (!c.stats || typeof c.stats.potencia !== 'number') {
+            const m = NFT_CAR_MODELS.find(mod => mod.id === c.modelId || mod.name === c.name) || starterModel;
             c.stats = { ...m.stats };
         }
         if (!c.parts) c.parts = { ecu: 0, tires: 0, brakes: 0, turbo: 0, chassis: 0 };
