@@ -101,30 +101,30 @@ const NFT_CAR_MODELS = [
     { id: "leg_10", name: "VENOM F5 ABSOLUTE AERO", rarity: "legendary", speed: 445, accel: 320, handling: 4.9, sprite: "car_cyan", desc: "El vehículo de producción más rápido del planeta con coeficiente aerodinámico 0.33" }
 ];
 
-// Definición de las 3 Cajas Misteriosas NFT (Web3 Loot Boxes)
+// Definición de las 3 Cajas Misteriosas NFT (Web3 Loot Boxes - Probabilidades Exclusivas)
 const NFT_CRATES = {
     bronze: {
         id: "bronze",
         nameKey: "crate_bronze_title",
         cost: 500,
         currency: "credits", // $CR
-        odds: { common: 0.80, uncommon: 0.18, rare: 0.02, legendary: 0.00 },
+        odds: { common: 0.88, uncommon: 0.115, rare: 0.005, legendary: 0.00 },
         badgeColor: 0xcd7f32
     },
     silver: {
         id: "silver",
         nameKey: "crate_silver_title",
-        cost: 1500,
+        cost: 2000,
         currency: "credits", // $CR
-        odds: { common: 0.35, uncommon: 0.45, rare: 0.18, legendary: 0.02 },
+        odds: { common: 0.62, uncommon: 0.33, rare: 0.049, legendary: 0.001 },
         badgeColor: 0xc0c0c0
     },
     gold: {
         id: "gold",
         nameKey: "crate_gold_title",
-        cost: 250,
+        cost: 500,
         currency: "gems", // Gemas $TON
-        odds: { common: 0.05, uncommon: 0.25, rare: 0.50, legendary: 0.20 },
+        odds: { common: 0.28, uncommon: 0.52, rare: 0.185, legendary: 0.015 },
         badgeColor: 0xffd700
     }
 };
@@ -138,7 +138,7 @@ function loadNftUserData() {
     } catch(e) {}
 
     if (!data) {
-        // Estado inicial de nuevo jugador: 3,000 $CR, 600 Gemas y coche inicial Monza Hatch
+        // Estado inicial de nuevo jugador: 1,500 $CR, 250 Gemas y coche inicial Monza Hatch
         const starterColor = NFT_CAR_COLORS[0];
         const starterCar = {
             instanceId: "nft_inst_001",
@@ -158,8 +158,8 @@ function loadNftUserData() {
         };
 
         data = {
-            credits: 3500,
-            gems: 600,
+            credits: 2000,
+            gems: 300,
             equippedInstanceId: starterCar.instanceId,
             garage: [starterCar]
         };
