@@ -3,20 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dust Racing 2D - Telegram Mini App Edition</title>
+    <title>Apex Motorsport - Web3 NFT GT Circuit Edition</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="hub_styles.css?v=16">
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- Phaser 3.60 Canvas Game Engine -->
     <script src="assets/phaser.min.js"></script>
 </head>
 <body>
-    <div style="position:fixed; top:12px; right:12px; z-index:999;">
-        <a href="battle_derby.html" style="background:linear-gradient(135deg, #e53935, #ff1744); color:white; font-family:sans-serif; font-size:12px; font-weight:800; padding:8px 16px; border-radius:20px; text-decoration:none; box-shadow:0 4px 15px rgba(229,57,53,0.7); display:flex; align-items:center; gap:6px; border:1px solid #ffffff;">
-            <span>💥 JUGAR BATTLE DERBY 3D</span>
-            <span>▶</span>
-        </a>
+    <!-- PORTAL WEB3 Y HUB PRINCIPAL DEL JUEGO -->
+    <div id="game-hub-root">
+        <!-- Barra Superior con Perfil, Saldos y Ajustes ⚙️ -->
+        <header id="hub-header" class="hub-header"></header>
+
+        <!-- Contenedor Dinámico de Vistas -->
+        <main class="hub-view-container">
+            <!-- 1. Vista Principal (Hero & 5 Zonas Principales) -->
+            <section id="view-main" class="hub-view active"></section>
+
+            <!-- 2. Vista Garaje NFT (75+ Coches Coleccionables) -->
+            <section id="view-garage" class="hub-view"></section>
+
+            <!-- 3. Vista Cajas Misteriosas NFT (Web3 Gacha) -->
+            <section id="view-crates" class="hub-view"></section>
+
+            <!-- 4. Vista Tienda Oficial (Upgrades & Tokens) -->
+            <section id="view-shop" class="hub-view"></section>
+
+            <!-- 5. Vista Competición & Multijugador -->
+            <section id="view-comp" class="hub-view"></section>
+        </main>
+
+        <!-- Modal de Ajustes ⚙️ (Idiomas, Audio, Gráficos, Controles) -->
+        <div id="settings-modal" class="settings-modal hidden"></div>
     </div>
+
+    <!-- Contenedor del Juego Phaser 2D Canvas -->
     <div id="game-container"></div>
 
     <!-- Controles táctiles pantalla para móviles en Telegram -->
@@ -31,8 +54,11 @@
         </div>
     </div>
 
-    <!-- Cargar Circuitos Oficiales (.trk) y Motor de Juego Dust Racing 2D -->
-    <script src="tracks_data.js?v=15"></script>
-    <script src="dustrac_game.js?v=15"></script>
+    <!-- Módulos de Datos, Traducciones y Lógica Web3 -->
+    <script src="translations.js?v=16"></script>
+    <script src="nft_cars_data.js?v=16"></script>
+    <script src="tracks_data.js?v=16"></script>
+    <script src="dustrac_game.js?v=16"></script>
+    <script src="game_hub.js?v=16"></script>
 </body>
 </html>

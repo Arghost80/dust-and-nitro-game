@@ -936,6 +936,23 @@ function showMenu(scene) {
     const progress = loadStoryProgress();
     const isDesigner = progress.designerMode !== false;
 
+    // Botón volver al Hub Principal Web3
+    const hubBox = scene.add.graphics();
+    hubBox.fillStyle(0x0f172a, 0.95);
+    hubBox.fillRoundedRect(14, 12, 136, 28, 6);
+    hubBox.lineStyle(1.5, 0x00f5d4, 1);
+    hubBox.strokeRoundedRect(14, 12, 136, 28, 6);
+
+    const hubBtn = scene.add.text(82, 26, '🏠 HUB PRINCIPAL', {
+        font: 'bold 11px Arial',
+        fill: '#00f5d4'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    hubBtn.on('pointerdown', () => {
+        dustAudio.init();
+        if (window.returnToGameHub) window.returnToGameHub();
+    });
+
     // Cabecera Principal
     scene.add.text(420, 22, '🏁 DUST RACING 2D: APEX MOTORSPORT 🏁', {
         font: '900 22px Arial',
@@ -2261,8 +2278,31 @@ function endRace() {
         font: 'bold 15px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 18, y: 10 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
 
+    // Recompensas Web3 en $CR y Gemas por clasificación
+    let crReward = playerRank === 1 ? 1000 : (playerRank === 2 ? 600 : (playerRank === 3 ? 400 : 200));
+    let gemReward = playerRank === 1 ? 25 : (playerRank === 2 ? 15 : (playerRank === 3 ? 10 : 0));
+    if (typeof loadNftUserData === 'function') {
+        const u = loadNftUserData();
+        u.credits += crReward;
+        u.gems += gemReward;
+        saveNftUserData(u);
+    }
+
+    raceScene.add.text(480, 276, `💰 +${crReward} $CR  •  💎 +${gemReward} TON RECOMPENSA DE CARRERA`, {
+        font: 'bold 13px Arial', fill: '#00f5d4'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
     menuBtn.on('pointerdown', () => {
         showMenu(raceScene);
+    });
+
+    // Botón Salir al Hub Principal
+    const hubBtn = raceScene.add.text(480, btnY + 46, '🏠 SALIR AL HUB PRINCIPAL (GARAJE / CAJAS / TIENDA)', {
+        font: 'bold 12px Arial', fill: '#ffffff', backgroundColor: '#e53935', padding: { x: 18, y: 8 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
+
+    hubBtn.on('pointerdown', () => {
+        if (window.returnToGameHub) window.returnToGameHub();
     });
 }
 
