@@ -308,28 +308,134 @@ const CONFIG = {
 
 const game = new Phaser.Game(CONFIG);
 
-// Catálogo de coches con assets originales de Dust Racing 2D
+// Catálogo de coches con nombres 100% libres de derechos y diseño motorsport GT3
 const DUST_CARS = [
-    { id: 'car_red', texture: 'car_red', name: 'FERRARI 488 GT3', speed: 470, accel: 390, handling: 4.8 },
-    { id: 'car_blue', texture: 'car_blue', name: 'ASTON VANTAGE GT3', speed: 460, accel: 400, handling: 5.0 },
-    { id: 'car_yellow', texture: 'car_yellow', name: 'PORSCHE 911 GT3', speed: 490, accel: 420, handling: 4.6 },
-    { id: 'car_green', texture: 'car_green', name: 'BMW M4 GT3', speed: 450, accel: 410, handling: 5.4 },
-    { id: 'car_cyan', texture: 'car_cyan', name: 'MCLAREN 720S GT3', speed: 480, accel: 380, handling: 4.9 },
-    { id: 'car_orange', texture: 'car_orange', name: 'IRON DAMES GT3', speed: 475, accel: 395, handling: 4.7 }
+    { id: 'car_red', texture: 'car_red', name: 'CORSA ROSSO 48', subtitle: 'V8 Twin-Turbo • Scuderia Italia', speed: 470, accel: 390, handling: 4.8 },
+    { id: 'car_blue', texture: 'car_blue', name: 'VALKYRIE VANTAGE R', subtitle: 'V12 Aero • Apex British Works', speed: 460, accel: 400, handling: 5.0 },
+    { id: 'car_yellow', texture: 'car_yellow', name: 'STUTTGART 91-BOXER', subtitle: 'Flat-6 Boxer • Horst Precision', speed: 490, accel: 420, handling: 4.6 },
+    { id: 'car_green', texture: 'car_green', name: 'BAVARIA M4 BEAST', subtitle: 'TwinPower L6 • Munich Speed', speed: 450, accel: 410, handling: 5.4 },
+    { id: 'car_cyan', texture: 'car_cyan', name: 'HYPERION 72-AERO', subtitle: 'Carbon Cyber • Aerotech Works', speed: 480, accel: 380, handling: 4.9 },
+    { id: 'car_orange', texture: 'car_orange', name: 'SOLARIS DAME GT', subtitle: 'Endurance Pro • Solaris Racing', speed: 475, accel: 395, handling: 4.7 }
 ];
 
-let currentTrackId = 'monza';
+// Configuración completa del MODO HISTORIA (5 Capítulos • 22 Circuitos)
+const STORY_CHAPTERS = [
+    {
+        id: 'cap_1',
+        number: 1,
+        title: 'CAP. 1: COPA ROOKIE',
+        fullName: '🏆 CAPÍTULO 1: COPA ROOKIE REGIONAL',
+        subtitle: 'Iniciación en pistas técnicas y óvalos rápidos',
+        rival: 'Alex "Rookie" Stone (Valkyrie Vantage)',
+        briefing: 'Bienvenido al campeonato. Domina las trazadas y los pianos para dar el salto.',
+        tracks: [
+            { id: 'rookie_ring', name: 'Rookie Ring Speedway', desc: 'Circuito peraltado con arboleda', laps: 3, tod: 'day' },
+            { id: 'radiator_oval', name: 'Radiator Oval Park', desc: 'Óvalo con chicanes de potencia', laps: 3, tod: 'day' },
+            { id: 'tri_apex_coliseum', name: 'Tri-Apex Coliseum', desc: 'Tri-óvalo con vértices de 90°', laps: 3, tod: 'sunset' },
+            { id: 'twister_chicanes', name: 'Twister S-Chicanes', desc: 'Eses cerradas y escapatorias', laps: 3, tod: 'day' }
+        ]
+    },
+    {
+        id: 'cap_2',
+        number: 2,
+        title: 'CAP. 2: TROFEO CLUBMAN',
+        fullName: '🏆 CAPÍTULO 2: TROFEO NACIONAL CLUBMAN',
+        subtitle: 'Pistas con cruces a dos niveles, puentes y bosques',
+        rival: 'Marcus Vance (Bavaria M4 Beast)',
+        briefing: 'El asfalto es más estrecho y los pasos elevados exigen máxima concentración.',
+        tracks: [
+            { id: 'red_rock_junction', name: 'Red Rock Junction', desc: 'Cruce a dos niveles con puente', laps: 3, tod: 'day' },
+            { id: 'curvastone_park', name: 'Curvastone Parkway', desc: 'Parque británico con curvas fluidas', laps: 3, tod: 'sunset' },
+            { id: 'schwarzwald_sprint', name: 'Schwarzwald Forest', desc: 'Bosque rápido alemán de alta carga', laps: 3, tod: 'day' },
+            { id: 'overpass_figure8', name: 'Overpass Figure-8', desc: 'Figura en 8 con paso elevado', laps: 3, tod: 'night' }
+        ]
+    },
+    {
+        id: 'cap_3',
+        number: 3,
+        title: 'CAP. 3: DESAFÍO DESIERTO',
+        fullName: '🏆 CAPÍTULO 3: DESAFÍO DE LA FRONTERA & DESIERTO',
+        subtitle: 'Condiciones extremas, arena abrasiva y resistencia',
+        rival: 'Elena "Mirage" Rostova (Hyperion 72-Aero)',
+        briefing: 'El calor del cañón castiga los frenos. Evita a toda costa la arena suelta.',
+        tracks: [
+            { id: 'desert_canyon', name: 'Desert Canyon Ridge', desc: 'Desfiladero entre cañones de roca', laps: 3, tod: 'day' },
+            { id: 'sandstorm_dunes', name: 'Sandstorm Dunes', desc: 'Pista desértica con escapatorias', laps: 3, tod: 'sunset' },
+            { id: 'badlands_endurance', name: 'Badlands Mega-Endurance', desc: 'Circuito colosal de gran distancia', laps: 2, tod: 'sunset' },
+            { id: 'infinity_loops', name: 'Infinity Twin-Loops', desc: 'Doble bucle simétrico de precisión', laps: 3, tod: 'day' }
+        ]
+    },
+    {
+        id: 'cap_4',
+        number: 4,
+        title: 'CAP. 4: CAMPEONATO PRO',
+        fullName: '🏆 CAPÍTULO 4: CAMPEONATO PRO CONTINENTAL',
+        subtitle: 'Templos de velocidad punta y aerodinámica pura',
+        rival: 'Viktor "The Wall" Sterling (Stuttgart 91-B)',
+        briefing: 'Aquí corren los campeones. Rectas a más de 300 km/h y frenadas límite.',
+        tracks: [
+            { id: 'brianza_speedway', name: 'Autodromo Brianza', desc: 'El templo legendario de la velocidad', laps: 3, tod: 'day' },
+            { id: 'sakura_ring', name: 'Sakura Twin-Ring', desc: 'Curvas en 8 enlazadas y puente overpass', laps: 3, tod: 'day' },
+            { id: 'diamond_apex', name: 'Diamond Apex Ring', desc: 'Trazado geométrico en diamante', laps: 3, tod: 'sunset' },
+            { id: 'super_dragway', name: 'Super-Straight Dragway', desc: 'Recta infinita y frenadas extremas', laps: 3, tod: 'night' }
+        ]
+    },
+    {
+        id: 'cap_5',
+        number: 5,
+        title: 'CAP. 5: LEYENDAS MUNDIAL',
+        fullName: '🏆 CAPÍTULO 5: GRAN FINAL MUNDIAL DE LEYENDAS',
+        subtitle: 'Los 6 circuitos definitivos del automovilismo mundial',
+        rival: 'Max "Apex God" Kincaid (Corsa Rosso 48)',
+        briefing: 'La consagración definitiva. Circuitos míticos donde nacen las leyendas.',
+        tracks: [
+            { id: 'riviera_coast', name: 'Riviera Monaco Harbor', desc: 'Circuito urbano costero con chicanes', laps: 3, tod: 'day' },
+            { id: 'nordkette_pass', name: 'Nordkette Alpine Pass', desc: 'Paso de montaña alpino con horquillas', laps: 3, tod: 'sunset' },
+            { id: 'silverstone_airfield', name: 'Aerodrome Apex GP', desc: 'Antiguo aeródromo de alta velocidad', laps: 3, tod: 'day' },
+            { id: 'neo_tokyo_bay', name: 'Neo-Tokyo Bay Ring', desc: 'Bahía nocturna iluminada con xenón', laps: 3, tod: 'night' },
+            { id: 'inter_laguna', name: 'Inter-Laguna Bowl', desc: 'Autódromo tropical con peraltes', laps: 3, tod: 'day' },
+            { id: 'sarthe_endurance', name: 'Sarthe 24H Speedway', desc: 'Mítica recta Mulsanne y resistencia', laps: 2, tod: 'night' }
+        ]
+    }
+];
+
+// Gestión de guardado del Modo Historia en LocalStorage
+function loadStoryProgress() {
+    try {
+        const raw = localStorage.getItem('dustrac_story_save');
+        if (raw) return JSON.parse(raw);
+    } catch(e) {}
+    return {
+        unlockedTracks: ['rookie_ring'],
+        stars: {},
+        bestRanks: {},
+        bestTimes: {}
+    };
+}
+
+function saveStoryProgress(data) {
+    try {
+        localStorage.setItem('dustrac_story_save', JSON.stringify(data));
+    } catch(e) {}
+}
+
+let currentTrackId = 'rookie_ring';
 let selectedCarIndex = 0;
 let selectedTimeOfDay = 'day'; // 'day' | 'sunset' | 'night'
 let gameState = 'MENU'; // 'MENU' | 'COUNTDOWN' | 'RACE' | 'FINISHED'
+let menuMode = 'STORY'; // 'STORY' | 'ARCADE'
+let currentChapterIndex = 0;
+let arcadeCategoryIndex = 0;
+let arcadePage = 0;
+let isCurrentRaceStory = true;
 
 let raceScene;
 let playerCar;
 let aiCars = [];
 let playerSpeed = 0;
 let playerLap = 1;
-const TOTAL_LAPS = 3;
-let playerNextNodeIdx = 1;
+let TOTAL_LAPS = 3;
+let playerNextNodeIdx = 0;
 let lapStartTime = 0;
 let bestLapTime = null;
 
@@ -786,102 +892,346 @@ function setupTouchControls() {
     bindTouch('btn-brake', () => touchBrake = true, () => touchBrake = false);
 }
 
-// ===== MENÚ PRINCIPAL: SELECCIÓN DE CIRCUITO Y COCHE =====
+// ===== MENÚ PRINCIPAL: MODO HISTORIA Y CARRERA LIBRE =====
 function showMenu(scene) {
     gameState = 'MENU';
     scene.children.removeAll();
 
     // Fondo elegante estilo juego de carreras retro-moderno
     const bg = scene.add.graphics();
-    bg.fillStyle(0x0c0e14, 1);
+    bg.fillStyle(0x0a0c14, 1);
     bg.fillRect(0, 0, 960, 540);
 
     // Patrón decorativo de cuadros
-    bg.fillStyle(0x141824, 0.4);
+    bg.fillStyle(0x121624, 0.45);
     for (let x = 0; x < 960; x += 40) {
         for (let y = 0; y < 540; y += 40) {
             if ((x / 40 + y / 40) % 2 === 0) bg.fillRect(x, y, 40, 40);
         }
     }
 
-    // Cabecera
-    scene.add.text(480, 45, '🏁 DUST RACING 2D 🏁', {
-        font: '900 36px Arial',
+    // Cabecera Principal
+    scene.add.text(480, 22, '🏁 DUST RACING 2D: APEX MOTORSPORT 🏁', {
+        font: '900 24px Arial',
         fill: '#ffffff',
         stroke: '#e53935',
-        strokeThickness: 6
+        strokeThickness: 5
     }).setOrigin(0.5);
 
-    scene.add.text(480, 84, 'TELEGRAM MINI APP EDITION • CIRCUITOS Y ASSETS OFICIALES', {
-        font: 'bold 12px Arial',
+    scene.add.text(480, 44, 'MODO HISTORIA • 5 CAMPEONATOS • 22 CIRCUITOS • VEHÍCULOS GT3', {
+        font: 'bold 11px Arial',
         fill: '#00f5d4',
         letterSpacing: 2
     }).setOrigin(0.5);
 
-    // Selección de Circuitos Oficiales
-    scene.add.text(480, 125, '--- SELECCIONA CIRCUITO OFICIAL ---', {
-        font: '900 13px Arial', fill: '#fee440'
-    }).setOrigin(0.5);
-
-    const circuitList = [
-        { id: 'monza', name: '🇮🇹 MONZA (Templo de la Velocidad)' },
-        { id: 'suzuka', name: '🇯🇵 SUZUKA (Curvas en S & Puente)' },
-        { id: 'twineburg', name: '🇩🇪 TWINEBURG (Circuito Rápido Bosque)' },
-        { id: 'crossroads', name: '🇺🇸 CROSSROADS (Cruce & Chicanes)' },
-        { id: 'western_valley', name: '🏜️ WESTERN VALLEY (Cañón & Arena)' },
-        { id: 'triangle', name: '🏁 TRIANGLE (Tri-Óvalo Técnico)' }
+    // Selector de Modo Principal: [ 🏆 MODO HISTORIA ] vs [ ⚡ CARRERA LIBRE ]
+    const modes = [
+        { id: 'STORY', label: '🏆 MODO HISTORIA (CAMPAÑA 22 CIRCUITOS)', x: 310 },
+        { id: 'ARCADE', label: '⚡ CARRERA LIBRE (SELECCIÓN LIBRE)', x: 650 }
     ];
 
-    circuitList.forEach((c, idx) => {
-        const col = idx % 2;
-        const row = Math.floor(idx / 2);
-        const bx = col === 0 ? 270 : 690;
-        const by = 165 + row * 45;
-        const isSel = currentTrackId === c.id;
+    modes.forEach(m => {
+        const isSel = menuMode === m.id;
+        const mBox = scene.add.graphics();
+        mBox.fillStyle(isSel ? 0xd32f2f : 0x161b26, 0.95);
+        mBox.fillRoundedRect(m.x - 155, 58, 310, 30, 6);
+        mBox.lineStyle(2, isSel ? 0xfee440 : 0x2e384d, 1);
+        mBox.strokeRoundedRect(m.x - 155, 58, 310, 30, 6);
 
-        const btnBox = scene.add.graphics();
-        btnBox.fillStyle(isSel ? 0xd32f2f : 0x1b202e, 0.95);
-        btnBox.fillRoundedRect(bx - 190, by - 16, 380, 34, 6);
-        btnBox.lineStyle(2, isSel ? 0xfee440 : 0x2e384d, 1);
-        btnBox.strokeRoundedRect(bx - 190, by - 16, 380, 34, 6);
-
-        const btnTxt = scene.add.text(bx, by, c.name, {
-            font: 'bold 13px Arial',
-            fill: isSel ? '#ffffff' : '#cfd8dc'
+        const mBtn = scene.add.text(m.x, 73, m.label, {
+            font: '900 12px Arial',
+            fill: isSel ? '#ffffff' : '#b0bec5'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        btnTxt.on('pointerdown', () => {
+        mBtn.on('pointerdown', () => {
             dustAudio.init();
-            currentTrackId = c.id;
+            menuMode = m.id;
+            isCurrentRaceStory = (m.id === 'STORY');
             showMenu(scene);
         });
     });
 
-    // Selección de Coches Oficiales de Dust Racing 2D
-    scene.add.text(480, 290, '--- SELECCIONA VEHÍCULO OFICIAL ---', {
-        font: '900 12px Arial', fill: '#fee440'
+    const progress = loadStoryProgress();
+
+    // -------------------------------------------------------------
+    // SECCIÓN 1: VISTA MODO HISTORIA
+    // -------------------------------------------------------------
+    if (menuMode === 'STORY') {
+        // Pestañas de los 5 Capítulos
+        STORY_CHAPTERS.forEach((ch, idx) => {
+            const bx = 110 + idx * 185;
+            const by = 104;
+            const isChSel = currentChapterIndex === idx;
+
+            const chBox = scene.add.graphics();
+            chBox.fillStyle(isChSel ? 0x2e7d32 : 0x141822, 0.95);
+            chBox.fillRoundedRect(bx - 84, by - 12, 168, 24, 5);
+            chBox.lineStyle(1.5, isChSel ? 0x00f5d4 : 0x2c3549, 1);
+            chBox.strokeRoundedRect(bx - 84, by - 12, 168, 24, 5);
+
+            const chBtn = scene.add.text(bx, by, ch.title, {
+                font: 'bold 11px Arial',
+                fill: isChSel ? '#ffffff' : '#90a4ae'
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            chBtn.on('pointerdown', () => {
+                dustAudio.init();
+                currentChapterIndex = idx;
+                showMenu(scene);
+            });
+        });
+
+        // Banner informativo del capítulo activo
+        const activeCh = STORY_CHAPTERS[currentChapterIndex];
+        const chapterTracks = activeCh.tracks;
+        let chapterStars = 0;
+        chapterTracks.forEach(t => {
+            chapterStars += (progress.stars[t.id] || 0);
+        });
+        const maxStars = chapterTracks.length * 3;
+
+        scene.add.text(480, 126, `${activeCh.fullName} • RIVAL: ${activeCh.rival} • ⭐ ${chapterStars}/${maxStars} ESTRELLAS`, {
+            font: 'bold 11px Arial', fill: '#fee440'
+        }).setOrigin(0.5);
+
+        // Tarjetas de los circuitos del capítulo
+        const isDenseChapter = chapterTracks.length > 4; // Cap 5 tiene 6 pistas
+        if (!isDenseChapter) {
+            // Fila única de 4 tarjetas
+            chapterTracks.forEach((t, idx) => {
+                const cx = 135 + idx * 230;
+                const cy = 205;
+                const isUnlocked = progress.unlockedTracks.includes(t.id);
+                const isSel = currentTrackId === t.id;
+                const starsCount = progress.stars[t.id] || 0;
+                const starsText = starsCount === 3 ? '⭐⭐⭐' : (starsCount === 2 ? '⭐⭐☆' : (starsCount === 1 ? '⭐☆☆' : '☆☆☆'));
+
+                const cBox = scene.add.graphics();
+                cBox.fillStyle(isUnlocked ? (isSel ? 0xd32f2f : 0x171d2b) : 0x0f121a, 0.95);
+                cBox.fillRoundedRect(cx - 105, cy - 65, 210, 130, 8);
+                cBox.lineStyle(2, isSel ? 0xfee440 : (isUnlocked ? 0x2e384d : 0x1e2430), 1);
+                cBox.strokeRoundedRect(cx - 105, cy - 65, 210, 130, 8);
+
+                if (isUnlocked) {
+                    scene.add.text(cx, cy - 44, `CARRERA ${idx + 1}`, {
+                        font: 'bold 10px Arial', fill: '#00f5d4'
+                    }).setOrigin(0.5);
+
+                    scene.add.text(cx, cy - 24, t.name, {
+                        font: '900 12px Arial', fill: isSel ? '#ffffff' : '#eceff1', align: 'center', wordWrap: { width: 195 }
+                    }).setOrigin(0.5);
+
+                    scene.add.text(cx, cy + 6, t.desc, {
+                        font: '10px Arial', fill: '#90a4ae', align: 'center', wordWrap: { width: 195 }
+                    }).setOrigin(0.5);
+
+                    scene.add.text(cx, cy + 34, starsText, {
+                        font: 'bold 16px Arial', fill: '#fee440'
+                    }).setOrigin(0.5);
+
+                    scene.add.text(cx, cy + 52, isSel ? '▶ SELECCIONADO' : 'CLICK PARA SELECCIONAR', {
+                        font: 'bold 10px Arial', fill: isSel ? '#ffffff' : '#00e676'
+                    }).setOrigin(0.5);
+
+                    const hit = scene.add.rectangle(cx, cy, 210, 130).setInteractive({ useHandCursor: true });
+                    hit.on('pointerdown', () => {
+                        dustAudio.init();
+                        currentTrackId = t.id;
+                        isCurrentRaceStory = true;
+                        showMenu(scene);
+                    });
+                } else {
+                    scene.add.text(cx, cy - 22, '🔒 BLOQUEADO', {
+                        font: '900 14px Arial', fill: '#ff5252'
+                    }).setOrigin(0.5);
+                    scene.add.text(cx, cy + 8, t.name, {
+                        font: 'bold 11px Arial', fill: '#546e7a', align: 'center', wordWrap: { width: 180 }
+                    }).setOrigin(0.5);
+                    scene.add.text(cx, cy + 32, 'Termina la carrera anterior en TOP 3 para desbloquear', {
+                        font: '10px Arial', fill: '#455a64', align: 'center', wordWrap: { width: 180 }
+                    }).setOrigin(0.5);
+                }
+            });
+        } else {
+            // 2 filas de 3 tarjetas para el Capítulo 5 (6 circuitos)
+            chapterTracks.forEach((t, idx) => {
+                const col = idx % 3;
+                const row = Math.floor(idx / 3);
+                const cx = 190 + col * 290;
+                const cy = 175 + row * 65;
+                const isUnlocked = progress.unlockedTracks.includes(t.id);
+                const isSel = currentTrackId === t.id;
+                const starsCount = progress.stars[t.id] || 0;
+                const starsText = starsCount === 3 ? '⭐⭐⭐' : (starsCount === 2 ? '⭐⭐☆' : (starsCount === 1 ? '⭐☆☆' : '☆☆☆'));
+
+                const cBox = scene.add.graphics();
+                cBox.fillStyle(isUnlocked ? (isSel ? 0xd32f2f : 0x171d2b) : 0x0f121a, 0.95);
+                cBox.fillRoundedRect(cx - 135, cy - 26, 270, 52, 6);
+                cBox.lineStyle(1.5, isSel ? 0xfee440 : (isUnlocked ? 0x2e384d : 0x1e2430), 1);
+                cBox.strokeRoundedRect(cx - 135, cy - 26, 270, 52, 6);
+
+                if (isUnlocked) {
+                    scene.add.text(cx - 120, cy - 10, `${idx + 1}. ${t.name}`, {
+                        font: 'bold 12px Arial', fill: isSel ? '#ffffff' : '#cfd8dc'
+                    });
+                    scene.add.text(cx - 120, cy + 8, t.desc, {
+                        font: '10px Arial', fill: '#90a4ae'
+                    });
+                    scene.add.text(cx + 100, cy, starsText, {
+                        font: 'bold 13px Arial', fill: '#fee440'
+                    }).setOrigin(0.5);
+
+                    const hit = scene.add.rectangle(cx, cy, 270, 52).setInteractive({ useHandCursor: true });
+                    hit.on('pointerdown', () => {
+                        dustAudio.init();
+                        currentTrackId = t.id;
+                        isCurrentRaceStory = true;
+                        showMenu(scene);
+                    });
+                } else {
+                    scene.add.text(cx - 120, cy - 8, `🔒 ${idx + 1}. ${t.name}`, {
+                        font: 'bold 12px Arial', fill: '#546e7a'
+                    });
+                    scene.add.text(cx - 120, cy + 9, 'Top 3 en la anterior para desbloquear', {
+                        font: '10px Arial', fill: '#37474f'
+                    });
+                }
+            });
+        }
+    }
+    // -------------------------------------------------------------
+    // SECCIÓN 2: VISTA CARRERA LIBRE (ARCADE - 22 CIRCUITOS)
+    // -------------------------------------------------------------
+    else {
+        // Categorías de Carrera Libre
+        const categories = [
+            { id: 0, label: 'TODAS (22)' },
+            { id: 1, label: 'ROOKIE (4)' },
+            { id: 2, label: 'CLUBMAN (4)' },
+            { id: 3, label: 'DESIERTO (4)' },
+            { id: 4, label: 'PRO GT (4)' },
+            { id: 5, label: 'LEYENDAS (6)' }
+        ];
+
+        categories.forEach((cat, idx) => {
+            const bx = 100 + idx * 152;
+            const by = 104;
+            const isCatSel = arcadeCategoryIndex === cat.id;
+
+            const cBox = scene.add.graphics();
+            cBox.fillStyle(isCatSel ? 0x0277bd : 0x141822, 0.95);
+            cBox.fillRoundedRect(bx - 68, by - 12, 136, 24, 5);
+            cBox.lineStyle(1.5, isCatSel ? 0x00f5d4 : 0x2c3549, 1);
+            cBox.strokeRoundedRect(bx - 68, by - 12, 136, 24, 5);
+
+            const cBtn = scene.add.text(bx, by, cat.label, {
+                font: 'bold 11px Arial',
+                fill: isCatSel ? '#ffffff' : '#90a4ae'
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+            cBtn.on('pointerdown', () => {
+                dustAudio.init();
+                arcadeCategoryIndex = cat.id;
+                arcadePage = 0;
+                showMenu(scene);
+            });
+        });
+
+        // Filtrar lista de circuitos según categoría
+        let filteredTracks = [];
+        if (arcadeCategoryIndex === 0) {
+            STORY_CHAPTERS.forEach(ch => ch.tracks.forEach(t => filteredTracks.push(t)));
+        } else {
+            const targetCh = STORY_CHAPTERS[arcadeCategoryIndex - 1];
+            if (targetCh) filteredTracks = targetCh.tracks;
+        }
+
+        const pageSize = 8;
+        const totalPages = Math.ceil(filteredTracks.length / pageSize);
+        const pageTracks = filteredTracks.slice(arcadePage * pageSize, (arcadePage + 1) * pageSize);
+
+        scene.add.text(480, 126, `CIRCUITOS DISPONIBLES: ${filteredTracks.length} • PÁGINA ${arcadePage + 1} DE ${totalPages}`, {
+            font: 'bold 11px Arial', fill: '#00f5d4'
+        }).setOrigin(0.5);
+
+        // Rejilla de 2 filas x 4 columnas
+        pageTracks.forEach((t, idx) => {
+            const col = idx % 4;
+            const row = Math.floor(idx / 4);
+            const cx = 135 + col * 230;
+            const cy = 168 + row * 62;
+            const isSel = currentTrackId === t.id;
+
+            const cBox = scene.add.graphics();
+            cBox.fillStyle(isSel ? 0xd32f2f : 0x171d2b, 0.95);
+            cBox.fillRoundedRect(cx - 105, cy - 25, 210, 50, 6);
+            cBox.lineStyle(1.5, isSel ? 0xfee440 : 0x2e384d, 1);
+            cBox.strokeRoundedRect(cx - 105, cy - 25, 210, 50, 6);
+
+            scene.add.text(cx, cy - 8, t.name, {
+                font: '900 11px Arial', fill: isSel ? '#ffffff' : '#eceff1', align: 'center', wordWrap: { width: 195 }
+            }).setOrigin(0.5);
+
+            scene.add.text(cx, cy + 10, t.desc, {
+                font: '10px Arial', fill: '#90a4ae', align: 'center', wordWrap: { width: 195 }
+            }).setOrigin(0.5);
+
+            const hit = scene.add.rectangle(cx, cy, 210, 50).setInteractive({ useHandCursor: true });
+            hit.on('pointerdown', () => {
+                dustAudio.init();
+                currentTrackId = t.id;
+                isCurrentRaceStory = false;
+                showMenu(scene);
+            });
+        });
+
+        // Controles de paginación si hay más de 8 pistas
+        if (totalPages > 1) {
+            if (arcadePage > 0) {
+                const prevBtn = scene.add.text(60, 260, '◀ ANTERIOR', {
+                    font: 'bold 11px Arial', fill: '#00f5d4', backgroundColor: '#161b26', padding: { x: 8, y: 4 }
+                }).setInteractive({ useHandCursor: true });
+                prevBtn.on('pointerdown', () => { arcadePage--; showMenu(scene); });
+            }
+            if (arcadePage < totalPages - 1) {
+                const nextBtn = scene.add.text(820, 260, 'SIGUIENTE ▶', {
+                    font: 'bold 11px Arial', fill: '#00f5d4', backgroundColor: '#161b26', padding: { x: 8, y: 4 }
+                }).setInteractive({ useHandCursor: true });
+                nextBtn.on('pointerdown', () => { arcadePage++; showMenu(scene); });
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // SECCIÓN 3: SELECCIÓN DE VEHÍCULO OFICIAL GT3
+    // -------------------------------------------------------------
+    scene.add.text(480, 298, '--- VEHÍCULO OFICIAL (GT3 ORIGINALES Y LIBRES DE DERECHOS) ---', {
+        font: '900 11px Arial', fill: '#fee440'
     }).setOrigin(0.5);
 
     DUST_CARS.forEach((car, idx) => {
-        const cx = 160 + idx * 128;
-        const cy = 340;
+        const cx = 95 + idx * 154;
+        const cy = 345;
         const isSel = selectedCarIndex === idx;
 
         const cBox = scene.add.graphics();
-        cBox.fillStyle(isSel ? 0x2e7d32 : 0x151922, 0.9);
-        cBox.fillRoundedRect(cx - 55, cy - 30, 110, 64, 8);
-        cBox.lineStyle(2, isSel ? 0x00f5d4 : 0x2e384d, 1);
-        cBox.strokeRoundedRect(cx - 55, cy - 30, 110, 64, 8);
+        cBox.fillStyle(isSel ? 0x2e7d32 : 0x141822, 0.92);
+        cBox.fillRoundedRect(cx - 70, cy - 32, 140, 64, 8);
+        cBox.lineStyle(2, isSel ? 0x00f5d4 : 0x263044, 1);
+        cBox.strokeRoundedRect(cx - 70, cy - 32, 140, 64, 8);
 
         // Sprite oficial del coche escalado a 48x25
-        scene.add.sprite(cx, cy - 8, car.texture).setDisplaySize(48, 25).setAngle(-90);
+        scene.add.sprite(cx, cy - 10, car.texture).setDisplaySize(48, 25).setAngle(-90);
 
-        scene.add.text(cx, cy + 18, car.name.split(' ')[0], {
-            font: 'bold 11px Arial',
-            fill: isSel ? '#ffffff' : '#90a4ae'
+        scene.add.text(cx, cy + 12, car.name, {
+            font: 'bold 10px Arial', fill: isSel ? '#ffffff' : '#cfd8dc'
         }).setOrigin(0.5);
 
-        const hit = scene.add.rectangle(cx, cy, 110, 64).setInteractive({ useHandCursor: true });
+        scene.add.text(cx, cy + 23, car.subtitle.split('•')[0].trim(), {
+            font: '9px Arial', fill: '#90a4ae'
+        }).setOrigin(0.5);
+
+        const hit = scene.add.rectangle(cx, cy, 140, 64).setInteractive({ useHandCursor: true });
         hit.on('pointerdown', () => {
             dustAudio.init();
             selectedCarIndex = idx;
@@ -889,31 +1239,32 @@ function showMenu(scene) {
         });
     });
 
-    // Selector de Iluminación y Horario (Día / Atardecer / Noche)
-    scene.add.text(480, 400, '--- CONDICIÓN DE LUZ Y AMBIENTE ---', {
-        font: '900 12px Arial', fill: '#00f5d4'
+    // -------------------------------------------------------------
+    // SECCIÓN 4: CONDICIÓN DE LUZ Y AMBIENTE (Día / Atardecer / Noche)
+    // -------------------------------------------------------------
+    scene.add.text(480, 396, '--- CONDICIÓN DE LUZ Y AMBIENTE ---', {
+        font: '900 11px Arial', fill: '#00f5d4'
     }).setOrigin(0.5);
 
     const timesOfDay = [
-        { id: 'day', label: '☀️ MODO DÍA (Faros Off)', desc: 'Luz natural clara' },
-        { id: 'sunset', label: '🌅 ATARDECER (Golden Hour)', desc: 'Tono cálido y sombras' },
-        { id: 'night', label: '🌙 MODO NOCHE (Faros Xenón)', desc: 'Iluminación nocturna' }
+        { id: 'day', label: '☀️ MODO DÍA (Luz Natural)', desc: 'Faros Off' },
+        { id: 'sunset', label: '🌅 ATARDECER (Golden Hour)', desc: 'Tono Cálido' },
+        { id: 'night', label: '🌙 MODO NOCHE (Faros Xenón)', desc: 'Haz Dinámico' }
     ];
 
     timesOfDay.forEach((tod, idx) => {
         const bx = 260 + idx * 220;
-        const by = 435;
+        const by = 428;
         const isSel = selectedTimeOfDay === tod.id;
 
         const tBox = scene.add.graphics();
-        tBox.fillStyle(isSel ? (tod.id === 'night' ? 0x1a237e : 0xef6c00) : 0x151922, 0.95);
-        tBox.fillRoundedRect(bx - 100, by - 18, 200, 36, 6);
+        tBox.fillStyle(isSel ? (tod.id === 'night' ? 0x1a237e : 0xef6c00) : 0x141822, 0.95);
+        tBox.fillRoundedRect(bx - 95, by - 16, 190, 32, 6);
         tBox.lineStyle(2, isSel ? 0xfee440 : 0x2e384d, 1);
-        tBox.strokeRoundedRect(bx - 100, by - 18, 200, 36, 6);
+        tBox.strokeRoundedRect(bx - 95, by - 16, 190, 32, 6);
 
         const tBtn = scene.add.text(bx, by, tod.label, {
-            font: 'bold 11px Arial',
-            fill: isSel ? '#ffffff' : '#b0bec5'
+            font: 'bold 11px Arial', fill: isSel ? '#ffffff' : '#b0bec5'
         }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
         tBtn.on('pointerdown', () => {
@@ -923,28 +1274,32 @@ function showMenu(scene) {
         });
     });
 
-    // Botón Iniciar Gran Premio
+    // -------------------------------------------------------------
+    // SECCIÓN 5: BOTÓN INICIAR CARRERA
+    // -------------------------------------------------------------
     const startBox = scene.add.graphics();
     startBox.fillStyle(0x00c853, 1);
-    startBox.fillRoundedRect(340, 480, 280, 44, 10);
-    startBox.lineStyle(2, 0xffffff, 0.8);
-    startBox.strokeRoundedRect(340, 480, 280, 44, 10);
+    startBox.fillRoundedRect(340, 475, 280, 44, 10);
+    startBox.lineStyle(2, 0xffffff, 0.9);
+    startBox.strokeRoundedRect(340, 475, 280, 44, 10);
 
-    const startBtn = scene.add.text(480, 502, '¡INICIAR GRAN PREMIO! ▶', {
-        font: '900 17px Arial', fill: '#ffffff'
+    const startBtnText = menuMode === 'STORY' ? '¡INICIAR PRUEBA DE HISTORIA! ▶' : '¡INICIAR GRAN PREMIO! ▶';
+    const startBtn = scene.add.text(480, 497, startBtnText, {
+        font: '900 16px Arial', fill: '#ffffff'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     startBtn.on('pointerdown', () => {
         dustAudio.init();
-        startRace(scene, currentTrackId, selectedCarIndex, selectedTimeOfDay);
+        startRace(scene, currentTrackId, selectedCarIndex, selectedTimeOfDay, isCurrentRaceStory);
     });
 }
 
 // ===== INICIAR CARRERA Y CONSTRUIR MUNDO DUSTRAC OFICIAL =====
-function startRace(scene, trackId, carIdx, timeOfDay = 'day') {
+function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     scene.children.removeAll();
 
     selectedTimeOfDay = timeOfDay;
+    isCurrentRaceStory = isStory;
 
     const tracks = window.DustracTracks || {};
     const track = tracks[trackId];
@@ -1596,29 +1951,114 @@ function checkLap(car, track) {
     }
 }
 
-// Fin de carrera
+// Fin de carrera y resultados con integración de Modo Historia
 function endRace() {
     gameState = 'FINISHED';
     playerSpeed = 0;
     playerCar.setVelocity(0, 0);
 
     const overlay = raceScene.add.graphics().setScrollFactor(0).setDepth(200);
-    overlay.fillStyle(0x000000, 0.8);
+    overlay.fillStyle(0x080a10, 0.90);
     overlay.fillRect(0, 0, 960, 540);
 
-    raceScene.add.text(480, 200, '🏁 ¡GRAN PREMIO FINALIZADO! 🏁', {
-        font: '900 36px Arial', fill: '#00f5d4', stroke: '#000000', strokeThickness: 6
+    const posMatch = hudPosText ? hudPosText.text.match(/\d+/) : null;
+    const playerRank = posMatch ? parseInt(posMatch[0]) : 1;
+    const isPodium = playerRank <= 3;
+
+    // Guardar progreso en el Modo Historia
+    const progress = loadStoryProgress();
+    const prevStars = progress.stars[currentTrackId] || 0;
+    const earnedStars = playerRank === 1 ? 3 : (playerRank === 2 ? 2 : (playerRank === 3 ? 1 : 0));
+    if (earnedStars > prevStars) {
+        progress.stars[currentTrackId] = earnedStars;
+    }
+    progress.bestRanks[currentTrackId] = Math.min(progress.bestRanks[currentTrackId] || 99, playerRank);
+
+    // Desbloqueo del siguiente circuito de la historia
+    let nextTrack = null;
+    if (isCurrentRaceStory && isPodium) {
+        const allStoryTracks = [];
+        STORY_CHAPTERS.forEach(ch => ch.tracks.forEach(t => allStoryTracks.push(t)));
+        const currIdx = allStoryTracks.findIndex(t => t.id === currentTrackId);
+        if (currIdx !== -1 && currIdx + 1 < allStoryTracks.length) {
+            nextTrack = allStoryTracks[currIdx + 1];
+            if (!progress.unlockedTracks.includes(nextTrack.id)) {
+                progress.unlockedTracks.push(nextTrack.id);
+            }
+        }
+    }
+    saveStoryProgress(progress);
+
+    // Título y Trofeo
+    const medalEmoji = playerRank === 1 ? '🥇 ¡VICTORIA! 1º PUESTO' : (playerRank === 2 ? '🥈 2º PUESTO (SUBCAMPEÓN)' : (playerRank === 3 ? '🥉 3º PUESTO (PODIO)' : `POSICIÓN ${playerRank}º / 6`));
+    const titleColor = playerRank === 1 ? '#fee440' : (playerRank === 2 ? '#e2e8f0' : (playerRank === 3 ? '#ff9800' : '#ef5350'));
+
+    raceScene.add.text(480, 115, isCurrentRaceStory ? '🏆 MODO HISTORIA: RESULTADO DE PRUEBA 🏆' : '🏁 GRAN PREMIO FINALIZADO 🏁', {
+        font: '900 22px Arial', fill: '#00f5d4'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-    raceScene.add.text(480, 260, `POSICIÓN: ${hudPosText.text}`, {
-        font: 'bold 22px Arial', fill: '#ffffff'
+    raceScene.add.text(480, 165, medalEmoji, {
+        font: '900 34px Arial', fill: titleColor, stroke: '#000000', strokeThickness: 6
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-    const retBtn = raceScene.add.text(480, 340, 'VOLVER AL MENÚ DE CIRCUITOS', {
-        font: 'bold 18px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 20, y: 12 }
+    // Estrellas
+    const starsStr = earnedStars === 3 ? '⭐⭐⭐ (MÁXIMA PUNTUACIÓN)' : (earnedStars === 2 ? '⭐⭐☆ (GRAN RENDIMIENTO)' : (earnedStars === 1 ? '⭐☆☆ (CLASIFICADO)' : '☆☆☆ (SIN ESTRELLAS)'));
+    raceScene.add.text(480, 215, `VALORACIÓN: ${starsStr}`, {
+        font: 'bold 18px Arial', fill: '#fee440'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    // Mejor tiempo de vuelta
+    const bestSec = bestLapTime ? (bestLapTime / 1000).toFixed(2) + 's' : '--';
+    raceScene.add.text(480, 252, `MEJOR VUELTA: ${bestSec} • TIEMPO TOTAL: ${((Date.now() - lapStartTime) / 1000).toFixed(1)}s`, {
+        font: 'bold 14px Arial', fill: '#90a4ae'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    let btnY = 360;
+
+    if (isCurrentRaceStory) {
+        if (isPodium && nextTrack) {
+            raceScene.add.text(480, 292, `¡DESBLOQUEADO NUEVO CIRCUITO: ${nextTrack.name.toUpperCase()}!`, {
+                font: '900 15px Arial', fill: '#00e676'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+            const nextBtn = raceScene.add.text(480, 342, 'CONTINUAR HISTORIA (SIGUIENTE PISTA) ▶', {
+                font: '900 16px Arial', fill: '#ffffff', backgroundColor: '#2e7d32', padding: { x: 24, y: 12 }
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
+
+            nextBtn.on('pointerdown', () => {
+                currentTrackId = nextTrack.id;
+                startRace(raceScene, currentTrackId, selectedCarIndex, selectedTimeOfDay, true);
+            });
+
+            btnY = 412;
+        } else if (isPodium && !nextTrack) {
+            raceScene.add.text(480, 292, '🏆 ¡FELICIDADES! ¡HAS COMPLETADO LOS 22 CIRCUITOS DEL MODO HISTORIA! 🏆', {
+                font: '900 15px Arial', fill: '#fee440'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+            btnY = 360;
+        } else {
+            raceScene.add.text(480, 292, 'Necesitas quedar entre los 3 primeros (Top 3) para avanzar en la historia.', {
+                font: 'bold 14px Arial', fill: '#ff5252'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+            btnY = 360;
+        }
+    }
+
+    // Botón Repetir Carrera
+    const retryBtn = raceScene.add.text(340, btnY, 'REPETIR CARRERA ↺', {
+        font: 'bold 15px Arial', fill: '#ffffff', backgroundColor: '#1e88e5', padding: { x: 18, y: 10 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
 
-    retBtn.on('pointerdown', () => {
+    retryBtn.on('pointerdown', () => {
+        startRace(raceScene, currentTrackId, selectedCarIndex, selectedTimeOfDay, isCurrentRaceStory);
+    });
+
+    // Botón Volver al Menú
+    const menuBtn = raceScene.add.text(620, btnY, 'VOLVER AL MENÚ DE PISTAS', {
+        font: 'bold 15px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 18, y: 10 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
+
+    menuBtn.on('pointerdown', () => {
         showMenu(raceScene);
     });
 }
