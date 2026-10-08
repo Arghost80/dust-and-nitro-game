@@ -1054,3 +1054,634 @@
     border-radius: 8px;
     cursor: pointer;
 }
+
+/* ===== MODAL DE SELECCIÓN DE CIRCUITOS (MODO HISTORIA) ===== */
+.track-select-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 7, 14, 0.88);
+    backdrop-filter: blur(14px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.track-modal-box {
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    background: #0b101d;
+    border: 1px solid rgba(0, 245, 212, 0.4);
+    box-shadow: 0 10px 40px rgba(0, 245, 212, 0.15);
+    border-radius: 18px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.track-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 14px;
+}
+
+.track-modal-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #00f5d4;
+}
+
+.track-modal-sub {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.track-modal-close {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.track-quick-launch {
+    width: 100%;
+}
+
+.btn-instant-race {
+    width: 100%;
+    background: linear-gradient(135deg, #00c853, #00e676);
+    color: #06120b;
+    font-weight: 900;
+    font-size: 14px;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0, 230, 118, 0.35);
+    letter-spacing: 0.5px;
+    transition: transform 0.15s ease;
+}
+
+.btn-instant-race:hover {
+    transform: translateY(-2px);
+}
+
+.chapters-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.chapter-card {
+    background: rgba(18, 25, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.chapter-title-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.chap-badge {
+    background: #e53935;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.chap-name {
+    color: #f8fafc;
+}
+
+.chap-rival {
+    margin-left: auto;
+    color: #fbbf24;
+    font-size: 11px;
+}
+
+.chapter-tracks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.track-item-card {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.track-item-card.unlocked {
+    border-color: rgba(0, 245, 212, 0.35);
+}
+
+.track-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.track-item-name {
+    font-size: 12px;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+
+.track-stars-pill {
+    font-size: 11px;
+    color: #facc15;
+}
+
+.track-item-desc {
+    font-size: 10px;
+    color: #64748b;
+}
+
+.btn-play-track {
+    width: 100%;
+    background: #0284c7;
+    color: #fff;
+    font-weight: 800;
+    font-size: 11px;
+    padding: 7px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-play-track:hover {
+    background: #0369a1;
+}
+
+.btn-locked-track {
+    width: 100%;
+    background: #1e293b;
+    color: #475569;
+    font-size: 10px;
+    padding: 6px;
+    border-radius: 6px;
+    border: none;
+}
+
+.track-modal-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.btn-retro-canvas-menu {
+    background: #1e293b;
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    font-weight: 800;
+    font-size: 12px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-close-track-select {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-weight: 800;
+    font-size: 12px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* ===== GARAJE: 10 ATRIBUTOS, XP, Y BOTONES PRO ===== */
+.card-chips-group {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.level-chip {
+    background: #0284c7;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 5px;
+}
+
+.points-chip {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #0b0f19;
+    font-size: 9px;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 5px;
+}
+
+.car-xp-box {
+    margin: 8px 0;
+    background: rgba(11, 16, 29, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 6px 10px;
+    border-radius: 7px;
+}
+
+.car-xp-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    font-weight: 800;
+    color: #94a3b8;
+}
+
+.xp-level-title {
+    color: #38bdf8;
+}
+
+.car-xp-track {
+    width: 100%;
+    height: 5px;
+    background: #1e293b;
+    border-radius: 3px;
+    margin-top: 4px;
+    overflow: hidden;
+}
+
+.car-xp-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #0284c7, #00f5d4);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.stats-10-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.stat-pill {
+    background: rgba(11, 16, 29, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 3px 6px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+}
+
+.s-name {
+    color: #94a3b8;
+    font-weight: 700;
+}
+
+.s-val {
+    color: #ffffff;
+    font-weight: 900;
+}
+
+.s-bonus {
+    color: #00e676;
+    font-weight: 900;
+}
+
+.perf-telemetry-chip {
+    margin-top: 6px;
+    padding: 5px 8px;
+    background: rgba(2, 132, 199, 0.12);
+    border: 1px solid rgba(2, 132, 199, 0.3);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-around;
+    font-size: 9px;
+    font-weight: 800;
+    color: #38bdf8;
+}
+
+.car-card-action-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.btn-tune-open {
+    flex: 1;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: #fff;
+    font-weight: 800;
+    font-size: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.btn-tune-open:hover {
+    transform: translateY(-1px);
+}
+
+/* ===== MODAL TALLER DE MEJORAS & TUNING ===== */
+.tuning-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 7, 14, 0.9);
+    backdrop-filter: blur(14px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.tuning-modal-box {
+    max-width: 820px;
+    width: 100%;
+    max-height: 90vh;
+    background: #0b101d;
+    border: 1px solid rgba(124, 58, 237, 0.45);
+    box-shadow: 0 10px 40px rgba(124, 58, 237, 0.2);
+    border-radius: 18px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.tuning-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 14px;
+}
+
+.tuning-car-headline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tuning-title {
+    font-size: 17px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.tuning-points-badge {
+    background: #f59e0b;
+    color: #0b101d;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.tuning-modal-close {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.tuning-car-overview {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    background: rgba(18, 25, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px 16px;
+    border-radius: 12px;
+}
+
+.tuning-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 10px;
+}
+
+.tuning-color-label {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 800;
+}
+
+.tuning-overview-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+}
+
+.t-stat-chip {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 800;
+    color: #00f5d4;
+}
+
+.tuning-parts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tuning-part-card {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tuning-part-card.part-maxed {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.part-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.part-icon {
+    font-size: 20px;
+}
+
+.part-titles {
+    flex: 1;
+}
+
+.part-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
+.part-boosts-tag {
+    font-size: 10px;
+    color: #00e676;
+    font-weight: 700;
+}
+
+.part-stage-badge {
+    font-size: 10px;
+    font-weight: 900;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    padding: 2px 7px;
+    border-radius: 5px;
+}
+
+.stage-pills-row {
+    display: flex;
+    gap: 6px;
+}
+
+.stage-dot {
+    flex: 1;
+    height: 5px;
+    background: #1e293b;
+    border-radius: 3px;
+}
+
+.stage-dot.filled {
+    background: linear-gradient(90deg, #00c853, #00e676);
+}
+
+.part-card-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.part-cost-info {
+    display: flex;
+    gap: 8px;
+}
+
+.cost-item {
+    font-size: 11px;
+    font-weight: 800;
+    color: #facc15;
+}
+
+.cost-item.cost-gems {
+    color: #00e676;
+}
+
+.btn-upgrade-part {
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-weight: 800;
+    font-size: 11px;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-can-afford {
+    background: linear-gradient(135deg, #00c853, #00e676);
+    color: #06120b;
+}
+
+.btn-cannot-afford {
+    background: #1e293b;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+.badge-stage-max {
+    font-size: 11px;
+    font-weight: 900;
+    color: #fbbf24;
+}
+
+.tuning-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-close-tuning {
+    background: #0284c7;
+    color: #fff;
+    font-weight: 800;
+    font-size: 12px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+}
+
+/* ===== APERTURA DE CAJAS: 10 ATRIBUTOS RESULTADO ===== */
+.reward-chips-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.reward-points-pill {
+    background: #f59e0b;
+    color: #0b101d;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 3px 8px;
+    border-radius: 5px;
+}
+
+.reward-10stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    margin: 12px 0;
+}
+
+.r-stat-pill {
+    background: rgba(11, 16, 29, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 4px 6px;
+    border-radius: 5px;
+    font-size: 9px;
+    display: flex;
+    justify-content: space-between;
+}
+

@@ -307,6 +307,9 @@ const CONFIG = {
 };
 
 const game = new Phaser.Game(CONFIG);
+window.phaserGame = game;
+window.startRace = startRace;
+window.showMenu = showMenu;
 
 // Catálogo de coches con nombres 100% libres de derechos y diseño motorsport GT3
 const DUST_CARS = [
@@ -407,6 +410,8 @@ const ALL_TRACK_IDS = [
     'brianza_speedway', 'sakura_ring', 'diamond_apex', 'super_dragway',
     'riviera_coast', 'nordkette_pass', 'silverstone_airfield', 'neo_tokyo_bay', 'inter_laguna', 'sarthe_endurance'
 ];
+window.STORY_CHAPTERS = STORY_CHAPTERS;
+window.ALL_TRACK_IDS = ALL_TRACK_IDS;
 
 // Gestión de guardado del Modo Historia en LocalStorage con Modo Diseñador
 function loadStoryProgress() {
@@ -876,6 +881,7 @@ function buildHDBridgeTextures(scene) {
 
 function dustCreate() {
     raceScene = this;
+    window.raceScene = this;
     buildGT3CarTextures(this);
     buildHDEnvironmentTextures(this);
     buildHDRoadTextures(this);
@@ -1575,7 +1581,24 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     offTrackTimer = 0;
 
     // Coche del Jugador (Pole Position, colocado detrás de la línea de meta)
-    const pCarData = DUST_CARS[carIdx];
+    let pCarData = DUST_CARS[carIdx] || DUST_CARS[0];
+    if (typeof getEquippedNftCar === 'function' && typeof calculateCarPerformance === 'function') {
+        const nftCar = getEquippedNftCar();
+        if (nftCar) {
+            const perf = calculateCarPerformance(nftCar);
+            pCarData = {
+                id: nftCar.id,
+                texture: nftCar.sprite || 'car_red',
+                name: nftCar.name,
+                subtitle: `Niv. ${nftCar.level || 1} • ${nftCar.colorName}`,
+                speed: perf.speedKmh,
+                accel: perf.accelVal,
+                handling: perf.handlingVal,
+                braking: perf.brakingVal,
+                tint: nftCar.colorTint || nftCar.colorHex
+            };
+        }
+    }
     const playerDistBehind = 55;
     const playerSideOffset = 22;
     playerCar = spawnVehicle(
@@ -1649,6 +1672,13 @@ function spawnVehicle(scene, x, y, textureKey, angleDeg, isPlayer, carData) {
     car.carData = carData;
     car.currentLap = 1;
     car.lastCheckpoint = 0;
+
+    if (carData && carData.tint) {
+        try {
+            const tintNum = typeof carData.tint === 'string' ? parseInt(carData.tint.replace('#', '0x'), 16) : carData.tint;
+            if (!isNaN(tintNum)) car.setTint(tintNum);
+        } catch(e) {}
+    }
 
     // Sombra suave proyectada bajo el coche
     car.shadow = scene.add.ellipse(x + 3, y + 4, 46, 22, 0x000000, 0.45).setDepth(9);
@@ -2281,14 +2311,26 @@ function endRace() {
     // Recompensas Web3 en $CR y Gemas por clasificación
     let crReward = playerRank === 1 ? 1000 : (playerRank === 2 ? 600 : (playerRank === 3 ? 400 : 200));
     let gemReward = playerRank === 1 ? 25 : (playerRank === 2 ? 15 : (playerRank === 3 ? 10 : 0));
+    let xpReward = playerRank === 1 ? 250 : (playerRank === 2 ? 180 : (playerRank === 3 ? 120 : 70));
+    let xpResult = null;
+
     if (typeof loadNftUserData === 'function') {
         const u = loadNftUserData();
-        u.credits += crReward;
-        u.gems += gemReward;
+        u.credits = (u.credits || 0) + crReward;
+        u.gems = (u.gems || 0) + gemReward;
         saveNftUserData(u);
     }
 
-    raceScene.add.text(480, 276, `💰 +${crReward} $CR  •  💎 +${gemReward} TON RECOMPENSA DE CARRERA`, {
+    if (typeof addXpToEquippedCar === 'function') {
+        xpResult = addXpToEquippedCar(xpReward);
+    }
+
+    let xpText = `⭐ +${xpReward} XP COCHE`;
+    if (xpResult && xpResult.leveledUp) {
+        xpText = `🔥 ¡SUBIDO A NIV. ${xpResult.newLevel}! (+${xpReward} XP)`;
+    }
+
+    raceScene.add.text(480, 276, `💰 +${crReward} $CR  •  💎 +${gemReward} TON  •  ${xpText}`, {
         font: 'bold 13px Arial', fill: '#00f5d4'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 

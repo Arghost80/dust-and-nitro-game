@@ -189,15 +189,128 @@ function renderMainHubView() {
 // Iniciar directamente el Modo Historia (Cierra el Hub y pasa el control a Phaser)
 function launchStoryMode() {
     hubAudio.playClick();
+    openTrackSelectModal();
+}
+
+// Modal de Selección de Circuitos del Modo Historia
+function openTrackSelectModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('track-select-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'track-select-modal';
+        modal.className = 'track-select-modal';
+        const hubRoot = document.getElementById('game-hub-root');
+        if (hubRoot) hubRoot.appendChild(modal);
+    }
+
+    const chapters = window.STORY_CHAPTERS || [];
+    const progress = (typeof loadStoryProgress === 'function') ? loadStoryProgress() : { unlockedTracks: ['rookie_ring'] };
+    const unlocked = progress.unlockedTracks || ['rookie_ring'];
+
+    modal.innerHTML = `
+        <div class="track-modal-box">
+            <div class="track-modal-header">
+                <div>
+                    <h2 class="track-modal-title">🏆 SELECCIÓN DE CIRCUITO • MODO HISTORIA</h2>
+                    <p class="track-modal-sub">Elige un circuito para disputar el Gran Premio o sal a pista inmediatamente</p>
+                </div>
+                <button class="track-modal-close" onclick="closeTrackSelectModal()">✖</button>
+            </div>
+
+            <div class="track-quick-launch">
+                <button class="btn-instant-race" onclick="launchRaceDirectly('rookie_ring')">
+                    ▶ ¡SALIR A PISTA INMEDIATAMENTE! (ROOKIE RING SPEEDWAY)
+                </button>
+            </div>
+
+            <div class="chapters-accordion">
+                ${chapters.map((ch) => `
+                    <div class="chapter-card">
+                        <div class="chapter-title-bar">
+                            <span class="chap-badge">CAPÍTULO ${ch.number}</span>
+                            <span class="chap-name">${ch.title}</span>
+                            <span class="chap-rival">🏁 ${ch.rival || 'IA Rival'}</span>
+                        </div>
+                        <div class="chapter-tracks-grid">
+                            ${ch.tracks.map(trk => {
+                                const isUnlocked = unlocked.includes(trk.id) || progress.designerMode;
+                                const starsCount = (progress.stars && progress.stars[trk.id]) || 0;
+                                const starsStr = '⭐'.repeat(starsCount) + '☆'.repeat(Math.max(0, 3 - starsCount));
+                                return `
+                                    <div class="track-item-card ${isUnlocked ? 'unlocked' : 'locked'}">
+                                        <div class="track-item-top">
+                                            <span class="track-item-name">${trk.name}</span>
+                                            <span class="track-stars-pill">${starsStr}</span>
+                                        </div>
+                                        <div class="track-item-desc">${trk.desc || 'Circuito de Velocidad'} • ${trk.tod === 'night' ? '🌙 Noche' : (trk.tod === 'sunset' ? '🌅 Atardecer' : '☀️ Día')}</div>
+                                        <div class="track-item-btn-wrap">
+                                            ${isUnlocked ? `
+                                                <button class="btn-play-track" onclick="launchRaceDirectly('${trk.id}', '${trk.tod || 'day'}')">
+                                                    ▶ CORRER AHORA
+                                                </button>
+                                            ` : `
+                                                <button class="btn-locked-track" disabled>🔒 BLOQUEADO</button>
+                                            `}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+
+            <div class="track-modal-footer">
+                <button class="btn-retro-canvas-menu" onclick="launchRetroCanvasMenu()">
+                    🕹️ MENÚ CLÁSICO 2D (CANVAS)
+                </button>
+                <button class="btn-close-track-select" onclick="closeTrackSelectModal()">
+                    VOLVER AL HUB
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+function closeTrackSelectModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('track-select-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function launchRetroCanvasMenu() {
+    hubAudio.playClick();
+    closeTrackSelectModal();
+    const hubRoot = document.getElementById('game-hub-root');
+    if (hubRoot) hubRoot.classList.add('hidden');
+    const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes[0]);
+    if (sc && typeof window.showMenu === 'function') {
+        window.showMenu(sc);
+    }
+}
+
+function launchRaceDirectly(trackId = 'rookie_ring', timeOfDay = 'day') {
+    hubAudio.playClick();
+    closeTrackSelectModal();
     const hubRoot = document.getElementById('game-hub-root');
     if (hubRoot) hubRoot.classList.add('hidden');
 
-    // Avisar a Phaser de mostrar el menú de circuitos
-    if (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes[0]) {
-        const sc = window.phaserGame.scene.scenes[0];
-        if (typeof showMenu === 'function') {
-            showMenu(sc);
+    const run = () => {
+        const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes[0]);
+        if (sc && typeof window.startRace === 'function') {
+            window.startRace(sc, trackId, 0, timeOfDay, true);
+        } else if (sc && typeof window.showMenu === 'function') {
+            window.showMenu(sc);
         }
+    };
+
+    if (window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes[0])) {
+        run();
+    } else {
+        setTimeout(run, 150);
     }
 }
 
@@ -209,7 +322,7 @@ window.returnToGameHub = function() {
 };
 
 // -------------------------------------------------------------
-// 2. GARAJE DE VEHÍCULOS NFT
+// 2. GARAJE DE VEHÍCULOS NFT (10 ESTADÍSTICAS & TALLER PRO)
 // -------------------------------------------------------------
 function renderGarageView() {
     const container = document.getElementById('view-garage');
@@ -231,8 +344,11 @@ function renderGarageView() {
     container.innerHTML = `
         <div class="view-header-bar">
             <button class="btn-nav-back" onclick="showHubView('main')">${t('btn_back')}</button>
-            <h2 class="view-title">${t('garage_title')}</h2>
-            <div class="garage-count-tag">${cars.length} EN POSESIÓN</div>
+            <div>
+                <h2 class="view-title">${t('garage_title')}</h2>
+                <div class="garage-count-tag">${cars.length} EN POSESIÓN • 10 ATRIBUTOS & TUNING PRO</div>
+            </div>
+            <div></div>
         </div>
 
         <div class="garage-filter-tabs">
@@ -252,50 +368,110 @@ function renderGarageView() {
             ` : filteredCars.map(car => {
                 const isEquipped = userData.equippedInstanceId === car.instanceId;
                 const rarityLabel = t(`rarity_${car.rarity}`);
+                const perf = calculateCarPerformance(car);
+                const eff = perf.effectiveStats;
+                const raw = car.stats || makeStats(1,1,1,1,1,1,1,1,1,1);
+                const lvl = car.level || 1;
+                const xp = car.xp || 0;
+                const xpNeeded = car.xpNeeded || (lvl * 250);
+                const xpPct = Math.min(100, Math.round((xp / xpNeeded) * 100));
+
                 return `
                     <div class="nft-car-card card-rarity-${car.rarity} ${isEquipped ? 'equipped-card' : ''}">
                         <div class="car-card-top">
                             <span class="rarity-badge badge-${car.rarity}">${rarityLabel}</span>
-                            <span class="mint-chip">#${car.mintNumber}</span>
+                            <div class="card-chips-group">
+                                <span class="mint-chip">#${car.mintNumber}</span>
+                                <span class="level-chip">⭐ NIV. ${lvl}</span>
+                                <span class="points-chip">⚡ ${perf.totalPoints} PTS</span>
+                            </div>
                         </div>
 
-                        <div class="car-preview-zone" style="background: radial-gradient(circle, ${car.colorHex}22 0%, #0b0f19 80%);">
-                            <div class="car-sprite-glow" style="filter: drop-shadow(0 0 14px ${car.colorHex});">
-                                <img src="assets/dustrac_clean/straight.png" style="display:none;" />
+                        <div class="car-preview-zone" style="background: radial-gradient(circle, ${car.colorHex}25 0%, #0b0f19 80%);">
+                            <div class="car-sprite-glow" style="filter: drop-shadow(0 0 16px ${car.colorHex});">
                                 <div class="car-svg-renderer" style="background-color: ${car.colorHex};"></div>
                             </div>
                             <span class="color-name-label">${car.colorName}</span>
                         </div>
 
                         <div class="car-card-info">
-                            <h4 class="car-name">${car.name}</h4>
-                            <div class="token-hash-label">⛓️ ${car.tokenHash}</div>
+                            <div class="car-info-headline">
+                                <h4 class="car-name">${car.name}</h4>
+                                <div class="token-hash-label">⛓️ ${car.tokenHash}</div>
+                            </div>
 
-                            <div class="car-stats-list">
-                                <div class="stat-row">
-                                    <span class="stat-name">${t('stat_speed')}</span>
-                                    <div class="stat-bar-track"><div class="stat-bar-fill fill-speed" style="width: ${(car.speed / 445) * 100}%;"></div></div>
-                                    <span class="stat-val">${car.speed} KM/H</span>
+                            <!-- Barra de Nivel y XP del Vehículo -->
+                            <div class="car-xp-box">
+                                <div class="car-xp-labels">
+                                    <span class="xp-level-title">NIVEL ${lvl}</span>
+                                    <span class="xp-ratio-text">${xp} / ${xpNeeded} XP (${xpPct}%)</span>
                                 </div>
-                                <div class="stat-row">
-                                    <span class="stat-name">${t('stat_accel')}</span>
-                                    <div class="stat-bar-track"><div class="stat-bar-fill fill-accel" style="width: ${(car.accel / 320) * 100}%;"></div></div>
-                                    <span class="stat-val">${car.accel}</span>
+                                <div class="car-xp-track">
+                                    <div class="car-xp-bar" style="width: ${xpPct}%;"></div>
                                 </div>
-                                <div class="stat-row">
-                                    <span class="stat-name">${t('stat_handling')}</span>
-                                    <div class="stat-bar-track"><div class="stat-bar-fill fill-handling" style="width: ${(car.handling / 5.2) * 100}%;"></div></div>
-                                    <span class="stat-val">${car.handling}G</span>
+                            </div>
+
+                            <!-- Las 10 Estadísticas de Rendimiento Motorsport -->
+                            <div class="stats-10-grid">
+                                <div class="stat-pill">
+                                    <span class="s-name">⚡ ${t('stat_power')}</span>
+                                    <span class="s-val">${eff.potencia} ${eff.potencia > raw.potencia ? `<span class="s-bonus">+${eff.potencia - raw.potencia}</span>` : ''}</span>
                                 </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🏁 ${t('stat_speed')}</span>
+                                    <span class="s-val">${eff.velocidad} ${eff.velocidad > raw.velocidad ? `<span class="s-bonus">+${eff.velocidad - raw.velocidad}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🚀 ${t('stat_accel')}</span>
+                                    <span class="s-val">${eff.aceleracion} ${eff.aceleracion > raw.aceleracion ? `<span class="s-bonus">+${eff.aceleracion - raw.aceleracion}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🏎️ ${t('stat_grip')}</span>
+                                    <span class="s-val">${eff.agarre} ${eff.agarre > raw.agarre ? `<span class="s-bonus">+${eff.agarre - raw.agarre}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🛑 ${t('stat_braking')}</span>
+                                    <span class="s-val">${eff.frenada} ${eff.frenada > raw.frenada ? `<span class="s-bonus">+${eff.frenada - raw.frenada}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🎯 ${t('stat_handling')}</span>
+                                    <span class="s-val">${eff.manejo} ${eff.manejo > raw.manejo ? `<span class="s-bonus">+${eff.manejo - raw.manejo}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🌪️ ${t('stat_turbo')}</span>
+                                    <span class="s-val">${eff.turbo} ${eff.turbo > raw.turbo ? `<span class="s-bonus">+${eff.turbo - raw.turbo}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🔻 ${t('stat_downforce')}</span>
+                                    <span class="s-val">${eff.downforce} ${eff.downforce > raw.downforce ? `<span class="s-bonus">+${eff.downforce - raw.downforce}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🛞 ${t('stat_traction')}</span>
+                                    <span class="s-val">${eff.traccion} ${eff.traccion > raw.traccion ? `<span class="s-bonus">+${eff.traccion - raw.traccion}</span>` : ''}</span>
+                                </div>
+                                <div class="stat-pill">
+                                    <span class="s-name">🪶 ${t('stat_lightness')}</span>
+                                    <span class="s-val">${eff.ligereza} ${eff.ligereza > raw.ligereza ? `<span class="s-bonus">+${eff.ligereza - raw.ligereza}</span>` : ''}</span>
+                                </div>
+                            </div>
+
+                            <!-- Telemetría Dinámica en Carrera -->
+                            <div class="perf-telemetry-chip">
+                                <span>🏎️ ${perf.speedKmh} KM/H</span>
+                                <span>⚡ ${perf.accelVal} ACEL</span>
+                                <span>🎯 ${perf.handlingVal}G</span>
                             </div>
                         </div>
 
-                        <div class="car-card-action">
+                        <div class="car-card-action-row">
                             ${isEquipped ? `
                                 <div class="badge-equipped">${t('garage_equipped')}</div>
                             ` : `
                                 <button class="btn-equip-car" onclick="equipNftCar('${car.instanceId}')">${t('garage_equip')}</button>
                             `}
+                            <button class="btn-tune-open" onclick="openTuningModal('${car.instanceId}')">
+                                🔧 ${t('btn_tune')}
+                            </button>
                         </div>
                     </div>
                 `;
@@ -315,6 +491,160 @@ function equipNftCar(instanceId) {
     const userData = loadNftUserData();
     userData.equippedInstanceId = instanceId;
     saveNftUserData(userData);
+    renderGarageView();
+}
+
+// -------------------------------------------------------------
+// TALLER DE MEJORAS & TUNING WEB3 (5 PIEZAS • 4 STAGES)
+// -------------------------------------------------------------
+function getStatName(st) {
+    const map = {
+        potencia: 'stat_power',
+        velocidad: 'stat_speed',
+        aceleracion: 'stat_accel',
+        agarre: 'stat_grip',
+        frenada: 'stat_braking',
+        manejo: 'stat_handling',
+        turbo: 'stat_turbo',
+        downforce: 'stat_downforce',
+        traccion: 'stat_traction',
+        ligereza: 'stat_lightness'
+    };
+    return t(map[st] || ('stat_' + st));
+}
+
+function openTuningModal(instanceId) {
+    hubAudio.playClick();
+    const userData = loadNftUserData();
+    const car = (userData.garage || []).find(c => c.instanceId === instanceId);
+    if (!car) return;
+
+    let modal = document.getElementById('tuning-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'tuning-modal';
+        modal.className = 'tuning-modal';
+        const hubRoot = document.getElementById('game-hub-root');
+        if (hubRoot) hubRoot.appendChild(modal);
+    }
+
+    const perf = calculateCarPerformance(car);
+    const eff = perf.effectiveStats;
+    const parts = car.parts || { ecu: 0, tires: 0, brakes: 0, turbo: 0, chassis: 0 };
+    const partKeys = ['ecu', 'tires', 'brakes', 'turbo', 'chassis'];
+
+    modal.innerHTML = `
+        <div class="tuning-modal-box">
+            <div class="tuning-modal-header">
+                <div class="tuning-car-headline">
+                    <span class="rarity-badge badge-${car.rarity}">${t(`rarity_${car.rarity}`)}</span>
+                    <h2 class="tuning-title">🔧 TALLER DE MEJORAS: ${car.name}</h2>
+                    <span class="tuning-points-badge">⚡ ${perf.totalPoints} PUNTOS TOTALES</span>
+                </div>
+                <button class="tuning-modal-close" onclick="closeTuningModal()">✖</button>
+            </div>
+
+            <div class="tuning-car-overview">
+                <div class="tuning-preview-wrap" style="background: radial-gradient(circle, ${car.colorHex}22 0%, #0d121f 90%);">
+                    <div class="car-svg-renderer" style="background-color: ${car.colorHex}; box-shadow: 0 0 20px ${car.colorHex};"></div>
+                    <span class="tuning-color-label">${car.colorName} • NIVEL ${car.level || 1} (${car.xp || 0} XP)</span>
+                </div>
+                <div class="tuning-overview-stats">
+                    <span class="t-stat-chip">POT: ${eff.potencia}</span>
+                    <span class="t-stat-chip">VEL: ${eff.velocidad}</span>
+                    <span class="t-stat-chip">ACEL: ${eff.aceleracion}</span>
+                    <span class="t-stat-chip">AGARRE: ${eff.agarre}</span>
+                    <span class="t-stat-chip">FRENO: ${eff.frenada}</span>
+                    <span class="t-stat-chip">MANEJO: ${eff.manejo}</span>
+                    <span class="t-stat-chip">TURBO: ${eff.turbo}</span>
+                    <span class="t-stat-chip">DOWNFORCE: ${eff.downforce}</span>
+                    <span class="t-stat-chip">TRACCIÓN: ${eff.traccion}</span>
+                    <span class="t-stat-chip">LIGEREZA: ${eff.ligereza}</span>
+                </div>
+            </div>
+
+            <div class="tuning-parts-grid">
+                ${partKeys.map(key => {
+                    const cfg = UPGRADE_PARTS_CONFIG[key];
+                    const currentStage = parts[key] || 0;
+                    const isMax = currentStage >= cfg.maxStage;
+                    const nextCost = isMax ? null : cfg.costs[currentStage];
+                    const canAfford = nextCost ? (userData.credits >= nextCost.cr && userData.gems >= nextCost.gems) : false;
+
+                    const partName = t(cfg.nameKey) || key.toUpperCase();
+                    const boostsText = Object.entries(cfg.boosts).map(([st, bonus]) => `+${bonus} ${getStatName(st)}`).join(', ');
+
+                    return `
+                        <div class="tuning-part-card ${isMax ? 'part-maxed' : ''}">
+                            <div class="part-card-top">
+                                <span class="part-icon">${cfg.icon}</span>
+                                <div class="part-titles">
+                                    <h4 class="part-name">${partName}</h4>
+                                    <span class="part-boosts-tag">${boostsText}</span>
+                                </div>
+                                <span class="part-stage-badge">STAGE ${currentStage}/${cfg.maxStage}</span>
+                            </div>
+
+                            <div class="stage-pills-row">
+                                ${[1, 2, 3, 4].map(s => `
+                                    <div class="stage-dot ${s <= currentStage ? 'filled' : ''}"></div>
+                                `).join('')}
+                            </div>
+
+                            <div class="part-card-action">
+                                ${isMax ? `
+                                    <div class="badge-stage-max">⭐ NIVEL MÁXIMO (STAGE 4)</div>
+                                ` : `
+                                    <div class="part-cost-info">
+                                        <span class="cost-item">💰 ${nextCost.cr.toLocaleString()} $CR</span>
+                                        ${nextCost.gems > 0 ? `<span class="cost-item cost-gems">💎 ${nextCost.gems} TON</span>` : ''}
+                                    </div>
+                                    <button class="btn-upgrade-part ${canAfford ? 'btn-can-afford' : 'btn-cannot-afford'}" 
+                                            onclick="applyPartUpgrade('${car.instanceId}', '${key}')">
+                                        ${canAfford ? '⚡ ' + t('btn_upgrade_part') : '🔒 FONDOS INSUFICIENTES'}
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <div class="tuning-modal-footer">
+                <button class="btn-close-tuning" onclick="closeTuningModal()">
+                    GUARDAR Y VOLVER AL GARAJE
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+function applyPartUpgrade(instanceId, partKey) {
+    hubAudio.playClick();
+    const res = upgradeCarPart(instanceId, partKey);
+    if (!res.success) {
+        if (res.reason === 'credits_insufficient' || res.reason === 'gems_insufficient') {
+            alert(t('shop_not_enough'));
+            closeTuningModal();
+            showHubView('shop');
+        } else {
+            alert(res.reason || 'No se pudo mejorar la pieza');
+        }
+        return;
+    }
+
+    hubAudio.playOpenCrate();
+    renderHubHeader();
+    openTuningModal(instanceId);
+    renderGarageView();
+}
+
+function closeTuningModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('tuning-modal');
+    if (modal) modal.classList.add('hidden');
     renderGarageView();
 }
 
@@ -440,6 +770,8 @@ function triggerCrateOpening(crateKey) {
         }
 
         const car = res.car;
+        const perf = calculateCarPerformance(car);
+        const eff = perf.effectiveStats;
         resultBox.innerHTML = `
             <div class="reward-sparkles">✨ ✨ ✨</div>
             <h3 class="reward-congrats">${t('crate_congrats')}</h3>
@@ -447,7 +779,10 @@ function triggerCrateOpening(crateKey) {
             <div class="reward-car-display card-rarity-${car.rarity}">
                 <div class="reward-rarity-tag badge-${car.rarity}">${t(`rarity_${car.rarity}`)}</div>
                 <h2 class="reward-car-name">${car.name}</h2>
-                <div class="reward-color-tag" style="color:${car.colorHex}; font-weight:bold;">● ${car.colorName}</div>
+                <div class="reward-chips-row">
+                    <span class="reward-color-tag" style="color:${car.colorHex}; font-weight:bold;">● ${car.colorName}</span>
+                    <span class="reward-points-pill">⚡ ${perf.totalPoints} PUNTOS TOTALES</span>
+                </div>
 
                 <div class="reward-car-card-body" style="background: radial-gradient(circle, ${car.colorHex}33 0%, #0d121f 90%);">
                     <div class="car-big-silhouette" style="background-color: ${car.colorHex}; box-shadow: 0 0 30px ${car.colorHex};"></div>
@@ -458,19 +793,17 @@ function triggerCrateOpening(crateKey) {
                     <span>BLOCKCHAIN: ${car.tokenHash}</span>
                 </div>
 
-                <div class="reward-stats-grid">
-                    <div class="r-stat">
-                        <span class="r-label">${t('stat_speed')}</span>
-                        <span class="r-val">${car.speed} KM/H</span>
-                    </div>
-                    <div class="r-stat">
-                        <span class="r-label">${t('stat_accel')}</span>
-                        <span class="r-val">${car.accel}</span>
-                    </div>
-                    <div class="r-stat">
-                        <span class="r-label">${t('stat_handling')}</span>
-                        <span class="r-val">${car.handling} G</span>
-                    </div>
+                <div class="reward-10stats-grid">
+                    <div class="r-stat-pill"><span>⚡ POT:</span> <b>${eff.potencia}</b></div>
+                    <div class="r-stat-pill"><span>🏁 VEL:</span> <b>${eff.velocidad}</b></div>
+                    <div class="r-stat-pill"><span>🚀 ACE:</span> <b>${eff.aceleracion}</b></div>
+                    <div class="r-stat-pill"><span>🏎️ AGA:</span> <b>${eff.agarre}</b></div>
+                    <div class="r-stat-pill"><span>🛑 FRE:</span> <b>${eff.frenada}</b></div>
+                    <div class="r-stat-pill"><span>🎯 MAN:</span> <b>${eff.manejo}</b></div>
+                    <div class="r-stat-pill"><span>🌪️ TUR:</span> <b>${eff.turbo}</b></div>
+                    <div class="r-stat-pill"><span>🔻 DOW:</span> <b>${eff.downforce}</b></div>
+                    <div class="r-stat-pill"><span>🛞 TRA:</span> <b>${eff.traccion}</b></div>
+                    <div class="r-stat-pill"><span>🪶 LIG:</span> <b>${eff.ligereza}</b></div>
                 </div>
 
                 <p class="reward-desc">${car.desc || ''}</p>
