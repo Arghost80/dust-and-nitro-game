@@ -399,18 +399,39 @@ const STORY_CHAPTERS = [
     }
 ];
 
-// Gestión de guardado del Modo Historia en LocalStorage
+// Catálogo completo de los 22 circuitos para el Modo Diseñador
+const ALL_TRACK_IDS = [
+    'rookie_ring', 'radiator_oval', 'tri_apex_coliseum', 'twister_chicanes',
+    'red_rock_junction', 'curvastone_park', 'schwarzwald_sprint', 'overpass_figure8',
+    'desert_canyon', 'sandstorm_dunes', 'badlands_endurance', 'infinity_loops',
+    'brianza_speedway', 'sakura_ring', 'diamond_apex', 'super_dragway',
+    'riviera_coast', 'nordkette_pass', 'silverstone_airfield', 'neo_tokyo_bay', 'inter_laguna', 'sarthe_endurance'
+];
+
+// Gestión de guardado del Modo Historia en LocalStorage con Modo Diseñador
 function loadStoryProgress() {
+    let data = null;
     try {
         const raw = localStorage.getItem('dustrac_story_save');
-        if (raw) return JSON.parse(raw);
+        if (raw) data = JSON.parse(raw);
     } catch(e) {}
-    return {
-        unlockedTracks: ['rookie_ring'],
-        stars: {},
-        bestRanks: {},
-        bestTimes: {}
-    };
+
+    if (!data) {
+        data = {
+            designerMode: true, // Activado por defecto para el diseñador del juego
+            unlockedTracks: [...ALL_TRACK_IDS],
+            stars: {},
+            bestRanks: {},
+            bestTimes: {}
+        };
+    } else {
+        // Si el modo diseñador está activado, asegurar acceso a los 22 circuitos
+        if (data.designerMode !== false) {
+            data.designerMode = true;
+            data.unlockedTracks = [...ALL_TRACK_IDS];
+        }
+    }
+    return data;
 }
 
 function saveStoryProgress(data) {
@@ -428,6 +449,8 @@ let currentChapterIndex = 0;
 let arcadeCategoryIndex = 0;
 let arcadePage = 0;
 let isCurrentRaceStory = true;
+let offTrackTimer = 0;
+let lastCrashSoundTime = 0;
 
 let raceScene;
 let playerCar;
@@ -910,19 +933,57 @@ function showMenu(scene) {
         }
     }
 
+    const progress = loadStoryProgress();
+    const isDesigner = progress.designerMode !== false;
+
     // Cabecera Principal
-    scene.add.text(480, 22, '🏁 DUST RACING 2D: APEX MOTORSPORT 🏁', {
-        font: '900 24px Arial',
+    scene.add.text(420, 22, '🏁 DUST RACING 2D: APEX MOTORSPORT 🏁', {
+        font: '900 22px Arial',
         fill: '#ffffff',
         stroke: '#e53935',
         strokeThickness: 5
     }).setOrigin(0.5);
 
-    scene.add.text(480, 44, 'MODO HISTORIA • 5 CAMPEONATOS • 22 CIRCUITOS • VEHÍCULOS GT3', {
+    scene.add.text(420, 43, 'MODO HISTORIA • 5 CAMPEONATOS • 22 CIRCUITOS • VEHÍCULOS GT3', {
         font: 'bold 11px Arial',
         fill: '#00f5d4',
         letterSpacing: 2
     }).setOrigin(0.5);
+
+    // Botón de Alternancia: Modo Diseñador (22 pistas abiertas) vs Modo Jugador (progresivo)
+    const desBox = scene.add.graphics();
+    desBox.fillStyle(isDesigner ? 0xf59e0b : 0x1f2937, 0.95);
+    desBox.fillRoundedRect(722, 12, 226, 28, 6);
+    desBox.lineStyle(1.5, isDesigner ? 0xffffff : 0x6b7280, 1);
+    desBox.strokeRoundedRect(722, 12, 226, 28, 6);
+
+    const desBtn = scene.add.text(835, 26, isDesigner ? '🛠️ DISEÑADOR: 22 PISTAS ON' : '🎮 JUGADOR: BLOQUEO ON', {
+        font: 'bold 10px Arial',
+        fill: '#ffffff'
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    desBtn.on('pointerdown', () => {
+        dustAudio.init();
+        progress.designerMode = !isDesigner;
+        if (progress.designerMode) {
+            progress.unlockedTracks = [...ALL_TRACK_IDS];
+        } else {
+            // Modo jugador: solo la primera pista o las ganadas con estrellas
+            const unlocked = ['rookie_ring'];
+            STORY_CHAPTERS.forEach(ch => {
+                for (let i = 0; i < ch.tracks.length - 1; i++) {
+                    const currentId = ch.tracks[i].id;
+                    const nextId = ch.tracks[i + 1].id;
+                    if ((progress.stars[currentId] || 0) >= 1) {
+                        if (!unlocked.includes(nextId)) unlocked.push(nextId);
+                    }
+                }
+            });
+            progress.unlockedTracks = unlocked;
+        }
+        saveStoryProgress(progress);
+        showMenu(scene);
+    });
 
     // Selector de Modo Principal: [ 🏆 MODO HISTORIA ] vs [ ⚡ CARRERA LIBRE ]
     const modes = [
@@ -950,8 +1011,6 @@ function showMenu(scene) {
             showMenu(scene);
         });
     });
-
-    const progress = loadStoryProgress();
 
     // -------------------------------------------------------------
     // SECCIÓN 1: VISTA MODO HISTORIA
@@ -1326,12 +1385,18 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
 
     // Mapa de colisiones y superficies por celda (i, j)
     scene.tileMap = new Map();
+    scene.roadTiles = [];
 
     // 2. CONSTRUCCIÓN DE TILES DEL CIRCUITO (.trk)
     track.tiles.forEach(tile => {
         const tx = tile.i * 256 + 128;
         const ty = tile.j * 256 + 128;
         scene.tileMap.set(`${tile.i},${tile.j}`, tile);
+
+        // Registrar tiles transitables de carretera para control de límites de pista y anti-atajos
+        if (tile.t === 'straight' || tile.t === 'finish' || tile.t.startsWith('corner') || tile.t.startsWith('straight45') || tile.t === 'bridge') {
+            scene.roadTiles.push({ x: tx, y: ty, i: tile.i, j: tile.j, t: tile.t });
+        }
 
         // A) Trampas de Arena y Transiciones Oficiales
         if (tile.t === 'sand') {
@@ -1490,6 +1555,7 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     playerSpeed = 0;
     playerNextNodeIdx = 0;
     bestLapTime = null;
+    offTrackTimer = 0;
 
     // Coche del Jugador (Pole Position, colocado detrás de la línea de meta)
     const pCarData = DUST_CARS[carIdx];
@@ -1690,7 +1756,62 @@ function dustUpdate(time, delta) {
     updateStandings(track);
 }
 
-// Actualizar coche del jugador
+// Cálculo rápido de distancia al segmento de carretera más cercano
+function getDistanceToRoad(px, py, scene) {
+    if (!scene || !scene.roadTiles || scene.roadTiles.length === 0) return { dist: 0, nearestTile: null };
+    let minDistSq = Infinity;
+    let nearestTile = scene.roadTiles[0];
+    for (let i = 0; i < scene.roadTiles.length; i++) {
+        const rt = scene.roadTiles[i];
+        const dx = px - rt.x;
+        const dy = py - rt.y;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < minDistSq) {
+            minDistSq = dSq;
+            nearestTile = rt;
+        }
+    }
+    return {
+        dist: Math.sqrt(minDistSq),
+        nearestTile: nearestTile
+    };
+}
+
+// Respawn limpio del jugador en la trazada de asfalto ante atajos ilegales
+function respawnPlayerOnTrack(track) {
+    if (!playerCar || !raceScene) return;
+
+    let spawnX, spawnY, spawnAngleDeg;
+    const nodes = track.nodes || [];
+
+    if (nodes.length > 0 && playerCar.lastCheckpoint >= 0 && playerCar.lastCheckpoint < nodes.length) {
+        const lastNode = nodes[playerCar.lastCheckpoint];
+        const nextNode = nodes[(playerCar.lastCheckpoint + 1) % nodes.length];
+        spawnX = lastNode.x;
+        spawnY = lastNode.y;
+        const ang = Math.atan2(nextNode.y - lastNode.y, nextNode.x - lastNode.x);
+        spawnAngleDeg = Phaser.Math.RadToDeg(ang);
+    } else {
+        const finishTile = track.tiles.find(t => t.t === 'finish');
+        spawnX = finishTile ? finishTile.i * 256 + 128 : (nodes[0] ? nodes[0].x : 500);
+        spawnY = finishTile ? finishTile.j * 256 + 128 : (nodes[0] ? nodes[0].y : 500);
+        const n0 = nodes[0] || { x: spawnX, y: spawnY - 100 };
+        const ang = Math.atan2(n0.y - spawnY, n0.x - spawnX);
+        spawnAngleDeg = Phaser.Math.RadToDeg(ang);
+    }
+
+    playerCar.x = spawnX;
+    playerCar.y = spawnY;
+    playerCar.angle = spawnAngleDeg;
+    playerCar.setVelocity(0, 0);
+    playerSpeed = 0;
+    offTrackTimer = 0;
+
+    raceScene.cameras.main.flash(220, 255, 255, 255);
+    dustAudio.playKerb();
+}
+
+// Actualizar coche del jugador con límites de pista y prevención de atajos
 function updatePlayer(dt, track) {
     const cData = playerCar.carData;
     const left = keys.left.isDown || keys.a.isDown || touchLeft;
@@ -1698,7 +1819,8 @@ function updatePlayer(dt, track) {
     const gas = keys.up.isDown || keys.w.isDown || keys.space.isDown || touchGas;
     const brake = keys.down.isDown || keys.s.isDown || touchBrake;
 
-    // Detección de superficie bajo el coche
+    // Detección de distancia a la carretera más cercana (Límites de pista y Anti-Atajos)
+    const roadInfo = getDistanceToRoad(playerCar.x, playerCar.y, raceScene);
     const ti = Math.floor(playerCar.x / 256);
     const tj = Math.floor(playerCar.y / 256);
     const tile = raceScene.tileMap.get(`${ti},${tj}`);
@@ -1706,37 +1828,65 @@ function updatePlayer(dt, track) {
     let grip = 1.0;
     let surfaceLabel = 'ASFALTO (GRIP 100%)';
 
-    if (tile) {
-        if (tile.t === 'sand') {
-            grip = 0.45;
-            surfaceLabel = 'TRAMPA DE ARENA (DECELERACIÓN)';
-            dustAudio.playSand();
-            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xc5a059);
-        } else if (tile.t.startsWith('sandGrass')) {
-            grip = 0.65;
-            surfaceLabel = 'TRANSICIÓN ARENA-CÉSPED';
-            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xd7ccc8);
-        } else if (tile.t === 'bridge') {
+    if (tile && (tile.t === 'straight' || tile.t === 'finish' || tile.t.startsWith('corner') || tile.t.startsWith('straight45') || tile.t === 'bridge')) {
+        offTrackTimer = Math.max(0, offTrackTimer - dt * 2);
+        if (tile.t === 'bridge') {
             grip = 1.0;
             surfaceLabel = playerCar.onBridgeDeck ? 'PUENTE ELEVADO (CRUCE SUPERIOR)' : 'TÚNEL DE PISTA (CRUCE INFERIOR)';
-        } else if (tile.t === 'straight' || tile.t === 'finish' || tile.t.startsWith('corner') || tile.t.startsWith('straight45')) {
-            // Comprobar si pisa los pianos de borde
+        } else {
             const distCenter = Math.hypot(playerCar.x - (ti * 256 + 128), playerCar.y - (tj * 256 + 128));
             if (distCenter > 88 && distCenter < 122) {
                 surfaceLabel = 'PIANOS DE CARRERA (RUMBLE STRIP)';
                 dustAudio.playKerb();
                 raceScene.cameras.main.shake(50, 0.002);
+                grip = 0.95;
+            } else if (distCenter >= 122) {
+                grip = 0.60;
+                surfaceLabel = 'BORDE DE ASFALTO (DERIVA)';
+                spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x388e3c);
             } else {
+                grip = 1.0;
                 surfaceLabel = 'ASFALTO (GRIP 100%)';
             }
-        } else {
-            grip = 0.60;
-            surfaceLabel = 'CÉSPED EXTERIOR (DERIVA)';
-            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x388e3c);
         }
+    } else if (tile && tile.t === 'sand') {
+        offTrackTimer = Math.max(0, offTrackTimer - dt * 1.5);
+        grip = 0.40;
+        surfaceLabel = 'TRAMPA DE ARENA (DECELERACIÓN)';
+        dustAudio.playSand();
+        spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xc5a059);
+    } else if (tile && tile.t.startsWith('sandGrass')) {
+        offTrackTimer = Math.max(0, offTrackTimer - dt * 1.5);
+        grip = 0.58;
+        surfaceLabel = 'TRANSICIÓN ARENA-CÉSPED';
+        spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xd7ccc8);
     } else {
-        grip = 0.55;
-        surfaceLabel = 'FUERA DE PISTA';
+        // Fuera del asfalto: margen permitido de escapatoria ("salirse un poco") vs atajo ilegal
+        if (roadInfo.dist <= 175) {
+            // Margen permitido de escapatoria o trompo leve (hasta 175px)
+            offTrackTimer = Math.max(0, offTrackTimer - dt);
+            grip = 0.52;
+            surfaceLabel = 'CÉSPED DE ESCAPATORIA (DERIVA)';
+            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x388e3c);
+        } else {
+            // ATAJO ILEGAL: Fuera de los límites permitidos del trazado
+            grip = 0.22;
+            surfaceLabel = '⚠️ FUERA DE LÍMITES - RETORNA A PISTA';
+            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x2e7d32);
+
+            // Frenada drástica y empuje elástico de retorno hacia el circuito
+            playerSpeed *= 0.88;
+            if (roadInfo.nearestTile) {
+                const retAng = Math.atan2(roadInfo.nearestTile.y - playerCar.y, roadInfo.nearestTile.x - playerCar.x);
+                playerCar.x += Math.cos(retAng) * 3.5;
+                playerCar.y += Math.sin(retAng) * 3.5;
+            }
+
+            offTrackTimer += dt;
+            if (offTrackTimer > 1.6 || roadInfo.dist > 280) {
+                respawnPlayerOnTrack(track);
+            }
+        }
     }
 
     hudSurfaceText.setText(`SUPERFICIE: ${surfaceLabel}`);
@@ -1781,7 +1931,7 @@ function updatePlayer(dt, track) {
     checkLap(playerCar, track);
 }
 
-// Actualizar IA de rivales
+// Actualizar IA de rivales con sujeción de seguridad al trazado
 function updateAiCar(ai, dt, track) {
     const nodes = track.nodes;
     if (!nodes || nodes.length === 0) return;
@@ -1797,10 +1947,17 @@ function updateAiCar(ai, dt, track) {
     const maxSpeed = ai.carData.speed * 0.88;
     ai.aiVelocity = Math.min(maxSpeed, (ai.aiVelocity || 0) + ai.carData.accel * 0.75 * dt);
 
+    const dist = Math.hypot(ai.x - targetNode.x, ai.y - targetNode.y);
+
+    // Contención de seguridad: si un choque empujó a la IA lejos de la trazada
+    if (dist > 350) {
+        ai.angle = targetDeg;
+        ai.aiVelocity = Math.min(ai.aiVelocity, 120);
+    }
+
     const rad = Phaser.Math.DegToRad(ai.angle);
     ai.setVelocity(Math.cos(rad) * ai.aiVelocity, Math.sin(rad) * ai.aiVelocity);
 
-    const dist = Math.hypot(ai.x - targetNode.x, ai.y - targetNode.y);
     if (dist < 150) {
         const prevAiIdx = ai.targetNodeIdx;
         ai.lastCheckpoint = prevAiIdx;
@@ -1897,25 +2054,71 @@ function spawnBackfireFlame(scene, car) {
     });
 }
 
-// Colisiones entre vehículos
+// Colisiones suaves entre vehículos (físicas estables sin descompensar cámara ni lanzar coches)
 function handleCollisions() {
+    if (!playerCar || !raceScene) return;
+    const now = Date.now();
+
+    // 1. Colisión Jugador vs IA (separación elástica suave sin saltos bruscos)
     aiCars.forEach(ai => {
-        const dist = Math.hypot(playerCar.x - ai.x, playerCar.y - ai.y);
-        if (dist < 34) {
-            dustAudio.playCrash();
-            playerSpeed *= 0.82;
-            ai.aiVelocity *= 0.82;
+        const dx = playerCar.x - ai.x;
+        const dy = playerCar.y - ai.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = 34;
 
-            const ang = Math.atan2(playerCar.y - ai.y, playerCar.x - ai.x);
-            playerCar.x += Math.cos(ang) * 6;
-            playerCar.y += Math.sin(ang) * 6;
-            ai.x -= Math.cos(ang) * 6;
-            ai.y -= Math.sin(ang) * 6;
+        if (dist < minDist && dist > 0.001) {
+            // Sonido de colisión con cooldown de 250ms para evitar saturación de audio
+            if (now - lastCrashSoundTime > 250) {
+                dustAudio.playCrash();
+                lastCrashSoundTime = now;
+            }
 
-            // Chispas de fricción
-            spawnDust(raceScene, (playerCar.x + ai.x) / 2, (playerCar.y + ai.y) / 2, 'dt_sparkle', 0xffea00);
+            // Fricción suave y controlada
+            playerSpeed *= 0.94;
+            ai.aiVelocity = (ai.aiVelocity || 0) * 0.94;
+
+            // Separación proporcional a la penetración real, acotada a máx 2.2px por frame
+            const overlap = minDist - dist;
+            const push = Math.min(2.2, overlap * 0.5);
+            const ang = Math.atan2(dy, dx);
+
+            playerCar.x += Math.cos(ang) * push;
+            playerCar.y += Math.sin(ang) * push;
+            ai.x -= Math.cos(ang) * push;
+            ai.y -= Math.sin(ang) * push;
+
+            // Chispas de fricción ocasionales
+            if (Math.random() > 0.45) {
+                spawnDust(raceScene, (playerCar.x + ai.x) / 2, (playerCar.y + ai.y) / 2, 'dt_sparkle', 0xffea00);
+            }
         }
     });
+
+    // 2. Colisión IA vs IA (evita que los rivales se apilen o empujen violentamente al jugador)
+    for (let i = 0; i < aiCars.length; i++) {
+        for (let j = i + 1; j < aiCars.length; j++) {
+            const a1 = aiCars[i];
+            const a2 = aiCars[j];
+            const dx = a1.x - a2.x;
+            const dy = a1.y - a2.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = 32;
+
+            if (dist < minDist && dist > 0.001) {
+                const overlap = minDist - dist;
+                const push = Math.min(1.8, overlap * 0.4);
+                const ang = Math.atan2(dy, dx);
+
+                a1.x += Math.cos(ang) * push;
+                a1.y += Math.sin(ang) * push;
+                a2.x -= Math.cos(ang) * push;
+                a2.y -= Math.sin(ang) * push;
+
+                a1.aiVelocity = (a1.aiVelocity || 0) * 0.96;
+                a2.aiVelocity = (a2.aiVelocity || 0) * 0.96;
+            }
+        }
+    }
 }
 
 // Checkpoints y paso de vuelta
