@@ -137,34 +137,39 @@ function loadNftUserData() {
         if (raw) data = JSON.parse(raw);
     } catch(e) {}
 
-    if (!data) {
-        // Estado inicial de nuevo jugador: 1,500 $CR, 250 Gemas y coche inicial Monza Hatch
-        const starterColor = NFT_CAR_COLORS[0];
-        const starterCar = {
-            instanceId: "nft_inst_001",
-            modelId: "c_01",
-            name: "Monza Hatch 1.4",
-            rarity: "common",
-            colorName: starterColor.name,
-            colorHex: starterColor.hex,
-            tint: starterColor.tint,
-            mintNumber: 1042,
-            tokenHash: "0x7a3f89b...c41e",
-            speed: 285,
-            accel: 155,
-            handling: 3.3,
-            sprite: "car_red",
-            obtainedAt: Date.now()
-        };
+    const starterColor = NFT_CAR_COLORS[0];
+    const starterCar = {
+        instanceId: "nft_inst_001",
+        modelId: "c_01",
+        name: "Monza Hatch 1.4",
+        rarity: "common",
+        colorName: starterColor.name,
+        colorHex: starterColor.hex,
+        tint: starterColor.tint,
+        mintNumber: 1042,
+        tokenHash: "0x7a3f89b...c41e",
+        speed: 285,
+        accel: 155,
+        handling: 3.3,
+        sprite: "car_red",
+        obtainedAt: Date.now()
+    };
 
+    if (!data || typeof data.credits !== 'number' || typeof data.gems !== 'number' || !Array.isArray(data.garage) || data.garage.length === 0) {
         data = {
-            credits: 2000,
-            gems: 300,
-            equippedInstanceId: starterCar.instanceId,
-            garage: [starterCar]
+            credits: (data && typeof data.credits === 'number') ? data.credits : 2000,
+            gems: (data && typeof data.gems === 'number') ? data.gems : 300,
+            equippedInstanceId: (data && data.equippedInstanceId) ? data.equippedInstanceId : starterCar.instanceId,
+            garage: (data && Array.isArray(data.garage) && data.garage.length > 0) ? data.garage : [starterCar]
         };
         saveNftUserData(data);
     }
+
+    if (typeof data.credits !== 'number') data.credits = 2000;
+    if (typeof data.gems !== 'number') data.gems = 300;
+    if (!Array.isArray(data.garage) || data.garage.length === 0) data.garage = [starterCar];
+    if (!data.equippedInstanceId && data.garage[0]) data.equippedInstanceId = data.garage[0].instanceId;
+
     return data;
 }
 

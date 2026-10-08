@@ -48,9 +48,12 @@ let hubAudio = {
 
 // Renderizar la barra de cabecera superior con saldos y botón ⚙️
 function renderHubHeader() {
-    const userData = loadNftUserData();
+    const userData = loadNftUserData() || {};
     const header = document.getElementById('hub-header');
     if (!header) return;
+
+    const credits = (typeof userData.credits === 'number') ? userData.credits : 2000;
+    const gems = (typeof userData.gems === 'number') ? userData.gems : 300;
 
     header.innerHTML = `
         <div class="hub-header-left">
@@ -66,11 +69,11 @@ function renderHubHeader() {
         <div class="hub-header-center">
             <div class="currency-pill credits-pill">
                 <span class="curr-icon">💰</span>
-                <span class="curr-amount" id="curr-credits">${userData.credits.toLocaleString()} $CR</span>
+                <span class="curr-amount" id="curr-credits">${credits.toLocaleString()} $CR</span>
             </div>
             <div class="currency-pill gems-pill">
                 <span class="curr-icon">💎</span>
-                <span class="curr-amount" id="curr-gems">${userData.gems.toLocaleString()} TON</span>
+                <span class="curr-amount" id="curr-gems">${gems.toLocaleString()} TON</span>
             </div>
         </div>
 
@@ -81,10 +84,13 @@ function renderHubHeader() {
         </div>
     `;
 
-    document.getElementById('btn-open-settings').onclick = () => {
-        hubAudio.playClick();
-        openSettingsModal();
-    };
+    const gearBtn = document.getElementById('btn-open-settings');
+    if (gearBtn) {
+        gearBtn.onclick = () => {
+            hubAudio.playClick();
+            openSettingsModal();
+        };
+    }
 }
 
 // Navegar entre vistas del Hub
@@ -747,8 +753,18 @@ function closeSettingsModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-// Inicialización automática al cargar el DOM
-window.addEventListener('DOMContentLoaded', () => {
-    renderHubHeader();
-    showHubView('main');
-});
+// Inicialización automática tolerante a si DOMContentLoaded ya ocurrió o no
+function initGameHub() {
+    try {
+        renderHubHeader();
+        showHubView('main');
+    } catch(e) {
+        console.error('Error inicializando Hub:', e);
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGameHub);
+} else {
+    initGameHub();
+}
