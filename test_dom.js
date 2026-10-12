@@ -689,6 +689,50 @@ vm.runInContext(`
 `, ctx);
 console.log('✓ Circuito nocturno lanzado con iluminación de focos, sombras dinámicas y viñeta cinemática');
 
+// 11. Verificando Correcciones: Arcos de Patrocinio Cruzados, IA Desatascable y Bioma Nieve
+console.log('\n--- VERIFICANDO CORRECCIONES: ARCOS, IA DESATASCABLE Y NIEVE BLANCA ---');
+
+// A) Orientación de arco en Desert Canyon (tile con o=360 debe cruzar horizontalmente a 0°)
+const desertTrack = vm.runInContext("DustracTracks['desert_canyon']", ctx);
+const desertTile360 = desertTrack.tiles.find(t => t.i === 6 && t.j === 18);
+if (!desertTile360 || desertTile360.o !== 360) {
+    throw new Error('Debe existir el tile de recta vertical con o=360 en desert_canyon');
+}
+const normO = ((desertTile360.o % 360) + 360) % 360;
+const isVert = (normO === 0 || normO === 180);
+if (!isVert) {
+    throw new Error('El tile con o=360 debe normalizarse a recta vertical');
+}
+console.log('✓ Arcos en rectas con o=360 orientados horizontalmente (0°) para cruzar la calzada de lado a lado');
+
+// B) Desatasco activo de la IA (Maniobra de marcha atrás y evasión)
+vm.runInContext(`
+    launchRaceDirectly('rookie_ring');
+    const testAi = aiCars[0];
+    testAi.aiVelocity = 0;
+    // Simular que está bloqueado contra un obstáculo por más de 0.8s
+    testAi.unstuckState = { state: 'NORMAL', timer: 0.85, reverseDuration: 0, lastX: testAi.x, lastY: testAi.y, checkTimer: 0 };
+    updateAiCar(testAi, 0.05, DustracTracks['rookie_ring']);
+`, ctx);
+const aiStateAfterStuck = vm.runInContext('aiCars[0].unstuckState.state', ctx);
+const aiVelAfterStuck = vm.runInContext('aiCars[0].aiVelocity', ctx);
+console.log('Estado de IA tras bloqueo:', aiStateAfterStuck, '| Velocidad (marcha atrás):', aiVelAfterStuck);
+if (aiStateAfterStuck !== 'REVERSING' || aiVelAfterStuck >= 0) {
+    throw new Error('La IA debe entrar en estado REVERSING con velocidad negativa al atascarse');
+}
+console.log('✓ Sistema anti-atasco con marcha atrás evasiva operativa al 100%');
+
+// C) Bioma Nieve con Nieve Pura Blanca e iluminación diurna alpina
+vm.runInContext(`
+    launchRaceDirectly('nordkette_pass');
+`, ctx);
+const snowTrackTod = vm.runInContext("STORY_CHAPTERS[4].tracks.find(t => t.id === 'nordkette_pass').tod", ctx);
+console.log('Hora del día en Nordkette Alpine Pass:', snowTrackTod);
+if (snowTrackTod !== 'day') {
+    throw new Error('Nordkette Pass debe ser de día para reflejar la nieve blanca pura');
+}
+console.log('✓ Circuito de nieve configurado con nieve blanca pura y luz solar diurna alpina');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

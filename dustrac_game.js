@@ -443,7 +443,7 @@ const STORY_CHAPTERS = [
         briefing: 'La consagración definitiva. Circuitos míticos donde nacen las leyendas.',
         tracks: [
             { id: 'riviera_coast', name: 'Riviera Monaco Harbor', desc: 'Circuito urbano costero con chicanes', laps: 3, tod: 'day' },
-            { id: 'nordkette_pass', name: 'Nordkette Alpine Pass', desc: 'Paso de montaña alpino con horquillas', laps: 3, tod: 'sunset' },
+            { id: 'nordkette_pass', name: 'Nordkette Alpine Pass', desc: 'Paso de montaña alpino con horquillas', laps: 3, tod: 'day' },
             { id: 'silverstone_airfield', name: 'Aerodrome Apex GP', desc: 'Antiguo aeródromo de alta velocidad', laps: 3, tod: 'day' },
             { id: 'neo_tokyo_bay', name: 'Neo-Tokyo Bay Ring', desc: 'Bahía nocturna iluminada con xenón', laps: 3, tod: 'night' },
             { id: 'inter_laguna', name: 'Inter-Laguna Bowl', desc: 'Autódromo tropical con peraltes', laps: 3, tod: 'day' },
@@ -1847,27 +1847,38 @@ function buildHDBridgeTextures(scene) {
 function buildHDBiomeTextures(scene) {
     if (!scene || !scene.textures) return;
 
-    // 1. BIOMA NIEVE: Suelo de Nieve y Hielo (dt_snow_ground)
+    // 1. BIOMA NIEVE: Suelo de Nieve y Hielo Brillante Glaciar (dt_snow_ground)
     try {
         const cv = document.createElement('canvas');
         cv.width = 512; cv.height = 512;
         const ctx = cv.getContext('2d');
         if (ctx) {
-            ctx.fillStyle = '#f1f5f9';
+            // Nieve alpina blanca pura inmaculada
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, 512, 512);
-            for (let i = 0; i < 40; i++) {
+
+            // Dunas de nieve en polvo con matices glaciales muy sutiles
+            for (let i = 0; i < 45; i++) {
                 const rx = Math.random() * 512, ry = Math.random() * 512;
-                const rad = 25 + Math.random() * 45;
+                const rad = 30 + Math.random() * 65;
                 const g = ctx.createRadialGradient(rx, ry, 5, rx, ry, rad);
-                g.addColorStop(0, 'rgba(226, 232, 240, 0.7)');
-                g.addColorStop(1, 'rgba(241, 245, 249, 0)');
+                g.addColorStop(0, 'rgba(240, 249, 255, 0.75)'); // Hielo ártico azulado muy suave
+                g.addColorStop(0.6, 'rgba(248, 250, 252, 0.40)');
+                g.addColorStop(1, 'rgba(255, 255, 255, 0)');
                 ctx.fillStyle = g;
                 ctx.beginPath(); ctx.arc(rx, ry, rad, 0, Math.PI * 2); ctx.fill();
             }
+
+            // Destellos de cristales de nieve y escarcha brillante
             ctx.fillStyle = '#ffffff';
-            for (let i = 0; i < 350; i++) {
+            for (let i = 0; i < 600; i++) {
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+            }
+            ctx.fillStyle = '#e0f2fe';
+            for (let i = 0; i < 250; i++) {
                 ctx.fillRect(Math.random() * 512, Math.random() * 512, 1.5, 1.5);
             }
+
             if (scene.textures.exists('dt_snow_ground')) scene.textures.remove('dt_snow_ground');
             scene.textures.addCanvas('dt_snow_ground', cv);
         }
@@ -2776,11 +2787,15 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     // Límites de físicas del mundo y cámara sin bloqueo perimetral
     scene.physics.world.setBounds(0, 0, track.worldWidth, track.worldHeight);
     scene.cameras.main.setBounds(-2500, -2500, track.worldWidth + 5000, track.worldHeight + 5000);
-    scene.cameras.main.setBackgroundColor('#0d121d');
+    const biome = getTrackBiome(track);
+    if (biome === 'snow') {
+        scene.cameras.main.setBackgroundColor('#f8fafc');
+    } else {
+        scene.cameras.main.setBackgroundColor('#0d121d');
+    }
     scene.cameras.main.setZoom(1.1);
 
     // 1. TERRENO BASE Y BIOMA AMBIENTAL (Nieve, Desierto, Ciudad, Montaña, Costa, Río y Puente de Piedra)
-    const biome = getTrackBiome(track);
     let baseGroundKey = 'dt_grass';
     if (biome === 'snow') baseGroundKey = 'dt_snow_ground';
     else if (biome === 'desert') baseGroundKey = 'dt_desert_sand';
@@ -2910,17 +2925,17 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
 
         // A) Trampas de Arena y Escapatorias de Nieve / Grava
         if (tile.t === 'sand') {
-            const sandSprite = scene.add.sprite(tx, ty, 'dt_sand').setDisplaySize(256, 256).setDepth(1);
-            if (biome === 'snow') sandSprite.setTint(0xf1f5f9);
-        } else if (tile.t === 'sandGrassStraight') {
-            const sgSprite = scene.add.sprite(tx, ty, 'dt_sandGrassStraight').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
-            if (biome === 'snow') sgSprite.setTint(0xf1f5f9);
-        } else if (tile.t === 'sandGrassCorner') {
-            const sgSprite = scene.add.sprite(tx, ty, 'dt_sandGrassCorner').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
-            if (biome === 'snow') sgSprite.setTint(0xf1f5f9);
-        } else if (tile.t === 'sandGrassCorner2') {
-            const sgSprite = scene.add.sprite(tx, ty, 'dt_sandGrassCorner2').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
-            if (biome === 'snow') sgSprite.setTint(0xf1f5f9);
+            if (biome === 'snow') {
+                scene.add.sprite(tx, ty, 'dt_snow_ground').setDisplaySize(256, 256).setDepth(1);
+            } else {
+                scene.add.sprite(tx, ty, 'dt_sand').setDisplaySize(256, 256).setDepth(1);
+            }
+        } else if (tile.t === 'sandGrassStraight' || tile.t === 'sandGrassCorner' || tile.t === 'sandGrassCorner2') {
+            if (biome === 'snow') {
+                scene.add.sprite(tx, ty, 'dt_snow_ground').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            } else {
+                scene.add.sprite(tx, ty, `dt_${tile.t}`).setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            }
         }
 
         // B) Segmentos de Asfalto con Pianos Oficiales Limpios (Transparencia Perfecta)
@@ -3027,6 +3042,11 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             tint: 0x0369a1, tintAlpha: 0.18, vignetteAlpha: 0.38
         }
     }[selectedTimeOfDay] || { shadowDx: 12, shadowDy: 14, shadowAlpha: 0.36, tint: null, vignetteAlpha: 0.16 };
+
+    // En circuitos alpinos de nieve, mantener la luz diurna blanca y nítida
+    if (biome === 'snow' && lightConfig.tint === 0xd97706) {
+        lightConfig.tint = null;
+    }
 
     // 4. OBJETOS DEL ENTORNO OFICIALES Y TEMÁTICOS SEGÚN BIOMA
     track.objects.forEach(obj => {
@@ -3254,9 +3274,12 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             if (!isNearFinish && !hasConflict) {
                 // El arco mide 280px y cruza la calzada de 200px de lado a lado:
                 // Sus torres descansan sobre el césped a ambos lados y el panel central cuelga sobre la pista.
-                // - En recta vertical (o=0 u o=180): el arco cruza horizontalmente Este-Oeste (ángulo 0°).
-                // - En recta horizontal (o=90 u o=270): el arco cruza verticalmente Norte-Sur (ángulo 90°).
-                const isVerticalRoad = (tile.o === 0 || tile.o === 180);
+                // - En recta vertical (o=0, 180, 360): el arco cruza horizontalmente Este-Oeste (ángulo 0°).
+                // - En recta horizontal (o=90, 270, -90): el arco cruza verticalmente Norte-Sur (ángulo 90°).
+                const normO = ((tile.o % 360) + 360) % 360;
+                const hasRoadAboveOrBelow = track.tiles.some(t => t.i === tile.i && (t.j === tile.j - 1 || t.j === tile.j + 1) && (t.t === 'straight' || t.t === 'finish' || t.t.startsWith('corner')));
+                const hasRoadLeftOrRight = track.tiles.some(t => (t.i === tile.i - 1 || t.i === tile.i + 1) && t.j === tile.j && (t.t === 'straight' || t.t === 'finish' || t.t.startsWith('corner')));
+                const isVerticalRoad = (normO === 0 || normO === 180) || (hasRoadAboveOrBelow && !hasRoadLeftOrRight);
                 const archAngle = isVerticalRoad ? 0 : 90;
 
                 // 1. Sombra arquitectónica proyectada sobre el asfalto (profundidad 3.6: los coches pasan SOBRE la sombra)
@@ -3392,36 +3415,56 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     }
 
     // F) Vehículos Oficiales de Asistencia de Circuito en Escapatorias Seguras
+    // Estacionados únicamente en la zona de Paddock / Pit Lane o en escapatorias a más de 220px del asfalto
     if (nodes && nodes.length > 2) {
-        // 1. Safety Car GT3 oficial aparcado junto a la recta de meta (en escapatoria exterior segura)
-        for (const side of [-1, 1]) {
-            let scPlaced = false;
-            for (let offset = 180; offset <= 270; offset += 30) {
-                const scX = fx - dirX * 130 + perpX * offset * side;
-                const scY = fy - dirY * 130 + perpY * offset * side;
-                if (isBoxSafeFromRoad(scX, scY, 36, 18)) {
-                    scene.add.rectangle(scX + lightConfig.shadowDx * 0.4, scY + lightConfig.shadowDy * 0.4, 64, 28, 0x000000, lightConfig.shadowAlpha).setAngle(startAngleDeg).setDepth(5);
-                    scene.add.sprite(scX, scY, 'dt_safety_car').setDisplaySize(64, 28).setAngle(startAngleDeg).setDepth(6);
-                    const strobe = scene.add.circle(scX, scY, 4, 0xf59e0b, 0.95).setDepth(7);
-                    scene.tweens.add({ targets: strobe, alpha: 0.15, duration: 420, yoyo: true, repeat: -1 });
-                    scPlaced = true;
-                    break;
-                }
+        // 1. Safety Car GT3 oficial: buscar aparcamiento en la calle de boxes o en escapatoria exterior segura
+        let scPlaced = false;
+        const pitObj = (track.objects || []).find(o => o.r === 'pit');
+        if (pitObj) {
+            const scX = pitObj.x;
+            const scY = pitObj.y;
+            const pitDist = (typeof getDistanceToRoad === 'function') ? getDistanceToRoad(scX, scY, scene).dist : 250;
+            if (isBoxSafeFromRoad(scX, scY, 36, 18) && pitDist >= 170) {
+                scene.add.rectangle(scX + lightConfig.shadowDx * 0.4, scY + lightConfig.shadowDy * 0.4, 64, 28, 0x000000, lightConfig.shadowAlpha).setAngle(pitObj.o || 0).setDepth(5);
+                scene.add.sprite(scX, scY, 'dt_safety_car').setDisplaySize(64, 28).setAngle(pitObj.o || 0).setDepth(6);
+                const strobe = scene.add.circle(scX, scY, 4, 0xf59e0b, 0.95).setDepth(7);
+                scene.tweens.add({ targets: strobe, alpha: 0.15, duration: 420, yoyo: true, repeat: -1 });
+                scPlaced = true;
             }
-            if (scPlaced) break;
         }
 
-        // 2. Coche Médico y Grúa de Asistencia en una escapatoria amplia del circuito
+        if (!scPlaced) {
+            for (const side of [-1, 1]) {
+                for (let offset = 220; offset <= 320; offset += 35) {
+                    const scX = fx - dirX * 130 + perpX * offset * side;
+                    const scY = fy - dirY * 130 + perpY * offset * side;
+                    const scDist = (typeof getDistanceToRoad === 'function') ? getDistanceToRoad(scX, scY, scene).dist : 250;
+                    if (isBoxSafeFromRoad(scX, scY, 36, 18) && scDist >= 220) {
+                        scene.add.rectangle(scX + lightConfig.shadowDx * 0.4, scY + lightConfig.shadowDy * 0.4, 64, 28, 0x000000, lightConfig.shadowAlpha).setAngle(startAngleDeg).setDepth(5);
+                        scene.add.sprite(scX, scY, 'dt_safety_car').setDisplaySize(64, 28).setAngle(startAngleDeg).setDepth(6);
+                        const strobe = scene.add.circle(scX, scY, 4, 0xf59e0b, 0.95).setDepth(7);
+                        scene.tweens.add({ targets: strobe, alpha: 0.15, duration: 420, yoyo: true, repeat: -1 });
+                        scPlaced = true;
+                        break;
+                    }
+                }
+                if (scPlaced) break;
+            }
+        }
+
+        // 2. Coche Médico y Grúa de Asistencia en el outfield exterior profundo (distancia >= 230px de la pista)
         const midNode = nodes[Math.floor(nodes.length * 0.5)];
         if (midNode) {
             let medPlaced = false;
-            for (let offset = 190; offset <= 310; offset += 35) {
+            for (let offset = 240; offset <= 360; offset += 40) {
                 for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
                     const medX = midNode.x + dx * offset;
                     const medY = midNode.y + dy * offset;
                     const craneX = medX + 75;
                     const craneY = medY + 12;
-                    if (isBoxSafeFromRoad(medX, medY, 36, 18) && isBoxSafeFromRoad(craneX, craneY, 38, 20)) {
+                    const medDist = (typeof getDistanceToRoad === 'function') ? getDistanceToRoad(medX, medY, scene).dist : 300;
+                    const craneDist = (typeof getDistanceToRoad === 'function') ? getDistanceToRoad(craneX, craneY, scene).dist : 300;
+                    if (isBoxSafeFromRoad(medX, medY, 36, 18) && isBoxSafeFromRoad(craneX, craneY, 38, 20) && medDist >= 230 && craneDist >= 230) {
                         scene.add.rectangle(medX + lightConfig.shadowDx * 0.4, medY + lightConfig.shadowDy * 0.4, 60, 26, 0x000000, lightConfig.shadowAlpha).setDepth(5);
                         scene.add.sprite(medX, medY, 'dt_medical_car').setDisplaySize(60, 26).setDepth(6);
 
@@ -4360,6 +4403,7 @@ function updateAiCar(ai, dt, track) {
     const forwardCos = Math.cos(curRad);
     const forwardSin = Math.sin(curRad);
     let carDirectlyAhead = false;
+    let closestAheadCar = null;
     let inAiDrafting = false;
     let closestAheadDist = Infinity;
     let aheadCarLatSide = 0; // -1 si el coche delantero está a la izquierda, +1 si a la derecha
@@ -4378,11 +4422,12 @@ function updateAiCar(ai, dt, track) {
         if (fwdDist > 0 && fwdDist < 125 && Math.abs(latDist) < 32) {
             if (fwdDist < closestAheadDist) {
                 closestAheadDist = fwdDist;
+                closestAheadCar = other;
                 aheadCarLatSide = latDist >= 0 ? 1 : -1;
             }
-            if (fwdDist < 36 && Math.abs(latDist) < 22) {
+            if (fwdDist < 42 && Math.abs(latDist) < 24) {
                 carDirectlyAhead = true; // Parachoques con parachoques
-            } else if (fwdDist >= 36) {
+            } else if (fwdDist >= 42) {
                 inAiDrafting = true; // Rebufo y preparación de adelantamiento
             }
         }
@@ -4464,8 +4509,19 @@ function updateAiCar(ai, dt, track) {
     const curveScrub = isSharpTurn ? (Math.abs(diff) > 22 ? 0.84 : 0.94) : (Math.abs(diff) > 28 ? 0.92 : 1.0);
     let targetVel = baseTopSpeed * curveScrub;
 
-    // Solo frenar ligeramente si está rozando el parachoques trasero sin espacio lateral todavía
-    if (carDirectlyAhead) targetVel = Math.min(targetVel, targetVel * 0.95);
+    // Frenada inteligente: si hay un coche delantero detenido o muy lento, no seguir empujándolo
+    if (carDirectlyAhead && closestAheadCar) {
+        const otherSpeed = Math.abs(closestAheadCar.aiVelocity !== undefined ? closestAheadCar.aiVelocity : (typeof playerSpeed !== 'undefined' ? playerSpeed : 0));
+        if (otherSpeed < 60) {
+            // Coche delantero frenado o atascado: FRENADA A 0 (no empujar ni amontonarse)
+            targetVel = 0;
+            // Forzar búsqueda de hueco lateral para esquivar
+            ai.overtakeDir = aheadCarLatSide >= 0 ? -1 : 1;
+            ai.overtakeTimer = 1.8;
+        } else {
+            targetVel = Math.min(targetVel, otherSpeed * 0.90);
+        }
+    }
     if (isAiOffTrack) targetVel *= 0.50; // Pérdida drástica de agarre en hierba
 
     // Aceleración y deceleración
@@ -4476,29 +4532,71 @@ function updateAiCar(ai, dt, track) {
         ai.aiVelocity = Math.max(targetVel, ai.aiVelocity - ai.carData.accel * (isAiOffTrack ? 1.6 : 0.55) * dt);
     }
 
-    // 4. Sistema Anti-Atasco (Watchdog): detecta si el coche colisionó contra un pilar/valla y no avanza
-    if (!ai.stuckTracker) ai.stuckTracker = { lastX: ai.x, lastY: ai.y, stuckTimer: 0 };
-    const moved = Math.hypot(ai.x - ai.stuckTracker.lastX, ai.y - ai.stuckTracker.lastY);
-    if (moved < 7 && Math.abs(ai.aiVelocity) > 50) {
-        ai.stuckTracker.stuckTimer += dt;
-    } else {
-        ai.stuckTracker.stuckTimer = 0;
-        ai.stuckTracker.lastX = ai.x;
-        ai.stuckTracker.lastY = ai.y;
+    // 4. Máquina de Estados Anti-Atasco (Watchdog): detecta colisión/bloqueo y ejecuta maniobra de desatasco real
+    if (!ai.unstuckState) {
+        ai.unstuckState = {
+            state: 'NORMAL',
+            timer: 0,
+            reverseDuration: 0,
+            reverseSteer: 0,
+            lastX: ai.x,
+            lastY: ai.y,
+            checkTimer: 0
+        };
     }
 
-    // Maniobra de escape o rescate si lleva más de 0.65s bloqueado
-    if (ai.stuckTracker.stuckTimer > 0.65 && ai.stuckTracker.stuckTimer < 1.4) {
-        // Marcha atrás y rotación para desenganchar el morro
-        ai.aiVelocity = -130;
-        ai.angle += (ai.targetNodeIdx % 2 === 0 ? 35 : -35) * dt * 2;
-    } else if (ai.stuckTracker.stuckTimer >= 1.4) {
-        // Rescate inmediato a la trazada del circuito
+    const uState = ai.unstuckState;
+    uState.checkTimer += dt;
+
+    if (uState.checkTimer >= 0.20) {
+        const movedDist = Math.hypot(ai.x - uState.lastX, ai.y - uState.lastY);
+        uState.lastX = ai.x;
+        uState.lastY = ai.y;
+        uState.checkTimer = 0;
+
+        // Si el coche apenas se desplazó (< 8px en 0.20s, es decir < 40px/s)
+        if (movedDist < 8) {
+            uState.timer += 0.20;
+        } else if (uState.state === 'NORMAL') {
+            uState.timer = Math.max(0, uState.timer - 0.20);
+        }
+    }
+
+    // Transición de estados de desatasco
+    if (uState.state === 'NORMAL') {
+        if (uState.timer >= 0.70) {
+            // Iniciar marcha atrás de desatasco por 1 segundo completo
+            uState.state = 'REVERSING';
+            uState.reverseDuration = 1.0;
+            uState.reverseSteer = (ai.targetNodeIdx % 2 === 0 ? 1 : -1) * 55;
+            ai.aiVelocity = -150;
+        }
+    } else if (uState.state === 'REVERSING') {
+        uState.reverseDuration -= dt;
+        uState.timer += dt; // Continúa acumulando tiempo total de bloqueo
+
+        // Potente marcha atrás con giro evasivo para desclavar el morro del obstáculo
+        ai.aiVelocity = -150;
+        ai.angle += uState.reverseSteer * dt * 2;
+
+        if (uState.reverseDuration <= 0) {
+            // Fin de marcha atrás: intentar reanudar marcha hacia adelante
+            uState.state = 'NORMAL';
+            uState.reverseDuration = 0;
+            ai.aiVelocity = 90;
+        }
+    }
+
+    // Si lleva más de 2.0s bloqueado o atrapado en una montonera: Reposición limpia e inmediata en el circuito
+    if (uState.timer >= 2.0) {
         ai.x = targetNode.x;
         ai.y = targetNode.y;
-        ai.angle = Phaser.Math.RadToDeg(Math.atan2(nextNode.y - targetNode.y, nextNode.x - targetNode.x));
-        ai.aiVelocity = 180;
-        ai.stuckTracker.stuckTimer = 0;
+        const respawnAng = Math.atan2(nextNode.y - targetNode.y, nextNode.x - targetNode.x);
+        ai.angle = Phaser.Math.RadToDeg(respawnAng);
+        ai.aiVelocity = 190;
+        uState.state = 'NORMAL';
+        uState.timer = 0;
+        uState.reverseDuration = 0;
         if (raceScene) spawnDust(raceScene, ai.x, ai.y, 'dt_sparkle', 0x00f5d4);
     }
 
