@@ -23,7 +23,21 @@ const doc = {
     return this.elements[id];
   },
   createElement(tag) {
-    return this.getElementById('tag_' + Math.random());
+    const el = this.getElementById('tag_' + Math.random());
+    if (tag === 'canvas') {
+      el.getContext = () => ({
+        fillStyle: '', strokeStyle: '', lineWidth: 1,
+        fillRect: () => {}, fillText: () => {}, strokeRect: () => {},
+        beginPath: () => {}, moveTo: () => {}, lineTo: () => {},
+        arc: () => {}, fill: () => {}, stroke: () => {},
+        closePath: () => {}, save: () => {}, restore: () => {},
+        translate: () => {}, rotate: () => {}, scale: () => {},
+        createRadialGradient: () => ({ addColorStop: () => {} }),
+        createLinearGradient: () => ({ addColorStop: () => {} }),
+        roundRect: () => {}
+      });
+    }
+    return el;
   },
   addEventListener() {}
 };
@@ -68,7 +82,7 @@ const sandbox = {
           },
           tileSprite: () => ({ setDepth: () => ({}) }),
           sprite: () => {
-            const s = { setDisplaySize: () => s, setAngle: () => s, setDepth: () => s, setTint: () => s, setAlpha: () => s };
+            const s = { setDisplaySize: () => s, setAngle: () => s, setDepth: () => s, setTint: () => s, setAlpha: () => s, setScrollFactor: () => s };
             return s;
           },
           rectangle: () => {
@@ -93,7 +107,13 @@ const sandbox = {
           }
         },
         time: { delayedCall: (delay, fn) => fn && fn(), addEvent: () => ({ remove: () => {} }) },
-        tweens: { add: () => {} }
+        tweens: { add: () => {} },
+        textures: {
+          _map: new Map(),
+          exists(k) { return this._map.has(k); },
+          addCanvas(k, cv) { this._map.set(k, cv); return this; },
+          get(k) { return this._map.get(k); }
+        }
       };
       return { scene: { scenes: [mockScene] } };
     },
@@ -640,6 +660,34 @@ if (stateAfterMenu !== 'MENU' || playerCarAfterMenu !== null) {
     throw new Error('showMenu debe restablecer la cámara y el estado a MENU limpiando el vehículo');
 }
 console.log('✓ Retorno al menú de pistas verificado con éxito sin pantallas congeladas');
+
+// 10. Verificando Gráficos Profesionales, Vehículos de Apoyo y Ambientación
+console.log('\n--- VERIFICANDO GRÁFICOS PROFESIONALES Y AMBIENTACIÓN DE CIRCUITO ---');
+vm.runInContext(`
+    buildProRacingEnvironmentTextures(raceScene);
+`, ctx);
+const proTextureKeys = [
+    'dt_brake_150', 'dt_brake_100', 'dt_brake_50',
+    'dt_safety_car', 'dt_medical_car', 'dt_recovery_crane',
+    'dt_flag_checkered', 'dt_flag_red', 'dt_flag_blue',
+    'dt_smoke_flare_red', 'dt_smoke_flare_yellow',
+    'dt_floodlight_tower', 'dt_light_cone',
+    'dt_tire_smoke', 'dt_vignette'
+];
+proTextureKeys.forEach(k => {
+    const exists = vm.runInContext(`raceScene.textures.exists('${k}')`, ctx);
+    if (!exists) {
+        throw new Error('Falta textura profesional obligatoria: ' + k);
+    }
+});
+console.log('✓ Texturas de ambientación profesional generadas correctamente (' + proTextureKeys.length + ' texturas)');
+
+// Probar lanzamiento de circuito nocturno con torres de iluminación y viñeta
+vm.runInContext(`
+    selectedTimeOfDay = 'night';
+    launchRaceDirectly('neo_tokyo_bay');
+`, ctx);
+console.log('✓ Circuito nocturno lanzado con iluminación de focos, sombras dinámicas y viñeta cinemática');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

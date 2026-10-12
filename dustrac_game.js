@@ -1418,6 +1418,157 @@ function buildProRacingEnvironmentTextures(scene) {
         ctx.fillStyle = '#fbbf24'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('BADLANDS APEX GP', bx + bw / 2, by + bh / 2);
     });
+
+    // 12. Paneles de Distancia de Frenada (150m, 100m, 50m) estilo FIA GT
+    makeTex('dt_brake_150', 38, 22, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 1, w - 2, h - 2);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(w - 7, 2, 4, h - 4);
+        ctx.fillRect(w - 13, 2, 4, h - 4);
+        ctx.fillRect(w - 19, 2, 4, h - 4);
+        ctx.fillStyle = '#090d16'; ctx.font = '900 13px Arial Black, sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText('150', 3, h / 2);
+    });
+
+    makeTex('dt_brake_100', 38, 22, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 1, w - 2, h - 2);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(w - 7, 2, 4, h - 4);
+        ctx.fillRect(w - 13, 2, 4, h - 4);
+        ctx.fillStyle = '#090d16'; ctx.font = '900 13px Arial Black, sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText('100', 3, h / 2);
+    });
+
+    makeTex('dt_brake_50', 38, 22, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(1, 1, w - 2, h - 2);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(w - 7, 2, 4, h - 4);
+        ctx.fillStyle = '#090d16'; ctx.font = '900 13px Arial Black, sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText('50', 5, h / 2);
+    });
+
+    // 13. Vehículos Oficiales de Pista: Safety Car GT3
+    makeTex('dt_safety_car', 64, 28, (ctx, w, h) => {
+        ctx.fillStyle = '#e2e8f0'; ctx.fillRect(4, 3, w - 8, h - 6);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(12, 5, 20, h - 10);
+        ctx.fillStyle = '#38bdf8'; ctx.fillRect(14, 7, 16, h - 14);
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(20, 2, 8, 3); ctx.fillRect(20, h - 5, 8, 3);
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(23, 2, 2, 3); ctx.fillRect(23, h - 5, 2, 3);
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(0, 11, w, 6);
+        ctx.fillStyle = '#000000'; ctx.font = '900 7px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('SAFETY CAR', w / 2 + 6, h / 2);
+        ctx.fillStyle = '#fef08a'; ctx.fillRect(w - 4, 4, 3, 4); ctx.fillRect(w - 4, h - 8, 3, 4);
+    });
+
+    // 14. Vehículo Oficial de Intervención Rápida / Médico
+    makeTex('dt_medical_car', 60, 26, (ctx, w, h) => {
+        ctx.fillStyle = '#f8fafc'; ctx.fillRect(4, 3, w - 8, h - 6);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(12, 5, 22, h - 10);
+        ctx.fillStyle = '#38bdf8'; ctx.fillRect(14, 7, 18, h - 14);
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(w - 14, h / 2 - 4, 8, 8);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(w - 12, h / 2 - 1, 4, 2); ctx.fillRect(w - 11, h / 2 - 2, 2, 4);
+        ctx.fillStyle = '#0284c7'; ctx.fillRect(22, 2, 8, 3); ctx.fillRect(22, h - 5, 8, 3);
+    });
+
+    // 15. Camión Grúa de Asistencia FIA
+    makeTex('dt_recovery_crane', 66, 30, (ctx, w, h) => {
+        ctx.fillStyle = '#eab308'; ctx.fillRect(2, 4, 26, h - 8);
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(6, 6, 12, h - 12);
+        ctx.fillStyle = '#475569'; ctx.fillRect(28, 5, w - 30, h - 10);
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(34, h / 2); ctx.lineTo(w - 6, h / 2 - 5); ctx.stroke();
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(w - 4, 6, 3, h - 12);
+        ctx.fillStyle = '#fef08a'; ctx.fillRect(w - 4, 9, 3, 3); ctx.fillRect(w - 4, h - 12, 3, 3);
+    });
+
+    // 16. Banderas ondeantes de circuito para las gradas
+    makeTex('dt_flag_checkered', 26, 16, (ctx, w, h) => {
+        ctx.fillStyle = '#475569'; ctx.fillRect(0, 0, 2, h);
+        for (let x = 2; x < w; x += 6) {
+            for (let y = 0; y < h; y += 4) {
+                const isBlack = (Math.floor((x - 2) / 6) + Math.floor(y / 4)) % 2 === 0;
+                ctx.fillStyle = isBlack ? '#090d16' : '#ffffff';
+                ctx.fillRect(x, y, 6, 4);
+            }
+        }
+    });
+
+    makeTex('dt_flag_red', 26, 16, (ctx, w, h) => {
+        ctx.fillStyle = '#475569'; ctx.fillRect(0, 0, 2, h);
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(2, 0, w - 2, h);
+        ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(14, h / 2, 4, 0, Math.PI * 2); ctx.fill();
+    });
+
+    makeTex('dt_flag_blue', 26, 16, (ctx, w, h) => {
+        ctx.fillStyle = '#475569'; ctx.fillRect(0, 0, 2, h);
+        ctx.fillStyle = '#0284c7'; ctx.fillRect(2, 0, w - 2, h);
+        ctx.fillStyle = '#ffffff'; ctx.beginPath();
+        ctx.moveTo(4, 0); ctx.lineTo(w, h - 4); ctx.lineTo(w, h); ctx.lineTo(4, 4); ctx.fill();
+    });
+
+    // 17. Bengalas de celebración y humo de gradas (Tifosi Smoke)
+    makeTex('dt_smoke_flare_red', 32, 48, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.75)';
+        ctx.beginPath(); ctx.arc(w / 2, 16, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.55)';
+        ctx.beginPath(); ctx.arc(w / 2 - 4, 28, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(185, 28, 28, 0.35)';
+        ctx.beginPath(); ctx.arc(w / 2 + 4, 38, 8, 0, Math.PI * 2); ctx.fill();
+    });
+
+    makeTex('dt_smoke_flare_yellow', 32, 48, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.75)';
+        ctx.beginPath(); ctx.arc(w / 2, 16, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.55)';
+        ctx.beginPath(); ctx.arc(w / 2 - 4, 28, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(217, 119, 6, 0.35)';
+        ctx.beginPath(); ctx.arc(w / 2 + 4, 38, 8, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // 18. Torre de Iluminación de Estadio con Focos de Alta Potencia (Floodlight)
+    makeTex('dt_floodlight_tower', 44, 44, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(16, 16, 12, 26);
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 1.5; ctx.strokeRect(17, 17, 10, 24);
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(2, 4, 40, 10);
+        ctx.strokeStyle = '#94a3b8'; ctx.strokeRect(2, 4, 40, 10);
+        [6, 16, 26, 36].forEach(bx => {
+            ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(bx, 9, 3.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(bx, 9, 1.8, 0, Math.PI * 2); ctx.fill();
+        });
+    });
+
+    // 19. Cono de Luz Suave sobre el Asfalto (Night Light Pool)
+    makeTex('dt_light_cone', 180, 180, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.25)';
+        ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.35)';
+        ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 3, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // 20. Humo Volumétrico Suave de Derrape / Neumático
+    makeTex('dt_tire_smoke', 36, 36, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(248, 250, 252, 0.55)';
+        ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 3, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // 21. Viñeteado Cinematográfico de Retransmisión TV (Vignette Overlay)
+    makeTex('dt_vignette', 960, 540, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(2, 6, 23, 0.40)';
+        ctx.fillRect(0, 0, w, 28);
+        ctx.fillRect(0, h - 28, w, 28);
+        ctx.fillRect(0, 0, 36, h);
+        ctx.fillRect(w - 36, 0, 36, h);
+    });
 }
 
 // Genera texturas HD fotorrealistas de césped y grava de forma instantánea sin bloqueos
@@ -2861,10 +3012,26 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     // 3. CAPA DE MARCAS DE GOMA DE DERRAPE PERMANENTES (SKID MARKS)
     skidLayer = scene.add.graphics().setDepth(4);
 
+    // Configuración de Iluminación y Sombras Coherentes según la Hora del Día
+    const lightConfig = {
+        day: {
+            shadowDx: 12, shadowDy: 14, shadowAlpha: 0.36,
+            tint: null, vignetteAlpha: 0.16
+        },
+        sunset: {
+            shadowDx: 26, shadowDy: 26, shadowAlpha: 0.48,
+            tint: 0xd97706, tintAlpha: 0.14, vignetteAlpha: 0.28
+        },
+        night: {
+            shadowDx: 6, shadowDy: 8, shadowAlpha: 0.65,
+            tint: 0x0369a1, tintAlpha: 0.18, vignetteAlpha: 0.38
+        }
+    }[selectedTimeOfDay] || { shadowDx: 12, shadowDy: 14, shadowAlpha: 0.36, tint: null, vignetteAlpha: 0.16 };
+
     // 4. OBJETOS DEL ENTORNO OFICIALES Y TEMÁTICOS SEGÚN BIOMA
     track.objects.forEach(obj => {
         if (obj.r === 'tree') {
-            scene.add.ellipse(obj.x + 8, obj.y + 10, 58, 48, 0x000000, 0.40).setDepth(13);
+            scene.add.ellipse(obj.x + lightConfig.shadowDx, obj.y + lightConfig.shadowDy, 64, 52, 0x000000, lightConfig.shadowAlpha).setDepth(13);
             let treeKey = 'dt_tree';
             let treeSize = 72;
             if (biome === 'snow') {
@@ -2891,7 +3058,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             const gsW = isIsolated ? 230 : 160;
             const gsH = isIsolated ? 160 : 130;
 
-            scene.add.rectangle(obj.x + 12, obj.y + 16, gsW - 5, gsH - 5, 0x000000, 0.40)
+            scene.add.rectangle(obj.x + lightConfig.shadowDx, obj.y + lightConfig.shadowDy, gsW - 5, gsH - 5, 0x000000, lightConfig.shadowAlpha)
                 .setAngle(obj.o)
                 .setDepth(11);
 
@@ -2899,6 +3066,21 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
                 .setDisplaySize(gsW, gsH)
                 .setAngle(obj.o)
                 .setDepth(12);
+
+            // Banderas ondeantes de competición sobre la cubierta de la tribuna
+            if (scene.textures && scene.textures.exists('dt_flag_checkered')) {
+                const flagKeys = ['dt_flag_checkered', 'dt_flag_red', 'dt_flag_blue'];
+                const f1 = scene.add.sprite(obj.x - 36, obj.y - 24, flagKeys[Math.floor(Math.random() * flagKeys.length)]).setAngle(obj.o).setDepth(13);
+                const f2 = scene.add.sprite(obj.x + 36, obj.y - 24, flagKeys[Math.floor(Math.random() * flagKeys.length)]).setAngle(obj.o).setDepth(13);
+                scene.tweens.add({ targets: [f1, f2], angle: obj.o + 6, duration: 1200 + Math.random() * 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            }
+
+            // Bengalas de celebración Tifosi en tribunas
+            if (Math.random() < 0.45 && scene.textures && scene.textures.exists('dt_smoke_flare_red')) {
+                const flareKey = Math.random() < 0.5 ? 'dt_smoke_flare_red' : 'dt_smoke_flare_yellow';
+                const flare = scene.add.sprite(obj.x, obj.y - 32, flareKey).setDepth(14).setAlpha(0.72);
+                scene.tweens.add({ targets: flare, y: obj.y - 42, alpha: 0.45, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            }
         } else if (obj.r === 'tire') {
             scene.add.ellipse(obj.x + 2, obj.y + 3, 26, 26, 0x000000, 0.42).setDepth(5);
             scene.add.sprite(obj.x, obj.y, 'dt_tire').setDisplaySize(28, 28).setAngle(obj.o).setDepth(6);
@@ -2920,8 +3102,8 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             const bH = 22;
             const texKey = isLong ? 'dt_armco_long' : 'dt_armco_short';
 
-            // Sombra arquitectónica bajo el quitamiedos metálico
-            scene.add.rectangle(obj.x + 3, obj.y + 4, bW, bH, 0x000000, 0.45)
+            // Sombra arquitectónica bajo el quitamiedos metálico coherente con el sol
+            scene.add.rectangle(obj.x + lightConfig.shadowDx * 0.35, obj.y + lightConfig.shadowDy * 0.35, bW, bH, 0x000000, lightConfig.shadowAlpha)
                 .setAngle(obj.o)
                 .setDepth(11);
 
@@ -3093,6 +3275,85 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         }
     });
 
+    // E) Paneles de Distancia de Frenada (150m, 100m, 50m) estilo Gran Premio FIA GT
+    if (nodes && nodes.length > 4) {
+        for (let i = 0; i < nodes.length; i++) {
+            const curr = nodes[i];
+            const prev = nodes[(i - 1 + nodes.length) % nodes.length];
+            const next = nodes[(i + 1) % nodes.length];
+            const a1 = Math.atan2(curr.y - prev.y, curr.x - prev.x);
+            const a2 = Math.atan2(next.y - curr.y, next.x - curr.x);
+            let turnAngle = Math.abs(a2 - a1);
+            if (turnAngle > Math.PI) turnAngle = Math.PI * 2 - turnAngle;
+
+            // Si la curva es pronunciada (> 0.40 rad), situar paneles de distancia antes de la frenada
+            if (turnAngle > 0.40) {
+                const turnDir = Math.sin(a2 - a1) > 0 ? 1 : -1;
+                const approachDirX = Math.cos(a1);
+                const approachDirY = Math.sin(a1);
+                const approachPerpX = -approachDirY * turnDir;
+                const approachPerpY = approachDirX * turnDir;
+
+                const boardDistances = [
+                    { dist: 165, key: 'dt_brake_150' },
+                    { dist: 115, key: 'dt_brake_100' },
+                    { dist: 65, key: 'dt_brake_50' }
+                ];
+
+                boardDistances.forEach(bd => {
+                    const bx = curr.x - approachDirX * bd.dist + approachPerpX * 132;
+                    const by = curr.y - approachDirY * bd.dist + approachPerpY * 132;
+                    const bAngle = Phaser.Math.RadToDeg(a1) + 90;
+                    // Sombra direccional
+                    scene.add.rectangle(bx + lightConfig.shadowDx * 0.3, by + lightConfig.shadowDy * 0.3, 38, 22, 0x000000, lightConfig.shadowAlpha).setAngle(bAngle).setDepth(5);
+                    // Panel de distancia
+                    scene.add.sprite(bx, by, bd.key).setDisplaySize(38, 22).setAngle(bAngle).setDepth(6);
+                });
+            }
+        }
+    }
+
+    // F) Vehículos Oficiales de Asistencia de Circuito en Escapatorias Seguras
+    if (nodes && nodes.length > 2) {
+        // 1. Safety Car GT3 oficial aparcado junto a la recta de meta
+        const scX = fx - dirX * 130 - perpX * 145;
+        const scY = fy - dirY * 130 - perpY * 145;
+        scene.add.rectangle(scX + lightConfig.shadowDx * 0.4, scY + lightConfig.shadowDy * 0.4, 64, 28, 0x000000, lightConfig.shadowAlpha).setAngle(startAngleDeg).setDepth(5);
+        scene.add.sprite(scX, scY, 'dt_safety_car').setDisplaySize(64, 28).setAngle(startAngleDeg).setDepth(6);
+        // Baliza estroboscópica ámbar parpadeante en el techo
+        const strobe = scene.add.circle(scX, scY, 4, 0xf59e0b, 0.95).setDepth(7);
+        scene.tweens.add({ targets: strobe, alpha: 0.15, duration: 420, yoyo: true, repeat: -1 });
+
+        // 2. Coche Médico y Grúa de Asistencia en una escapatoria del circuito
+        const midNode = nodes[Math.floor(nodes.length * 0.5)];
+        if (midNode) {
+            const medX = midNode.x + 155;
+            const medY = midNode.y + 155;
+            scene.add.rectangle(medX + lightConfig.shadowDx * 0.4, medY + lightConfig.shadowDy * 0.4, 60, 26, 0x000000, lightConfig.shadowAlpha).setDepth(5);
+            scene.add.sprite(medX, medY, 'dt_medical_car').setDisplaySize(60, 26).setDepth(6);
+
+            const craneX = medX + 75;
+            const craneY = medY + 12;
+            scene.add.rectangle(craneX + lightConfig.shadowDx * 0.4, craneY + lightConfig.shadowDy * 0.4, 66, 30, 0x000000, lightConfig.shadowAlpha).setDepth(5);
+            scene.add.sprite(craneX, craneY, 'dt_recovery_crane').setDisplaySize(66, 30).setDepth(6);
+        }
+    }
+
+    // G) Torres de Iluminación de Estadio y Focos con Conos de Luz (Modo Noche)
+    if ((selectedTimeOfDay === 'night' || (track && track.tod === 'night')) && nodes && nodes.length > 4) {
+        const step = Math.max(2, Math.floor(nodes.length / 8));
+        for (let i = 0; i < nodes.length; i += step) {
+            const n = nodes[i];
+            // Cono de luz sobre el asfalto (profundidad 3.2: bajo los coches pero sobre el asfalto)
+            scene.add.sprite(n.x, n.y, 'dt_light_cone').setDisplaySize(210, 210).setDepth(3.2);
+            // Torre de focos colocada fuera del trazado
+            const towerX = n.x + 135;
+            const towerY = n.y + 135;
+            scene.add.rectangle(towerX + 4, towerY + 6, 44, 44, 0x000000, 0.65).setDepth(13);
+            scene.add.sprite(towerX, towerY, 'dt_floodlight_tower').setDisplaySize(44, 44).setDepth(14);
+        }
+    }
+
     // 5. PARRILLA DE SALIDA Y SPAWN DE COCHES OFICIAL
     // Ubicación oficial de meta: todos los coches salen DETRÁS de la línea de meta mirando hacia adelante
 
@@ -3253,6 +3514,20 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
 
     // Crear Telemetría e Interfaz HUD
     setupHud(scene, track);
+
+    // H) Viñeteado Cinematográfico de Retransmisión TV y Filtro de Atmósfera
+    if (scene.textures && scene.textures.exists('dt_vignette')) {
+        scene.add.sprite(480, 270, 'dt_vignette')
+            .setScrollFactor(0)
+            .setDepth(195)
+            .setAlpha(lightConfig.vignetteAlpha);
+    }
+
+    if (lightConfig.tint) {
+        scene.add.rectangle(480, 270, 960, 540, lightConfig.tint, lightConfig.tintAlpha)
+            .setScrollFactor(0)
+            .setDepth(194);
+    }
 
     // Secuencia de Semáforo de Salida (3... 2... 1... GO!)
     startCountdown(scene);
@@ -4192,29 +4467,28 @@ function spawnDust(scene, x, y, textureKey, tintHex) {
     });
 }
 
-// Emisor de humo blanco/gris de derrape en neumáticos (Tire Smoke)
+// Emisor de humo volumétrico de derrape en neumáticos (Volumetric Tire Smoke)
 function spawnTireSmoke(scene, x, y, angleDeg) {
-    if (!scene || Math.random() > 0.42) return;
+    if (!scene || Math.random() > 0.38) return;
     const rad = Phaser.Math.DegToRad(angleDeg + 90);
-    const px = Math.cos(rad) * 10;
-    const py = Math.sin(rad) * 10;
+    const px = Math.cos(rad) * 11;
+    const py = Math.sin(rad) * 11;
     const offsetSide = Math.random() > 0.5 ? 1 : -1;
 
+    const tex = (scene.textures && scene.textures.exists('dt_tire_smoke')) ? 'dt_tire_smoke' : 'dt_smoke';
     const smoke = scene.add.sprite(
         x + px * offsetSide + (Math.random() - 0.5) * 6,
         y + py * offsetSide + (Math.random() - 0.5) * 6,
-        'dt_smoke'
-    ).setDisplaySize(14, 14).setDepth(8).setAlpha(0.65);
-
-    smoke.setTint(0xf1f5f9);
+        tex
+    ).setDisplaySize(16, 16).setDepth(8).setAlpha(0.72);
 
     scene.tweens.add({
         targets: smoke,
         alpha: 0,
-        scale: 2.8,
-        x: smoke.x + (Math.random() - 0.5) * 14,
-        y: smoke.y + (Math.random() - 0.5) * 14,
-        duration: 380,
+        scale: 3.4,
+        x: smoke.x + (Math.random() - 0.5) * 20,
+        y: smoke.y + (Math.random() - 0.5) * 20,
+        duration: 480,
         ease: 'Quad.easeOut',
         onComplete: () => smoke.destroy()
     });
