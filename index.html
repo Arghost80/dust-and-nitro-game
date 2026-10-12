@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Apex Motorsport - Web3 NFT GT Circuit Edition</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="hub_styles.css?v=20">
-    <!-- Telegram WebApp SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css?v=44">
+    <link rel="stylesheet" href="hub_styles.css?v=44">
+    <!-- Telegram WebApp SDK (carga asíncrona no bloqueante) -->
+    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <!-- Phaser 3.60 Canvas Game Engine -->
     <script src="assets/phaser.min.js"></script>
 </head>
@@ -36,7 +36,7 @@
         </main>
 
         <!-- Modal de Ajustes ⚙️ (Idiomas, Audio, Gráficos, Controles) -->
-        <div id="settings-modal" class="settings-modal hidden"></div>
+        <div id="settings-modal" class="settings-modal hidden" style="display: none;"></div>
     </div>
 
     <!-- Contenedor del Juego Phaser 2D Canvas -->
@@ -49,16 +49,17 @@
             <button id="btn-right" class="btn-touch">▶ D</button>
         </div>
         <div class="control-group right-group">
-            <button id="btn-accel" class="btn-touch btn-action btn-green">GAS (W / ESPACIO)</button>
-            <button id="btn-brake" class="btn-touch btn-action btn-yellow">FRENO (S)</button>
+            <button id="btn-handbrake" class="btn-touch btn-action btn-cyan btn-handbrake" title="Freno de Mano / Derrape (Barra Espaciadora / Shift)">💨 DERRAPE<br><small style="font-size:8px;opacity:0.85;">(ESPACIO)</small></button>
+            <button id="btn-accel" class="btn-touch btn-action btn-green">GAS<br><small style="font-size:8px;opacity:0.85;">(W / ↑)</small></button>
+            <button id="btn-brake" class="btn-touch btn-action btn-yellow">FRENO<br><small style="font-size:8px;opacity:0.85;">(S / ↓)</small></button>
         </div>
     </div>
 
     <!-- Módulos de Datos, Traducciones y Lógica Web3 -->
-    <script src="translations.js?v=20"></script>
-    <script src="nft_cars_data.js?v=20"></script>
-    <script src="tracks_data.js?v=20"></script>
-    <script src="dustrac_game.js?v=20"></script>
-    <script src="game_hub.js?v=20"></script>
+    <script src="translations.js?v=44"></script>
+    <script src="nft_cars_data.js?v=44"></script>
+    <script src="tracks_data.js?v=44"></script>
+    <script src="dustrac_game.js?v=44"></script>
+    <script src="game_hub.js?v=44"></script>
 </body>
 </html>

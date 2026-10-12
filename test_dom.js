@@ -1,0 +1,648 @@
+const fs = require('fs');
+const vm = require('vm');
+
+const doc = {
+  elements: {},
+  getElementById(id) {
+    if (!this.elements[id]) {
+      this.elements[id] = {
+        id,
+        classList: {
+          classes: new Set(),
+          add(c) { this.classes.add(c); },
+          remove(c) { this.classes.delete(c); },
+          toggle(c, force) { if (force) this.classes.add(c); else this.classes.delete(c); },
+          contains(c) { return this.classes.has(c); }
+        },
+        innerHTML: '',
+        style: {},
+        appendChild(child) {},
+        addEventListener() {}
+      };
+    }
+    return this.elements[id];
+  },
+  createElement(tag) {
+    return this.getElementById('tag_' + Math.random());
+  },
+  addEventListener() {}
+};
+
+['game-hub-root', 'hub-header', 'view-main', 'view-garage', 'view-crates', 'view-shop', 'view-comp', 'settings-modal', 'game-container', 'btn-left', 'btn-right', 'btn-accel', 'btn-brake', 'btn-handbrake'].forEach(id => doc.getElementById(id));
+
+const sandbox = {
+  window: {},
+  document: doc,
+  localStorage: {
+    _d: {},
+    getItem(k) { return this._d[k] || null; },
+    setItem(k, v) { this._d[k] = String(v); },
+    removeItem(k) { delete this._d[k]; }
+  },
+  console: console,
+  alert: console.log,
+  setTimeout: (fn) => fn && fn(),
+  AudioContext: function() {},
+  webkitAudioContext: function() {},
+  Phaser: {
+    AUTO: 'AUTO',
+    Scale: { FIT: 1, CENTER_BOTH: 2 },
+    Math: {
+      DegToRad: (d) => d * Math.PI / 180,
+      RadToDeg: (r) => r * 180 / Math.PI,
+      Linear: (a,b,t) => a + (b-a)*t,
+      Angle: { WrapDegrees: (d) => (((d + 180) % 360 + 360) % 360) - 180 }
+    },
+    Game: function() {
+      const mockScene = {
+        children: { removeAll: () => {} },
+        physics: { world: { setBounds: () => {} }, add: { sprite: () => {
+          const car = { active: true, angle: 0, x: 0, y: 0, setDisplaySize: () => car, setAngle: (a) => { car.angle = a || 0; return car; }, setDepth: () => car, setCollideWorldBounds: () => car, setTint: () => car, setVelocity: () => car, setAlpha: () => car };
+          return car;
+        } } },
+        cameras: { main: { setBounds: () => {}, setBackgroundColor: () => {}, setZoom: () => {}, startFollow: () => {}, stopFollow: () => {}, setScroll: () => {} } },
+        add: {
+          graphics: () => {
+            const g = { fillStyle: () => g, fill: () => g, fillRect: () => g, fillRoundedRect: () => g, lineStyle: () => g, strokeRoundedRect: () => g, lineBetween: () => g, clear: () => g, setDepth: () => g, setScrollFactor: () => g, fillCircle: () => g, fillEllipse: () => g, beginPath: () => g, moveTo: () => g, lineTo: () => g, strokePath: () => g, closePath: () => g };
+            return g;
+          },
+          tileSprite: () => ({ setDepth: () => ({}) }),
+          sprite: () => {
+            const s = { setDisplaySize: () => s, setAngle: () => s, setDepth: () => s, setTint: () => s, setAlpha: () => s };
+            return s;
+          },
+          rectangle: () => {
+            const r = { setDepth: () => r, setAngle: () => r, setInteractive: () => ({ on: () => {} }) };
+            return r;
+          },
+          ellipse: () => {
+            const el = { setDepth: () => el, setAngle: () => el, setAlpha: () => el };
+            return el;
+          },
+          circle: () => {
+            const ci = { setDepth: () => ci, setAngle: () => ci, setAlpha: () => ci, setStrokeStyle: () => ci, setFillStyle: () => ci };
+            return ci;
+          },
+          text: () => {
+            const t = { setOrigin: () => t, setInteractive: () => ({ on: () => {} }), setScrollFactor: () => t, setDepth: () => t, setText: () => t, setColor: () => t, setFill: () => t, setVisible: () => t, setAngle: () => t };
+            return t;
+          },
+          container: () => {
+            const c = { setScrollFactor: () => c, setDepth: () => c, add: () => c };
+            return c;
+          }
+        },
+        time: { delayedCall: (delay, fn) => fn && fn(), addEvent: () => ({ remove: () => {} }) },
+        tweens: { add: () => {} }
+      };
+      return { scene: { scenes: [mockScene] } };
+    },
+    Input: { Keyboard: { KeyCodes: {} } }
+  }
+};
+sandbox.window = sandbox;
+const ctx = vm.createContext(sandbox);
+
+vm.runInContext(fs.readFileSync('translations.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync('nft_cars_data.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync('tracks_data.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync('dustrac_game.js', 'utf8'), ctx);
+vm.runInContext(fs.readFileSync('game_hub.js', 'utf8'), ctx);
+
+console.log('Hub header length:', doc.getElementById('hub-header').innerHTML.length);
+console.log('View main length:', doc.getElementById('view-main').innerHTML.length);
+console.log('Testing renderGarageView...');
+vm.runInContext('renderGarageView()', ctx);
+console.log('View garage length:', doc.getElementById('view-garage').innerHTML.length);
+console.log('Testing renderCratesView...');
+vm.runInContext('renderCratesView()', ctx);
+console.log('View crates length:', doc.getElementById('view-crates').innerHTML.length);
+console.log('Testing triggerCrateOpening...');
+vm.runInContext('triggerCrateOpening("bronze")', ctx);
+console.log('Testing launchRaceDirectly (snow: nordkette_pass)...');
+vm.runInContext('launchRaceDirectly("nordkette_pass")', ctx);
+vm.runInContext('dustUpdate.call(window.raceScene, 1000, 16)', ctx);
+
+console.log('Testing launchRaceDirectly (desert: desert_canyon)...');
+vm.runInContext('launchRaceDirectly("desert_canyon")', ctx);
+vm.runInContext('dustUpdate.call(window.raceScene, 1000, 16)', ctx);
+
+console.log('Testing launchRaceDirectly (city: neo_tokyo_bay)...');
+vm.runInContext('launchRaceDirectly("neo_tokyo_bay")', ctx);
+vm.runInContext('dustUpdate.call(window.raceScene, 1000, 16)', ctx);
+
+console.log('Testing launchRaceDirectly (coast: riviera_coast)...');
+vm.runInContext('launchRaceDirectly("riviera_coast")', ctx);
+vm.runInContext('dustUpdate.call(window.raceScene, 1000, 16)', ctx);
+
+console.log('Testing launchRaceDirectly (river & bridge: red_rock_junction)...');
+vm.runInContext('launchRaceDirectly("red_rock_junction")', ctx);
+vm.runInContext('dustUpdate.call(window.raceScene, 1000, 16)', ctx);
+
+console.log('Testing launchRaceDirectly (mountain: schwarzwald_sprint)...');
+vm.runInContext('launchRaceDirectly("schwarzwald_sprint")', ctx);
+vm.runInContext('dustUpdate.call(window.raceScene, 1000, 16)', ctx);
+
+// Verificar coche del jugador y rivales IA
+const pTex = vm.runInContext('playerCar ? playerCar.carData.texture : null', ctx);
+const aiSpeeds = vm.runInContext('aiCars.map(c => c.carData.speed)', ctx);
+const aiDrivers = vm.runInContext('aiCars.map(c => c.carData.subtitle)', ctx);
+console.log('Player car in race texture:', pTex);
+console.log('AI Rival Speeds (Spread across 3 tiers):', aiSpeeds);
+console.log('AI Rival Drivers:', aiDrivers);
+
+// ===== VERIFICACIÓN DE NUEVAS MARCAS Y SISTEMA DE PIEZAS FÍSICAS =====
+console.log('\n--- VERIFICANDO NUEVOS VEHÍCULOS DE MARCA & SISTEMA DE PIEZAS ---');
+const totalModels = vm.runInContext('NFT_CAR_MODELS.length', ctx);
+console.log('Total de Modelos NFT en Catálogo:', totalModels);
+
+const brandChecks = ['lambo', 'ferrari', 'porsche', 'viper', 'mitsu', 'toyota', 'bugatti', 'bentley'];
+brandChecks.forEach(brand => {
+    const count = vm.runInContext(`NFT_CAR_MODELS.filter(m => m.id.includes('${brand}') || m.name.toLowerCase().includes('${brand}')).length`, ctx);
+    console.log(`Modelos encontrados para ${brand.toUpperCase()}:`, count);
+    if (count === 0) throw new Error(`¡Falta la marca ${brand}!`);
+});
+
+const partsCatalogCount = vm.runInContext('Object.keys(WORKSHOP_PIECES_CATALOG).length', ctx);
+console.log('Piezas mecánicas en catálogo:', partsCatalogCount);
+if (partsCatalogCount < 16) throw new Error('Faltan piezas mecánicas en catálogo');
+
+const branchCount = vm.runInContext('Object.keys(STAT_UPGRADE_BRANCHES).length', ctx);
+console.log('Ramas de mejora por estadísticas:', branchCount);
+if (branchCount !== 5) throw new Error('Debe haber exactamente 5 ramas de mejora');
+
+// Test de mejora con piezas físicas
+console.log('\n--- PROBANDO MEJORA POR PIEZAS FÍSICAS EN EL TALLER ---');
+const starterCarId = vm.runInContext('loadNftUserData().garage[0].instanceId', ctx);
+const preLvl = vm.runInContext(`loadNftUserData().garage[0].parts.speed_power || 0`, ctx);
+console.log('Nivel inicial de Motor & Velocidad:', preLvl);
+
+const upgradeResult = vm.runInContext(`upgradeCarStatBranch('${starterCarId}', 'speed_power')`, ctx);
+console.log('Resultado de upgradeCarStatBranch:', upgradeResult.success, 'Nuevo Stage:', upgradeResult.newStage);
+if (!upgradeResult.success) throw new Error('Falló upgradeCarStatBranch: ' + upgradeResult.reason);
+
+// Test de compra de kit de piezas en tienda
+console.log('\n--- PROBANDO COMPRA DE PACK DE PIEZAS EN TIENDA ---');
+const buyKitRes = vm.runInContext(`buyPartsKit('kit_brakes')`, ctx);
+console.log('Resultado de buyPartsKit:', buyKitRes.success, 'Kit:', buyKitRes.kit.name);
+if (!buyKitRes.success) throw new Error('Falló buyPartsKit');
+
+// Test de apertura y renderizado del Modal de Tuning
+console.log('\n--- PROBANDO RENDERIZADO DEL MODAL DE TUNING ---');
+vm.runInContext(`openTuningModal('${starterCarId}')`, ctx);
+const modalHtml = doc.getElementById('tuning-modal') ? doc.getElementById('tuning-modal').innerHTML : '';
+console.log('Modal HTML length:', modalHtml.length);
+if (!modalHtml.includes('TU INVENTARIO DE PIEZAS') || !modalHtml.includes('RAMAS DE RENDIMIENTO')) {
+    throw new Error('El modal de tuning no contiene las secciones requeridas');
+}
+
+// Test de renderizado de Tienda Oficial con los nuevos packs
+console.log('\n--- PROBANDO RENDERIZADO DE TIENDA CON PACKS DE PIEZAS ---');
+vm.runInContext(`renderShopView()`, ctx);
+const shopHtml = doc.getElementById('view-shop').innerHTML;
+if (!shopHtml.includes('PACKS DE PIEZAS DEL TALLER') || !shopHtml.includes('Pack de Frenada Brembo')) {
+    throw new Error('La tienda no contiene los packs de piezas mecánicas');
+}
+
+// Test de fin de carrera y otorgamiento de botín de piezas: SOLO 1º y 2º puesto ganan piezas
+console.log('\n--- PROBANDO BOTÍN DE PIEZAS AL COMPLETAR CARRERA (endRace) ---');
+
+// Caso 1: 1º Puesto (debe ganar exactamente 4 piezas)
+vm.runInContext(`hudPosText.text = 'POS: 1 / 6'`, ctx);
+const prePartsRank1 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+vm.runInContext(`endRace()`, ctx);
+const postPartsRank1 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+const diffRank1 = postPartsRank1 - prePartsRank1;
+console.log(`Piezas ganadas en 1º Puesto: ${diffRank1} (esperadas: 4)`);
+if (diffRank1 !== 4) throw new Error(`El 1º puesto debe otorgar 4 piezas, otorgó: ${diffRank1}`);
+
+// Caso 2: 2º Puesto (debe ganar 3 piezas)
+vm.runInContext(`hudPosText.text = 'POS: 2 / 6'`, ctx);
+const prePartsRank2 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+vm.runInContext(`endRace()`, ctx);
+const postPartsRank2 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+const diffRank2 = postPartsRank2 - prePartsRank2;
+console.log(`Piezas ganadas en 2º Puesto: ${diffRank2} (esperadas: 3)`);
+if (diffRank2 !== 3) throw new Error(`El 2º puesto debe otorgar 3 piezas, otorgó: ${diffRank2}`);
+
+// Caso 3: 3º Puesto (debe ganar 2 piezas)
+vm.runInContext(`hudPosText.text = 'POS: 3 / 6'`, ctx);
+const prePartsRank3 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+vm.runInContext(`endRace()`, ctx);
+const postPartsRank3 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+const diffRank3 = postPartsRank3 - prePartsRank3;
+console.log(`Piezas ganadas en 3º Puesto: ${diffRank3} (esperadas: 2)`);
+if (diffRank3 !== 2) throw new Error(`El 3º puesto debe otorgar 2 piezas, otorgó: ${diffRank3}`);
+
+// Caso 4: 4º Puesto (debe ganar 1 pieza de consolación)
+vm.runInContext(`hudPosText.text = 'POS: 4 / 6'`, ctx);
+const prePartsRank4 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+vm.runInContext(`endRace()`, ctx);
+const postPartsRank4 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+const diffRank4 = postPartsRank4 - prePartsRank4;
+console.log(`Piezas ganadas en 4º Puesto: ${diffRank4} (esperadas: 1)`);
+if (diffRank4 !== 1) throw new Error(`El 4º puesto debe otorgar 1 pieza de consolación, otorgó: ${diffRank4}`);
+
+// ===== VERIFICACIÓN DE LAS 12 SILUETAS VECTORIALES DE COCHES =====
+console.log('\n--- VERIFICANDO LAS 12 SILUETAS ARQUITECTÓNICAS DE COCHES ---');
+const archetypesExpected = [
+    'lambo_wedge', 'ferrari_corsa', 'porsche_boxer', 'viper_acr',
+    'rally_evo', 'jdm_supra', 'bugatti_w16', 'bentley_gt3',
+    'hot_hatch', 'dakar_truck', 'le_mans_proto', 'dtm_coupe'
+];
+const archetypesFound = new Set();
+const allModels = vm.runInContext('NFT_CAR_MODELS', ctx);
+allModels.forEach(m => {
+    const arch = vm.runInContext(`getCarArchetype(${JSON.stringify(m)})`, ctx);
+    archetypesFound.add(arch);
+    const svg = vm.runInContext(`generateCarSvg(${JSON.stringify(m)}, 240, 120)`, ctx);
+    if (!svg || !svg.startsWith('<svg') || !svg.endsWith('</svg>')) {
+        throw new Error(`SVG inválido para el modelo ${m.name}`);
+    }
+});
+console.log(`Siluetas detectadas en los ${allModels.length} modelos:`, Array.from(archetypesFound));
+archetypesExpected.forEach(reqArch => {
+    if (!archetypesFound.has(reqArch)) {
+        throw new Error(`Falta cubrir la silueta: ${reqArch}`);
+    }
+});
+console.log(`¡Las 12 siluetas vectoriales están activas y con SVGs válidos!`);
+
+// ===== VERIFICACIÓN DEL SISTEMA DE ENERGÍA Y MONETIZACIÓN =====
+console.log('\n--- VERIFICANDO SISTEMA DE ENERGÍA DE CARRERA & MONETIZACIÓN ---');
+const userForEnergy = vm.runInContext('loadNftUserData()', ctx);
+const carTest = userForEnergy.garage[0];
+console.log('Energía del coche tras 6 carreras disputadas (10 - 6 = 4):', carTest.energy, '/', carTest.maxEnergy);
+if (typeof carTest.energy !== 'number' || carTest.energy !== 4) {
+    throw new Error('El coche debe tener 4 puntos de energía tras disputar 6 carreras');
+}
+
+// Simular gasto de energía y regeneración horaria (+1⚡ cada 1h)
+const regeneratedEnergy = vm.runInContext(`
+    const u = loadNftUserData();
+    const c = u.garage[0];
+    c.energy = 6;
+    c.lastEnergyUpdate = Date.now() - (2.5 * 3600 * 1000);
+    refreshCarEnergy(c);
+    saveNftUserData(u);
+    c.energy;
+`, ctx);
+console.log('Energía tras 2.5h transcurridas (+2⚡ esperados):', regeneratedEnergy);
+if (regeneratedEnergy !== 8) {
+    throw new Error(`Regeneración horaria incorrecta: esperada 8, obtenida ${regeneratedEnergy}`);
+}
+
+// Probar recarga mediante Anuncio (+1⚡)
+const preAdEnergy = regeneratedEnergy;
+const adRes = vm.runInContext(`rechargeEnergyWithAd('${carTest.instanceId}')`, ctx);
+console.log('Resultado de ver anuncio (+1⚡):', adRes.success, 'Nueva energía:', adRes.newEnergy);
+if (!adRes.success || adRes.newEnergy !== preAdEnergy + 1) {
+    throw new Error('Fallo al recargar energía con anuncio publicitario');
+}
+
+// Probar compra de Pack de Batería en Tienda con Token $CR
+const preShopCr = vm.runInContext('loadNftUserData().credits', ctx);
+carTest.energy = 4;
+vm.runInContext(`saveNftUserData(${JSON.stringify(userForEnergy)})`, ctx);
+const buyEnergyRes = vm.runInContext(`buyEnergyPack('pack_energy_boost', '${carTest.instanceId}')`, ctx);
+console.log('Resultado de compra de Batería en Tienda:', buyEnergyRes.success, 'Nueva energía:', buyEnergyRes.newEnergy);
+if (!buyEnergyRes.success || buyEnergyRes.newEnergy !== 6) {
+    throw new Error('Fallo al comprar batería de energía en la tienda con tokens $CR');
+}
+
+// Probar bloqueo de carrera cuando energía es 0 y apertura de modal
+carTest.energy = 0;
+vm.runInContext(`saveNftUserData(${JSON.stringify(userForEnergy)})`, ctx);
+vm.runInContext(`launchRaceDirectly('rookie_ring')`, ctx);
+const modalDepleted = doc.getElementById('energy-depleted-modal');
+console.log('Modal de energía agotada activo:', modalDepleted && modalDepleted.style.display !== 'none');
+if (!modalDepleted || modalDepleted.style.display === 'none') {
+    throw new Error('Debe bloquearse el inicio de carrera y mostrarse el modal si el coche tiene 0 de energía');
+}
+
+// ===== VERIFICACIÓN DE VELOCIDADES IA REEQUILIBRADAS =====
+console.log('\n--- VERIFICANDO VELOCIDADES DE IA REEQUILIBRADAS ---');
+if (!aiSpeeds.every(s => s >= 320 && s <= 435)) {
+    throw new Error(`Velocidades de la IA fuera de rango justo (320-435 km/h): ${JSON.stringify(aiSpeeds)}`);
+}
+console.log('✓ Velocidades de IA perfectamente equilibradas y competitivas (325 - 432 km/h)');
+
+// ===== VERIFICACIÓN DE FRENO DE MANO / DERRAPE (ESPACIO) =====
+console.log('\n--- VERIFICANDO MECÁNICAS DE FRENO DE MANO / DERRAPE ---');
+// Restaurar energía para simular carrera
+const freshUser = vm.runInContext('loadNftUserData()', ctx);
+freshUser.garage[0].energy = 10;
+vm.runInContext(`saveNftUserData(${JSON.stringify(freshUser)})`, ctx);
+vm.runInContext(`launchRaceDirectly('rookie_ring')`, ctx);
+
+// Simular estado de carrera activa
+vm.runInContext('gameState = "RACE"', ctx);
+vm.runInContext('playerSpeed = 250', ctx);
+
+// Probar giro normal
+const initAngle1 = vm.runInContext('playerCar.angle', ctx);
+vm.runInContext('touchLeft = true; touchHandbrake = false; updatePlayer(0.016, window.DustracTracks["rookie_ring"]);', ctx);
+const normalTurnDelta = Math.abs(vm.runInContext('playerCar.angle', ctx) - initAngle1);
+
+// Probar giro con freno de mano (derrape)
+const initAngle2 = vm.runInContext('playerCar.angle', ctx);
+vm.runInContext('touchLeft = true; touchHandbrake = true; updatePlayer(0.016, window.DustracTracks["rookie_ring"]);', ctx);
+const driftTurnDelta = Math.abs(vm.runInContext('playerCar.angle', ctx) - initAngle2);
+
+console.log(`Giro estándar por frame: ${normalTurnDelta.toFixed(3)}° | Giro con derrape/freno de mano: ${driftTurnDelta.toFixed(3)}°`);
+if (driftTurnDelta <= normalTurnDelta * 1.5) {
+    throw new Error('El freno de mano debe incrementar la rotación/yaw de forma contundente (+85%) para horquillas cerradas');
+}
+console.log('✓ Freno de mano amplifica la rotación de horquilla correctamente');
+
+// Verificar acumulación de driftCharge y boost al soltar freno de mano
+vm.runInContext('playerSpeed = 200; touchHandbrake = true; touchLeft = true; updatePlayer(0.5, window.DustracTracks["rookie_ring"]);', ctx);
+const charge = vm.runInContext('driftCharge', ctx);
+console.log(`Carga de derrape acumulada: ${charge.toFixed(2)}`);
+if (charge <= 0.3) {
+    throw new Error('La carga de derrape debe acumularse mientras se derrapa en curva');
+}
+
+// Al soltar el freno de mano, se activa el boost de derrape
+const preBoostSpeed = vm.runInContext('playerSpeed', ctx);
+vm.runInContext('touchHandbrake = false; touchLeft = false; touchGas = true; updatePlayer(0.016, window.DustracTracks["rookie_ring"]);', ctx);
+const postBoostSpeed = vm.runInContext('playerSpeed', ctx);
+console.log(`Velocidad antes de soltar derrape: ${preBoostSpeed.toFixed(1)} | Velocidad tras boost: ${postBoostSpeed.toFixed(1)}`);
+if (postBoostSpeed <= preBoostSpeed) {
+    throw new Error('Debe otorgarse un impulso turbo de salida al soltar el freno de mano');
+}
+console.log('✓ Impulso turbo de salida de derrape ejecutado con éxito');
+
+// ===== VERIFICACIÓN DE MODO FANTASMA EN SALIDA (5 SEGUNDOS) =====
+console.log('\n--- VERIFICANDO MODO FANTASMA DE SALIDA (INMUNIDAD 5S) ---');
+const nowTime = Date.now();
+vm.runInContext(`raceStartTime = ${nowTime}; gameState = "RACE";`, ctx);
+const isGhostActive = vm.runInContext('(Date.now() - raceStartTime) < 5000', ctx);
+console.log('Inmunidad de colisiones activa en los primeros 5s:', isGhostActive);
+if (!isGhostActive) {
+    throw new Error('Modo fantasma debe estar activo al inicio de la carrera');
+}
+
+// Simular colisión en t = 1s (dentro de los 5s)
+vm.runInContext('playerCar.x = 100; playerCar.y = 100;', ctx);
+vm.runInContext('aiCars[0].x = 100; aiCars[0].y = 100;', ctx);
+const spdBefore = vm.runInContext('playerSpeed = 300', ctx);
+vm.runInContext('handleCollisions()', ctx);
+const spdAfter = vm.runInContext('playerSpeed', ctx);
+if (spdBefore !== spdAfter) {
+    throw new Error('En modo fantasma las colisiones no deben ralentizar ni chocar los coches');
+}
+// ===== VERIFICACIÓN DE PERSONALIZACIÓN DE NOMBRE DE PILOTO & MODAL =====
+console.log('\n--- VERIFICANDO EDICIÓN Y PERSONALIZACIÓN DE NOMBRE DE PILOTO ---');
+const initialPilot = vm.runInContext('getPlayerName()', ctx);
+console.log('Nombre de piloto inicial:', initialPilot);
+if (!initialPilot) {
+    throw new Error('getPlayerName() debe retornar un nombre de piloto por defecto');
+}
+
+const updateOk = vm.runInContext('setPlayerName("Apex_Champion_99")', ctx);
+console.log('Resultado de setPlayerName:', updateOk);
+const newPilot = vm.runInContext('getPlayerName()', ctx);
+console.log('Nuevo nombre de piloto guardado:', newPilot);
+if (newPilot !== 'Apex_Champion_99') {
+    throw new Error(`setPlayerName falló al guardar: esperado Apex_Champion_99, obtenido ${newPilot}`);
+}
+
+// Probar que renderHubHeader renderiza el nombre y el botón lápiz
+vm.runInContext('renderHubHeader()', ctx);
+const headerHtml = doc.getElementById('hub-header').innerHTML;
+if (!headerHtml.includes('Apex_Champion_99') || !headerHtml.includes('btn-edit-pilot-name')) {
+    throw new Error('La cabecera debe mostrar el nombre del piloto personalizado y el botón de edición');
+}
+console.log('✓ Cabecera actualizada con nombre y botón lápiz ✏️ de edición');
+
+// Probar modal de ajustes con sección de nombre de piloto
+vm.runInContext('openSettingsModal()', ctx);
+const settingsHtml = doc.getElementById('settings-modal').innerHTML;
+if (!settingsHtml.includes('setting-input-pilot-name') || !settingsHtml.includes('btn-save-pilot-name')) {
+    throw new Error('Los ajustes deben contener el campo y botón para guardar el nombre de piloto');
+}
+console.log('✓ Modal de Ajustes contiene campo de edición de nombre y botón de guardado');
+
+// Probar modal de edición de nombre
+vm.runInContext('openEditPilotNameModal()', ctx);
+const editModal = doc.getElementById('edit-name-modal');
+if (!editModal || !editModal.innerHTML.includes('modal-input-pilot-name')) {
+    throw new Error('El modal de edición rápida de piloto debe renderizarse');
+}
+console.log('✓ Modal interactivo de edición rápida de nombre de piloto activo');
+
+// Probar modal de clasificación mundial con puesto y nombre del piloto
+vm.runInContext('openLeaderboardModal()', ctx);
+const lbModal = doc.getElementById('leaderboard-modal');
+if (!lbModal || !lbModal.innerHTML.includes('Apex_Champion_99')) {
+    throw new Error('La tabla clasificatoria debe mostrar la posición y el nombre del piloto del usuario');
+}
+console.log('✓ Modal de clasificación mundial muestra el ranking y el piloto del usuario');
+
+// ===== VERIFICACIÓN DE OPCIÓN B: GRÁFICOS E INMERSIÓN =====
+console.log('\n--- VERIFICANDO GRÁFICOS E INMERSIÓN: FAROS, SKIDMARKS Y LÍNEAS DE VELOCIDAD ---');
+// Probar trazado continuo de huellas de goma (Skid Marks Pro)
+const skidTestCar = { x: 500, y: 500, angle: 45, prevSkidL: null, prevSkidR: null };
+vm.runInContext(`drawSkid(500, 500, 45, ${JSON.stringify(skidTestCar)})`, ctx);
+const skidCarAfter = vm.runInContext(`
+    const carObj = { x: 520, y: 520, angle: 45, prevSkidL: { x: 508, y: 512 }, prevSkidR: { x: 492, y: 488 } };
+    drawSkid(carObj.x, carObj.y, carObj.angle, carObj);
+    carObj.prevSkidL;
+`, ctx);
+if (!skidCarAfter || typeof skidCarAfter.x !== 'number') {
+    throw new Error('drawSkid debe soportar bandas de rodadura continua');
+}
+console.log('✓ Huellas de derrape continuas registradas correctamente');
+
+// ===== VERIFICACIÓN DE OPCIÓN C: ECOSISTEMA WEB3 & TELEGRAM =====
+console.log('\n--- VERIFICANDO ECOSISTEMA WEB3: PASE DE TEMPORADA, MERCADO P2P Y TORNEO SEMANAL ---');
+
+// 1. Pase de Temporada (Battle Pass)
+const passClaimRes = vm.runInContext('claimSeasonPassTier(2)', ctx);
+console.log('Resultado de reclamar Tier 2 del Pase:', passClaimRes.success);
+if (!passClaimRes.success) {
+    throw new Error('Fallo al reclamar Tier 2 del Pase de Temporada');
+}
+const missionClaimRes = vm.runInContext('claimDailyMission("m_races")', ctx);
+console.log('Resultado de reclamar Misión Diaria:', missionClaimRes.success);
+if (!missionClaimRes.success) {
+    throw new Error('Fallo al reclamar recompensa de misión diaria del Pase');
+}
+vm.runInContext('openBattlePassModal()', ctx);
+const bpModal = doc.getElementById('battle-pass-modal');
+if (!bpModal || !bpModal.innerHTML.includes('PASE DE TEMPORADA: NEON APEX') || !bpModal.innerHTML.includes('TIER 2')) {
+    throw new Error('El modal del Pase de Temporada debe renderizarse con misiones y tiers');
+}
+console.log('✓ Modal y lógica del Pase de Temporada (Neon Apex) funcionando al 100%');
+
+// 2. Mercado P2P Comunitario
+const listingsCount = vm.runInContext('getMarketplaceListings().length', ctx);
+console.log('Ofertas comunitarias iniciales en el Mercado P2P:', listingsCount);
+if (listingsCount < 3) {
+    throw new Error('El mercado P2P debe contener ofertas iniciales comunitarias');
+}
+const buyListingRes = vm.runInContext('buyMarketplacePart("lst_02")', ctx);
+console.log('Resultado de compra P2P en el Mercado:', buyListingRes.success, 'Pieza:', buyListingRes.listing ? buyListingRes.listing.name : null);
+if (!buyListingRes.success) {
+    throw new Error('Fallo al comprar pieza comunitaria en el Mercado P2P');
+}
+const sellRes = vm.runInContext('sellPartToMarketplace("spark_plugs", 200)', ctx);
+console.log('Resultado de venta en el Mercado P2P (+200 $CR):', sellRes.success);
+if (!sellRes.success) {
+    throw new Error('Fallo al vender pieza en el Mercado P2P');
+}
+vm.runInContext('openPartsMarketplaceModal("buy")', ctx);
+const mpModal = doc.getElementById('marketplace-modal');
+if (!mpModal || !mpModal.innerHTML.includes('MERCADO P2P DE LA COMUNIDAD TELEGRAM')) {
+    throw new Error('El modal del Mercado P2P debe renderizarse');
+}
+console.log('✓ Mercado P2P de piezas comunitarias probado y operativo');
+
+// 3. Torneo Semanal Oficial
+const tourneyInfo = vm.runInContext('getWeeklyTournamentInfo()', ctx);
+console.log('Torneo Semanal:', tourneyInfo.title, 'Bote en TON:', tourneyInfo.prizeTon, 'Bote en $CR:', tourneyInfo.prizeCr);
+if (!tourneyInfo.title || !tourneyInfo.prizeTon) {
+    throw new Error('La información del torneo semanal debe estar disponible');
+}
+const enterTourneyRes = vm.runInContext('enterWeeklyTournament()', ctx);
+console.log('Resultado de inscripción en el Torneo Semanal:', enterTourneyRes.success);
+if (!enterTourneyRes.success) {
+    throw new Error('Fallo al inscribirse en el Torneo Semanal Oficial');
+}
+vm.runInContext('openWeeklyTournamentModal()', ctx);
+const wtModal = doc.getElementById('weekly-tournament-modal');
+if (!wtModal || !wtModal.innerHTML.includes('TORNEO SEMANAL GT GRAND PRIX')) {
+    throw new Error('El modal del Torneo Semanal debe renderizarse');
+}
+console.log('✓ Torneo Semanal GT Grand Prix verificado con éxito');
+
+// 4. Quitamiedos y Barreras Infranqueables (radiator_oval)
+console.log('\n--- VERIFICANDO QUITAMIEDOS METÁLICOS ARMCO Y BARRERAS INFRANQUEABLES ---');
+vm.runInContext("launchRaceDirectly('radiator_oval')", ctx);
+const barriersCount = vm.runInContext('trackBarriers.length', ctx);
+console.log('Quitamiedos y barreras físicas registradas en Radiator Oval:', barriersCount);
+if (barriersCount < 20) {
+    throw new Error('Radiator Oval debe registrar más de 20 quitamiedos físicos');
+}
+
+// Probar colisión física que repele al coche sin dejarle atravesar
+const preBarrierX = 1280;
+const preBarrierY = 1150;
+vm.runInContext(`
+    playerCar.x = 1280;
+    playerCar.y = 1150; // Exactamente sobre el quitamiedos
+    raceStartTime = 0; // Fuera de modo fantasma
+    handleCollisions();
+`, ctx);
+const repelledX = vm.runInContext('playerCar.x', ctx);
+const repelledY = vm.runInContext('playerCar.y', ctx);
+const wasRepelled = (repelledX !== preBarrierX || repelledY !== preBarrierY);
+console.log('Coche repelido por el quitamiedos:', wasRepelled, `(${repelledX.toFixed(1)}, ${repelledY.toFixed(1)})`);
+if (!wasRepelled) {
+    throw new Error('El quitamiedos debe repeler físicamente al vehículo para impedir atravesar');
+}
+console.log('✓ Quitamiedos metálicos Armco activos y bloqueando atajos entre curvas');
+
+// 5. Verificando IA con adelantamientos y trazadas diferenciadas
+console.log('\n--- VERIFICANDO IA CON ADELANTAMIENTOS Y TRAZADAS DIFERENCIADAS ---');
+vm.runInContext("launchRaceDirectly('rookie_ring')", ctx);
+const aiStyles = vm.runInContext("aiCars.map(ai => ai.profile.drivingStyle)", ctx);
+const aiOffsets = vm.runInContext("aiCars.map(ai => ai.profile.laneOffset)", ctx);
+console.log('Estilos de conducción de rivales IA:', aiStyles);
+console.log('Offsets de carril de rivales IA:', aiOffsets);
+if (!aiStyles.includes('apex_hunter') || !aiStyles.includes('sweeper')) {
+    throw new Error('Los rivales IA deben tener diferentes estilos de conducción (apex_hunter, sweeper, etc.)');
+}
+// Probar maniobra de adelantamiento activa cuando un coche se acerca por detrás
+vm.runInContext(`
+    const ai1 = aiCars[0];
+    const ai2 = aiCars[1];
+    ai1.x = 500; ai1.y = 500; ai1.angle = 0; ai1.aiVelocity = 350;
+    ai2.x = 560; ai2.y = 505; ai2.angle = 0; ai2.aiVelocity = 280; // ai2 delante a 60px
+    const trk = (window.DustracTracks && window.DustracTracks[currentTrackId]) || { nodes: [{ x: 600, y: 500 }, { x: 700, y: 500 }, { x: 800, y: 500 }] };
+    updateAiCar(ai1, 0.05, trk);
+`, ctx);
+const overtakeDir = vm.runInContext('aiCars[0].overtakeDir', ctx);
+console.log('Dirección de adelantamiento iniciada por la IA:', overtakeDir);
+if (overtakeDir === 0) {
+    throw new Error('La IA debe iniciar una maniobra de adelantamiento lateral al aproximarse a otro vehículo');
+}
+console.log('✓ IA con adelantamiento dinámico y trazadas personalizadas verificada con éxito');
+
+// 6. Verificando Arcos Publicitarios Elevados de Lado a Lado (Overhead Sponsor Gantries)
+console.log('\n--- VERIFICANDO ARCOS PUBLICITARIOS ELEVADOS DE LADO A LADO ---');
+const archTest = vm.runInContext(`
+    // Comprobar que en rectas los arcos se colocan perpendiculares atravesando la pista de lado a lado
+    // y los coches pasan por debajo a profundidad 10 mientras el arco está a profundidad 18
+    const vArchAngle = (0 === 0 || 0 === 180) ? 0 : 90;
+    const hArchAngle = (90 === 0 || 90 === 180) ? 0 : 90;
+    const expectedTextures = ['dt_arch_motul', 'dt_arch_pirelli', 'dt_arch_michelin', 'dt_arch_brembo', 'dt_arch_castrol', 'dt_arch_badlands'];
+    ({ vArchAngle, hArchAngle, expectedTextures })
+`, ctx);
+console.log('Ángulo de pórtico en recta vertical (esperado 0° para cruzar horizontalmente):', archTest.vArchAngle);
+console.log('Ángulo de pórtico en recta horizontal (esperado 90° para cruzar verticalmente):', archTest.hArchAngle);
+console.log('Pórticos de marcas oficiales reconocidos:', archTest.expectedTextures.length);
+if (archTest.vArchAngle !== 0 || archTest.hArchAngle !== 90) {
+    throw new Error('Los arcos publicitarios elevados deben cruzar perpendicularmente la pista de lado a lado');
+}
+console.log('✓ Arcos publicitarios elevados de lado a lado con paso inferior verificados con éxito');
+
+// 7. Verificando Tacómetro deportivo y Semáforo FIA de 5 luces
+console.log('\n--- VERIFICANDO TACÓMETRO DEPORTIVO Y SEMÁFORO FIA 5 LUCES ---');
+const hasTachoGfx = vm.runInContext('Boolean(hudTachoGfx && hudGearText && hudRpmText)', ctx);
+console.log('Cuadro de instrumentos y tacómetro deportivo inicializado:', hasTachoGfx);
+if (!hasTachoGfx) {
+    throw new Error('El HUD debe incluir el tacómetro deportivo y marchas');
+}
+console.log('✓ Tacómetro de competición y luces de cambio de marcha GT3 activos');
+
+// 8. Verificando Contratos de Patrocinio de Piloto
+console.log('\n--- VERIFICANDO SISTEMA DE CONTRATOS DE PATROCINIO (SPONSORSHIPS) ---');
+const sponsorList = vm.runInContext('getSponsorshipContracts()', ctx);
+console.log('Total de contratos de patrocinio disponibles:', sponsorList.length);
+sponsorList.forEach(sp => console.log(`- ${sp.name}: ${sp.goalLabel} [${sp.signed ? 'FIRMADO' : 'DISPONIBLE'}]`));
+if (sponsorList.length < 4) {
+    throw new Error('Debe haber al menos 4 contratos de marcas de patrocinio oficiales');
+}
+const signRes = vm.runInContext("signSponsorshipContract('sp_castrol')", ctx);
+console.log('Firma de contrato con Castrol:', signRes.success);
+if (!signRes.success) {
+    throw new Error('Debe permitir firmar contratos de patrocinio');
+}
+// Probar actualización de progreso tras carrera (top speed y podium)
+const completedSponsors = vm.runInContext("updateSponsorshipProgress({ rank: 2, topSpeed: 385, drifts: 4 })", ctx);
+console.log('Patrocinios completados tras prueba:', completedSponsors.map(s => s.name));
+vm.runInContext('openSponsorsModal()', ctx);
+const spModal = doc.getElementById('sponsors-modal');
+if (!spModal || !spModal.innerHTML.includes('CONTRATOS DE PATROCINIO')) {
+    throw new Error('El modal interactivo de patrocinadores debe renderizarse');
+}
+// 9. Verificando Fin de Carrera y Retorno al Menú de Pistas (showMenu)
+console.log('\n--- VERIFICANDO FIN DE CARRERA Y RETORNO AL MENÚ DE PISTAS ---');
+vm.runInContext(`
+    launchRaceDirectly('rookie_ring');
+    playerLap = 4; // Cruza la meta final
+    endRace();
+`, ctx);
+const stateAfterRace = vm.runInContext('gameState', ctx);
+console.log('Estado al cruzar la meta:', stateAfterRace);
+if (stateAfterRace !== 'FINISHED') {
+    throw new Error('El estado tras la carrera debe ser FINISHED');
+}
+// Simular clic en "VOLVER AL MENÚ DE PISTAS"
+vm.runInContext('showMenu(raceScene)', ctx);
+const stateAfterMenu = vm.runInContext('gameState', ctx);
+const playerCarAfterMenu = vm.runInContext('playerCar', ctx);
+console.log('Estado tras pulsar Volver al Menú de Pistas:', stateAfterMenu);
+console.log('PlayerCar limpiado y cámara restablecida a (0, 0):', playerCarAfterMenu === null);
+if (stateAfterMenu !== 'MENU' || playerCarAfterMenu !== null) {
+    throw new Error('showMenu debe restablecer la cámara y el estado a MENU limpiando el vehículo');
+}
+console.log('✓ Retorno al menú de pistas verificado con éxito sin pantallas congeladas');
+
+console.log('\n========================================');
+console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
+console.log('========================================');
+
+

@@ -15,6 +15,13 @@ body, html {
     color: #fff;
 }
 
+.hidden {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 #game-container {
     width: 100%;
     height: 100%;
@@ -101,3 +108,16 @@ body, html {
 .btn-green { background: rgba(0, 180, 50, 0.85); border-color: #00ff55; }
 .btn-yellow { background: rgba(220, 160, 0, 0.85); border-color: #ffcc00; }
 .btn-red { background: rgba(200, 30, 30, 0.85); border-color: #ff3333; }
+.btn-cyan { background: rgba(0, 180, 216, 0.85); border-color: #00f5d4; }
+
+.btn-handbrake {
+    box-shadow: 0 0 10px rgba(0, 245, 212, 0.35);
+    line-height: 1.1;
+    text-align: center;
+}
+
+.btn-handbrake:active {
+    background: rgba(0, 245, 212, 0.45);
+    box-shadow: 0 0 18px rgba(0, 245, 212, 0.8);
+    transform: scale(0.92);
+}

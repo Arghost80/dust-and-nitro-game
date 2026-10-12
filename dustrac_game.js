@@ -208,19 +208,53 @@ class DustAudio {
     }
 
     playKerb() {
+        this.playRumbleStrip(180);
+    }
+
+    playRumbleStrip(speedKmh = 180) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        if (this._lastRumbleTime && now - this._lastRumbleTime < 0.065) return;
+        this._lastRumbleTime = now;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const baseFreq = 75 + Math.min(60, (speedKmh / 420) * 60);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.setValueAtTime(baseFreq * 1.35, now + 0.025);
+
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+        if (this.ctx.createBiquadFilter) {
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(340, now);
+            osc.connect(filter);
+            filter.connect(gain);
+        } else {
+            osc.connect(gain);
+        }
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.06);
+    }
+
+    playGearShift(gear = 2) {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(80, now);
-        osc.frequency.setValueAtTime(130, now + 0.03);
-        gain.gain.setValueAtTime(0.06, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160 + gear * 18, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+        gain.gain.setValueAtTime(0.065, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.07);
+        osc.stop(now + 0.08);
     }
 
     playSand() {
@@ -285,6 +319,22 @@ class DustAudio {
         gain.connect(this.ctx.destination);
         osc.start(now);
         osc.stop(now + (isGo ? 0.35 : 0.15));
+    }
+
+    playBoost() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(760, now + 0.22);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
     }
 }
 const dustAudio = new DustAudio();
@@ -467,13 +517,19 @@ let playerNextNodeIdx = 0;
 let lapStartTime = 0;
 let bestLapTime = null;
 
-let skidLayer;
-let radarGraphics;
-let hudPosText, hudLapText, hudTimeText, hudSpeedText, hudSurfaceText;
+let skidLayer, radarGraphics;
+let trackBarriers = [];
+let hudPosText, hudLapText, hudTimeText, hudSpeedText, hudSurfaceText, hudGhostBadge, hudDriftBadge, hudSlipstreamBadge, hudTachoGfx, hudGearText, hudRpmText, lastPlayerGear = 1;
+let playerInSlipstream = false;
+let speedLinesGraphics, weatherGraphics;
+let weatherParticles = [];
 
-// Controles táctiles y teclado
+// Controles táctiles, freno de mano (derrape) y teclado
 let keys = {};
-let touchLeft = false, touchRight = false, touchGas = false, touchBrake = false;
+let touchLeft = false, touchRight = false, touchGas = false, touchBrake = false, touchHandbrake = false;
+let raceStartTime = 0;
+let driftCharge = 0;
+let driftBoostTimer = 0;
 
 // ===== PRELOAD: CARGA DE ASSETS ORIGINALES DE DUSTRACING2D =====
 function dustPreload() {
@@ -506,6 +562,16 @@ function dustPreload() {
     this.load.image('dt_startLightOn', p + 'startLightOn.png');
     this.load.image('dt_startLightOff', p + 'startLightOff.png');
 
+    // Coches base limpios con transparencia oficial inmediata
+    this.load.image('car_red', p + 'carRed.png');
+    this.load.image('car_blue', p + 'carBlue.png');
+    this.load.image('car_yellow', p + 'carYellow.png');
+    this.load.image('car_green', p + 'carGreen.png');
+    this.load.image('car_cyan', p + 'carCyan.png');
+    this.load.image('car_orange', p + 'carOrange.png');
+    this.load.image('car_pink', p + 'carPink.png');
+    this.load.image('car_grey', p + 'carGrey.png');
+
     // Coches GT3 fotorrealistas (hoja de sprites nueva)
     this.load.image('gt_cars_sheet', 'assets/real_gt_cars.jpg');
 
@@ -533,161 +599,864 @@ function buildGT3CarTextures(scene) {
         { key: 'car_red',    c: 1, r: 0 }, // Ferrari 488 GT3
         { key: 'car_blue',   c: 0, r: 1 }, // Aston Martin Vantage Valvoline
         { key: 'car_green',  c: 1, r: 1 }, // BMW M4 GT3 Rowe
-        { key: 'car_orange', c: 0, r: 2 }, // Iron Dames GT3
+        { key: 'car_pink',   c: 0, r: 2 }, // Iron Dames Lamborghini GT3
         { key: 'car_cyan',   c: 1, r: 2 }  // McLaren 720S Gulf
     ];
     const rowY = [20, 350, 690];
 
     cells.forEach(cell => {
-        const sx = cell.c * 512 + 6;
-        const sy = rowY[cell.r];
-        const w = Math.min(cellW, src.width - sx);
-        const h = Math.min(cellH, src.height - sy);
+        try {
+            const sx = cell.c * 512 + 6;
+            const sy = rowY[cell.r];
+            const w = Math.min(cellW, src.width - sx);
+            const h = Math.min(cellH, src.height - sy);
+            if (w <= 0 || h <= 0) return;
 
-        const tmp = document.createElement('canvas');
-        tmp.width = w; tmp.height = h;
-        const tctx = tmp.getContext('2d');
-        tctx.drawImage(src, sx, sy, w, h, 0, 0, w, h);
+            const tmp = document.createElement('canvas');
+            tmp.width = w; tmp.height = h;
+            const tctx = tmp.getContext('2d');
+            tctx.drawImage(src, sx, sy, w, h, 0, 0, w, h);
 
-        const img = tctx.getImageData(0, 0, w, h);
-        const d = img.data;
-        const lumAt = (p) => Math.max(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]);
-        // Flood-fill desde los bordes: solo se borra el fondo/sombra oscura conectada al exterior,
-        // así las partes negras del propio coche (cristales, libreas negras) no se agujerean.
-        const BG = 42;
-        const seen = new Uint8Array(w * h);
-        const stack = [];
-        for (let x = 0; x < w; x++) { stack.push(x, (h - 1) * w + x); }
-        for (let y = 0; y < h; y++) { stack.push(y * w, y * w + w - 1); }
-        while (stack.length) {
-            const p = stack.pop();
-            if (seen[p]) continue;
-            seen[p] = 1;
-            if (lumAt(p) >= BG) continue;
-            d[p * 4 + 3] = 0;
-            const x = p % w, y = (p / w) | 0;
-            if (x > 0) stack.push(p - 1);
-            if (x < w - 1) stack.push(p + 1);
-            if (y > 0) stack.push(p - w);
-            if (y < h - 1) stack.push(p + w);
-        }
-        let minX = w, minY = h, maxX = 0, maxY = 0;
-        for (let y = 0; y < h; y++) {
+            const img = tctx.getImageData(0, 0, w, h);
+            const d = img.data;
+            const lumAt = (p) => Math.max(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]);
+            const BG = 38;
+            const seen = new Uint8Array(w * h);
+            const stack = [];
             for (let x = 0; x < w; x++) {
-                if (d[(y * w + x) * 4 + 3] > 0) {
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
+                stack.push(x); seen[x] = 1;
+                const bottom = (h - 1) * w + x;
+                stack.push(bottom); seen[bottom] = 1;
+            }
+            for (let y = 0; y < h; y++) {
+                const left = y * w;
+                if (!seen[left]) { stack.push(left); seen[left] = 1; }
+                const right = y * w + w - 1;
+                if (!seen[right]) { stack.push(right); seen[right] = 1; }
+            }
+            while (stack.length) {
+                const p = stack.pop();
+                if (lumAt(p) >= BG) continue;
+                d[p * 4 + 3] = 0;
+                const x = p % w, y = (p / w) | 0;
+                if (x > 0 && !seen[p - 1]) { seen[p - 1] = 1; stack.push(p - 1); }
+                if (x < w - 1 && !seen[p + 1]) { seen[p + 1] = 1; stack.push(p + 1); }
+                if (y > 0 && !seen[p - w]) { seen[p - w] = 1; stack.push(p - w); }
+                if (y < h - 1 && !seen[p + w]) { seen[p + w] = 1; stack.push(p + w); }
+            }
+            let minX = w, minY = h, maxX = 0, maxY = 0;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (d[(y * w + x) * 4 + 3] > 0) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
                 }
             }
+            tctx.putImageData(img, 0, 0);
+
+            const bw = Math.max(1, maxX - minX + 1);
+            const bh = Math.max(1, maxY - minY + 1);
+            const out = document.createElement('canvas');
+            out.width = bw; out.height = bh;
+            const octx = out.getContext('2d');
+            octx.translate(bw, 0);
+            octx.scale(-1, 1);
+            octx.drawImage(tmp, minX, minY, bw, bh, 0, 0, bw, bh);
+
+            if (scene.textures.exists(cell.key)) scene.textures.remove(cell.key);
+            scene.textures.addCanvas(cell.key, out);
+
+            // Registrar alias para McLaren y compatibilidad
+            if (cell.key === 'car_cyan') {
+                if (scene.textures.exists('car_orange')) scene.textures.remove('car_orange');
+                scene.textures.addCanvas('car_orange', out);
+            }
+            if (cell.key === 'car_green') {
+                // Generar variante Gris / Plata metálico oficial para car_grey
+                const greyCv = document.createElement('canvas');
+                greyCv.width = bw; greyCv.height = bh;
+                const gctx = greyCv.getContext('2d');
+                gctx.drawImage(out, 0, 0);
+                const gImg = gctx.getImageData(0, 0, bw, bh);
+                const gd = gImg.data;
+                for (let p = 0; p < gd.length; p += 4) {
+                    if (gd[p + 3] > 10) {
+                        const lum = (0.299 * gd[p] + 0.587 * gd[p+1] + 0.114 * gd[p+2]) | 0;
+                        gd[p] = (gd[p] * 0.25 + lum * 0.75) | 0;
+                        gd[p+1] = (gd[p+1] * 0.25 + lum * 0.75) | 0;
+                        gd[p+2] = (gd[p+2] * 0.25 + lum * 0.75) | 0;
+                    }
+                }
+                gctx.putImageData(gImg, 0, 0);
+                if (scene.textures.exists('car_grey')) scene.textures.remove('car_grey');
+                scene.textures.addCanvas('car_grey', greyCv);
+            }
+        } catch(err) {
+            console.warn('Error recortando sprite GT3:', cell.key, err);
         }
-        tctx.putImageData(img, 0, 0);
-
-        const bw = Math.max(1, maxX - minX + 1);
-        const bh = Math.max(1, maxY - minY + 1);
-        const out = document.createElement('canvas');
-        out.width = bw; out.height = bh;
-        const octx = out.getContext('2d');
-        // Volteo horizontal: en la hoja el morro mira a la izquierda
-        octx.translate(bw, 0);
-        octx.scale(-1, 1);
-        octx.drawImage(tmp, minX, minY, bw, bh, 0, 0, bw, bh);
-
-        if (scene.textures.exists(cell.key)) scene.textures.remove(cell.key);
-        scene.textures.addCanvas(cell.key, out);
     });
 }
 
-// Genera texturas HD fotorrealistas de césped, grava y objetos ambientales con sombras
-function buildHDEnvironmentTextures(scene) {
-    // 1. Césped HD Fotorrealista (Mowed Lawn)
-    if (scene.textures.exists('hd_grass_src')) {
-        const src = scene.textures.get('hd_grass_src').getSourceImage();
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(src, 0, 0, 512, 512);
-        if (scene.textures.exists('dt_grass')) scene.textures.remove('dt_grass');
-        scene.textures.addCanvas('dt_grass', canvas);
+// Ajustar brillo de un color hexadecimal
+function adjustBrightness(hex, percent) {
+    if (!hex) return '#333333';
+    let clean = String(hex).replace('#', '');
+    if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+    const num = parseInt(clean, 16);
+    if (isNaN(num)) return hex;
+    let r = (num >> 16) + Math.round(255 * (percent / 100));
+    let g = ((num >> 8) & 0x00ff) + Math.round(255 * (percent / 100));
+    let b = (num & 0x0000ff) + Math.round(255 * (percent / 100));
+    r = Math.min(255, Math.max(0, r));
+    g = Math.min(255, Math.max(0, g));
+    b = Math.min(255, Math.max(0, b));
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+// Generador procedural de coches cenitales GT3 y superdeportivos de ultra alta resolución (140x70px)
+function renderTopDownArchetypeCanvas(colorHex, archetype = 'lambo_wedge') {
+    return null;
+
+    const baseColor = colorHex || '#e53935';
+    const darkShade = adjustBrightness(baseColor, -35);
+    const midDark = adjustBrightness(baseColor, -15);
+    const lightGleam = adjustBrightness(baseColor, 40);
+
+    // 1. Sombra suave bajo el chasis (Ambient Occlusion & difusor)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h / 2 + 1, 58, 27, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Ruedas de competición anchas (Pirelli P-Zero / Michelin slicks con pinzas Brembo y llantas BBS)
+    const wheels = [
+        { x: 104, y: 10 },
+        { x: 104, y: 60 },
+        { x: 34, y: 9 },
+        { x: 34, y: 61 }
+    ];
+
+    wheels.forEach(wh => {
+        // Goma del neumático (slick ancho)
+        ctx.fillStyle = '#0f131a';
+        ctx.fillRect(wh.x - 13, wh.y - 5.5, 26, 11);
+
+        // Flanco oscuro
+        ctx.fillStyle = '#1e2430';
+        ctx.fillRect(wh.x - 11, wh.y - 4.5, 22, 9);
+
+        // Disco de freno perforado de carbono-cerámica
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.ellipse(wh.x, wh.y, 6.5, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pinza de freno Brembo en rojo o amarillo de carreras
+        ctx.fillStyle = (archetype === 'ferrari_corsa' || archetype === 'porsche_boxer') ? '#eab308' : '#dc2626';
+        ctx.fillRect(wh.x + 2, wh.y - 3.5, 4, 7);
+
+        // Llanta multirradio grafito / titanio
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.arc(wh.x, wh.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f59e0b'; // Tuerca central de bloqueo de rueda monotuerca
+        ctx.beginPath();
+        ctx.arc(wh.x, wh.y, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // 3. Carrocería aerodinámica según arquetipo
+    ctx.save();
+    const bodyGrad = ctx.createLinearGradient(0, 10, 0, 60);
+    bodyGrad.addColorStop(0, darkShade);
+    bodyGrad.addColorStop(0.20, baseColor);
+    bodyGrad.addColorStop(0.50, lightGleam);
+    bodyGrad.addColorStop(0.80, baseColor);
+    bodyGrad.addColorStop(1, darkShade);
+
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = '#050811';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+
+    if (archetype === 'lambo_wedge') {
+        ctx.moveTo(126, 35);
+        ctx.lineTo(116, 16);
+        ctx.lineTo(92, 13);
+        ctx.lineTo(74, 16);
+        ctx.lineTo(50, 13);
+        ctx.lineTo(24, 14);
+        ctx.lineTo(14, 20);
+        ctx.lineTo(10, 35);
+        ctx.lineTo(14, 50);
+        ctx.lineTo(24, 56);
+        ctx.lineTo(50, 57);
+        ctx.lineTo(74, 54);
+        ctx.lineTo(92, 57);
+        ctx.lineTo(116, 54);
+        ctx.closePath();
+    } else if (archetype === 'ferrari_corsa') {
+        ctx.moveTo(127, 35);
+        ctx.quadraticCurveTo(124, 15, 108, 14);
+        ctx.lineTo(90, 13);
+        ctx.quadraticCurveTo(72, 18, 54, 14);
+        ctx.quadraticCurveTo(34, 12, 18, 18);
+        ctx.lineTo(12, 35);
+        ctx.lineTo(18, 52);
+        ctx.quadraticCurveTo(34, 58, 54, 56);
+        ctx.quadraticCurveTo(72, 52, 90, 57);
+        ctx.quadraticCurveTo(124, 55, 127, 35);
+        ctx.closePath();
+    } else if (archetype === 'porsche_boxer') {
+        ctx.moveTo(124, 35);
+        ctx.quadraticCurveTo(122, 16, 105, 15);
+        ctx.lineTo(85, 14);
+        ctx.quadraticCurveTo(68, 17, 52, 15);
+        ctx.quadraticCurveTo(30, 10, 16, 18);
+        ctx.quadraticCurveTo(10, 26, 10, 35);
+        ctx.quadraticCurveTo(10, 44, 16, 52);
+        ctx.quadraticCurveTo(30, 60, 52, 55);
+        ctx.quadraticCurveTo(68, 53, 85, 56);
+        ctx.quadraticCurveTo(122, 54, 124, 35);
+        ctx.closePath();
+    } else if (archetype === 'viper_acr') {
+        ctx.moveTo(126, 35);
+        ctx.lineTo(120, 17);
+        ctx.lineTo(68, 14);
+        ctx.lineTo(50, 16);
+        ctx.lineTo(26, 13);
+        ctx.lineTo(12, 19);
+        ctx.lineTo(10, 35);
+        ctx.lineTo(12, 51);
+        ctx.lineTo(26, 57);
+        ctx.lineTo(50, 54);
+        ctx.lineTo(68, 56);
+        ctx.lineTo(120, 53);
+        ctx.closePath();
+    } else if (archetype === 'bugatti_w16') {
+        ctx.moveTo(127, 35);
+        ctx.quadraticCurveTo(125, 15, 106, 14);
+        ctx.lineTo(80, 13);
+        ctx.quadraticCurveTo(62, 19, 44, 14);
+        ctx.quadraticCurveTo(22, 12, 12, 22);
+        ctx.lineTo(8, 35);
+        ctx.lineTo(12, 48);
+        ctx.quadraticCurveTo(22, 58, 44, 56);
+        ctx.quadraticCurveTo(62, 51, 80, 57);
+        ctx.quadraticCurveTo(125, 55, 127, 35);
+        ctx.closePath();
+    } else if (archetype === 'le_mans_proto') {
+        ctx.moveTo(128, 35);
+        ctx.lineTo(122, 14);
+        ctx.lineTo(98, 12);
+        ctx.lineTo(86, 17);
+        ctx.lineTo(40, 17);
+        ctx.lineTo(24, 11);
+        ctx.lineTo(10, 14);
+        ctx.lineTo(8, 35);
+        ctx.lineTo(10, 56);
+        ctx.lineTo(24, 59);
+        ctx.lineTo(40, 53);
+        ctx.lineTo(86, 53);
+        ctx.lineTo(98, 58);
+        ctx.lineTo(122, 56);
+        ctx.closePath();
+    } else if (archetype === 'dakar_truck') {
+        ctx.moveTo(122, 35);
+        ctx.lineTo(118, 13);
+        ctx.lineTo(48, 12);
+        ctx.lineTo(20, 12);
+        ctx.lineTo(16, 35);
+        ctx.lineTo(20, 58);
+        ctx.lineTo(48, 58);
+        ctx.lineTo(118, 57);
+        ctx.closePath();
+    } else {
+        // Superdeportivo GT estándar / DTM / JDM
+        ctx.moveTo(126, 35);
+        ctx.lineTo(118, 17);
+        ctx.lineTo(86, 14);
+        ctx.lineTo(64, 15);
+        ctx.lineTo(26, 13);
+        ctx.lineTo(14, 18);
+        ctx.lineTo(10, 35);
+        ctx.lineTo(14, 52);
+        ctx.lineTo(26, 57);
+        ctx.lineTo(64, 55);
+        ctx.lineTo(86, 56);
+        ctx.lineTo(118, 53);
+        ctx.closePath();
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Franja doble de competición GT (Racing Stripes en contraste)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
+    ctx.fillRect(20, 32, 100, 2);
+    ctx.fillRect(20, 36, 100, 2);
+
+    // 5. Splitter frontal de fibra de carbono y canards
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(122, 26, 6, 18);
+    ctx.fillRect(118, 15, 6, 4);
+    ctx.fillRect(118, 51, 6, 4);
+
+    // Difusor trasero con aletas verticales
+    ctx.fillRect(8, 22, 8, 26);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(8, 26, 6, 2);
+    ctx.fillRect(8, 34, 6, 2);
+    ctx.fillRect(8, 42, 6, 2);
+
+    // 6. Retrovisores aerodinámicos de carbono
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(88, 10, 4, 3);
+    ctx.fillRect(88, 57, 4, 3);
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(87, 8, 6, 3);
+    ctx.fillRect(87, 59, 6, 3);
+
+    // 7. Cabina y Cristales tintados con curvatura realista y reflejo especular
+    const glassGrad = ctx.createLinearGradient(45, 20, 95, 50);
+    glassGrad.addColorStop(0, '#060a12');
+    glassGrad.addColorStop(0.5, '#1e293b');
+    glassGrad.addColorStop(1, '#060a12');
+    ctx.fillStyle = glassGrad;
+
+    ctx.beginPath();
+    ctx.moveTo(96, 35);
+    ctx.lineTo(84, 21);
+    ctx.lineTo(54, 20);
+    ctx.lineTo(40, 24);
+    ctx.lineTo(36, 35);
+    ctx.lineTo(40, 46);
+    ctx.lineTo(54, 50);
+    ctx.lineTo(84, 49);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#020617';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Reflejos especulares blancos estilizados en el parabrisas
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(90, 24);
+    ctx.lineTo(68, 44);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(92, 29);
+    ctx.lineTo(76, 44);
+    ctx.stroke();
+
+    // Escobilla del limpiaparabrisas
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(86, 35);
+    ctx.lineTo(72, 26);
+    ctx.stroke();
+
+    // Asientos baquet de competición visibles en el habitáculo
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(52, 25, 8, 7);
+    ctx.fillRect(52, 38, 8, 7);
+    ctx.fillStyle = '#dc2626'; // Arneses de 6 puntos rojos
+    ctx.fillRect(55, 27, 2, 5);
+    ctx.fillRect(55, 40, 2, 5);
+
+    // Techo central de fibra de carbono
+    ctx.fillStyle = '#0b0f19';
+    ctx.fillRect(56, 25, 22, 20);
+
+    // 8. Louvers / Extractores de aire del capó
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(106, 27, 8, 2);
+    ctx.fillRect(106, 41, 8, 2);
+    ctx.fillRect(100, 29, 6, 2);
+    ctx.fillRect(100, 39, 6, 2);
+
+    // 9. Tapa motor trasera y admisión de colectores V8/V10/V12
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(38, 28, 12, 14);
+    ctx.fillStyle = '#cbd5e1'; // Colectores cromados
+    ctx.fillRect(40, 30, 8, 2);
+    ctx.fillRect(40, 34, 8, 2);
+    ctx.fillRect(40, 38, 8, 2);
+
+    // 10. Alerón trasero GT3 de carbono con soportes de cuello de cisne
+    if (archetype !== 'hot_hatch') {
+        const wingX = (archetype === 'viper_acr' || archetype === 'le_mans_proto') ? 14 : 18;
+        // Hoja del alerón en carbono
+        ctx.fillStyle = '#060a12';
+        ctx.fillRect(wingX - 4, 13, 8, 44);
+        // Soportes metálicos
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(wingX, 28, 5, 2.5);
+        ctx.fillRect(wingX, 39, 5, 2.5);
+        // Endplates aerodinámicos en el color del coche
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(wingX - 6, 11, 11, 3.5);
+        ctx.fillRect(wingX - 6, 55, 11, 3.5);
     }
 
-    // 2. Gravilla / Arena HD de Escapatoria (Gravel Runoff)
-    if (scene.textures.exists('hd_sand_src')) {
-        const src = scene.textures.get('hd_sand_src').getSourceImage();
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(src, 0, 0, 512, 512);
-        if (scene.textures.exists('dt_sand')) scene.textures.remove('dt_sand');
-        scene.textures.addCanvas('dt_sand', canvas);
+    // 11. Escapes de titanio con halo de calor azulado
+    ctx.fillStyle = '#0284c7'; // Azul titanio
+    ctx.beginPath();
+    ctx.arc(10, 31, 2.4, 0, Math.PI * 2);
+    ctx.arc(10, 39, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a'; // Interior hueco del tubo de escape
+    ctx.beginPath();
+    ctx.arc(10, 31, 1.4, 0, Math.PI * 2);
+    ctx.arc(10, 39, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 12. Faros delanteros proyectores LED Xenón
+    ctx.fillStyle = '#f0f9ff';
+    ctx.fillRect(118, 19, 5, 3.5);
+    ctx.fillRect(118, 47, 5, 3.5);
+    ctx.fillStyle = '#38bdf8'; // Halo LED azul cielo
+    ctx.fillRect(115, 19, 3, 3.5);
+    ctx.fillRect(115, 47, 3, 3.5);
+
+    // 13. Barra LED trasera roja de freno
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(12, 20, 3.5, 5);
+    ctx.fillRect(12, 45, 3.5, 5);
+    ctx.fillRect(11, 25, 2, 20); // Tira central de luz continua
+
+    ctx.restore();
+    return cv;
+}
+
+// Obtener textura de supercoche GT3 fotorrealista con silueta de arquetipo y color exacto
+function getOrCreateColoredCarTexture(scene, colorHex, fallbackKey = 'car_red', archetype = 'lambo_wedge') {
+    if (!scene || !scene.textures) return fallbackKey;
+    if (!colorHex) return fallbackKey;
+
+    const cleanHex = String(colorHex).toLowerCase().replace('#', '');
+    const cleanArch = String(archetype || 'lambo_wedge').toLowerCase();
+    const customKey = `car_gt3_${cleanArch}_${cleanHex}`;
+    if (scene.textures.exists(customKey)) return customKey;
+
+    // 1. Determinar el modelo GT3 fotorrealista base según el arquetipo / fabricante:
+    let baseKey = 'car_red'; // Por defecto Ferrari 488 GT3
+    if (cleanArch.includes('porsche') || cleanArch.includes('boxer')) {
+        baseKey = 'car_yellow'; // Porsche 911 GT3 Manthey Grello
+    } else if (cleanArch.includes('ferrari') || cleanArch.includes('corsa') || cleanArch.includes('proto')) {
+        baseKey = 'car_red';    // Ferrari 488 GT3 Scuderia
+    } else if (cleanArch.includes('lambo') || cleanArch.includes('wedge') || cleanArch.includes('dakar')) {
+        baseKey = 'car_pink';   // Lamborghini Huracán GT3 (Iron Dames)
+    } else if (cleanArch.includes('mclaren') || cleanArch.includes('bugatti') || cleanArch.includes('supra') || cleanArch.includes('cyan')) {
+        baseKey = 'car_cyan';   // McLaren 720S Gulf GT3
+    } else if (cleanArch.includes('bmw') || cleanArch.includes('coupe') || cleanArch.includes('rally') || cleanArch.includes('hatch')) {
+        baseKey = 'car_green';  // BMW M4 GT3 ROWE Motorsport
+    } else if (cleanArch.includes('bentley') || cleanArch.includes('viper') || cleanArch.includes('aston')) {
+        baseKey = 'car_blue';   // Aston Martin Vantage AMR GT3
     }
 
-    // 3. Limpiador de fondo blanco con preservación de sombra realista
-    const cleanWhiteBg = (srcImg, targetKey, whiteThresh = 240, shadowFactor = 0.5) => {
-        const w = srcImg.width;
-        const h = srcImg.height;
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(srcImg, 0, 0);
-
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const d = imgData.data;
-
-        const seen = new Uint8Array(w * h);
-        const stack = [];
-        for (let x = 0; x < w; x++) { stack.push(x, (h - 1) * w + x); }
-        for (let y = 0; y < h; y++) { stack.push(y * w, y * w + w - 1); }
-
-        while (stack.length) {
-            const p = stack.pop();
-            if (seen[p]) continue;
-            seen[p] = 1;
-            const r = d[p*4], g = d[p*4+1], b = d[p*4+2];
-            const maxC = Math.max(r, g, b);
-            const minC = Math.min(r, g, b);
-
-            if (maxC > 230 && (maxC - minC < 30)) {
-                d[p*4+3] = 0; // Fondo blanco eliminado
-                const x = p % w, y = (p / w) | 0;
-                if (x > 0) stack.push(p - 1);
-                if (x < w - 1) stack.push(p + 1);
-                if (y > 0) stack.push(p - w);
-                if (y < h - 1) stack.push(p + w);
-            } else if (maxC > 140 && (maxC - minC < 30)) {
-                // Sombra suave proyectada -> convertir a sombra alfa
-                const shadowStrength = 1.0 - (maxC / 255);
-                d[p*4] = 8;
-                d[p*4+1] = 12;
-                d[p*4+2] = 18;
-                d[p*4+3] = Math.round(shadowStrength * 200 * shadowFactor);
-            }
-        }
-
-        ctx.putImageData(imgData, 0, 0);
-        if (scene.textures.exists(targetKey)) scene.textures.remove(targetKey);
-        scene.textures.addCanvas(targetKey, canvas);
+    // 2. Mapeo directo por color si coincide con los colores oficiales de las marcas GT3:
+    const colorToKeyMap = {
+        'ec4899': 'car_pink', 'f472b6': 'car_pink', 'd946ef': 'car_pink',
+        '0284c7': 'car_blue', '1d4ed8': 'car_blue', '38bdf8': 'car_blue',
+        '06b6d4': 'car_cyan', '00f5d4': 'car_cyan',
+        'facc15': 'car_yellow', 'eab308': 'car_yellow', 'fde047': 'car_yellow',
+        '15803d': 'car_green', '84cc16': 'car_green', 'a3e635': 'car_green',
+        'ea580c': 'car_orange', 'f97316': 'car_orange',
+        'e53935': 'car_red', '991b1b': 'car_red', 'ef4444': 'car_red',
+        '1e293b': 'car_grey', '64748b': 'car_grey', '94a3b8': 'car_grey', 'f8fafc': 'car_grey'
     };
 
-    if (scene.textures.exists('hd_tree_src')) {
-        cleanWhiteBg(scene.textures.get('hd_tree_src').getSourceImage(), 'dt_tree', 242, 0.45);
+    if (colorToKeyMap[cleanHex] && scene.textures.exists(colorToKeyMap[cleanHex])) {
+        return colorToKeyMap[cleanHex];
     }
-    if (scene.textures.exists('hd_grandstand_src')) {
-        cleanWhiteBg(scene.textures.get('hd_grandstand_src').getSourceImage(), 'dt_grandstand', 238, 0.55);
+
+    // 3. Si es un color personalizado, tintar sobre el superdeportivo GT3 fotorrealista base:
+    try {
+        if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+            if (!scene.textures.exists(baseKey)) {
+                const pool = ['car_red', 'car_blue', 'car_yellow', 'car_green', 'car_cyan', 'car_pink'];
+                for (const k of pool) {
+                    if (scene.textures.exists(k)) { baseKey = k; break; }
+                }
+            }
+
+            if (scene.textures.exists(baseKey)) {
+                const baseTex = scene.textures.get(baseKey);
+                const src = baseTex ? baseTex.getSourceImage() : null;
+                if (src && src.width && src.height) {
+                    const cv = document.createElement('canvas');
+                    cv.width = src.width;
+                    cv.height = src.height;
+                    const ctx = cv.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(src, 0, 0);
+
+                        // Tinte con preservación de sombras, transparencias y elementos mecánicos
+                        const imgData = ctx.getImageData(0, 0, cv.width, cv.height);
+                        const d = imgData.data;
+
+                        const rT = parseInt(cleanHex.slice(0, 2), 16) || 200;
+                        const gT = parseInt(cleanHex.slice(2, 4), 16) || 50;
+                        const bT = parseInt(cleanHex.slice(4, 6), 16) || 50;
+
+                        for (let p = 0; p < d.length; p += 4) {
+                            const a = d[p + 3];
+                            if (a > 15) {
+                                const r = d[p], g = d[p + 1], b = d[p + 2];
+                                const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                                const maxC = Math.max(r, g, b);
+                                const minC = Math.min(r, g, b);
+                                const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
+
+                                // No tintar sombras oscuras / neumáticos / fibra de carbono (lum < 30)
+                                // ni reflejos blancos del parabrisas (lum > 230 con muy baja saturación)
+                                if (lum > 30 && !(lum > 230 && sat < 0.12)) {
+                                    const blend = Math.min(1.0, Math.max(0.40, sat * 1.15));
+                                    d[p] = Math.round(r * (1 - blend) + ((rT * lum) / 255) * blend);
+                                    d[p + 1] = Math.round(g * (1 - blend) + ((gT * lum) / 255) * blend);
+                                    d[p + 2] = Math.round(b * (1 - blend) + ((bT * lum) / 255) * blend);
+                                }
+                            }
+                        }
+                        ctx.putImageData(imgData, 0, 0);
+
+                        if (scene.textures.exists(customKey)) scene.textures.remove(customKey);
+                        scene.textures.addCanvas(customKey, cv);
+                        return customKey;
+                    }
+                }
+            }
+        }
+    } catch(e) {
+        console.warn('Error tintando coche GT3:', e);
     }
-    if (scene.textures.exists('hd_tire_src')) {
-        cleanWhiteBg(scene.textures.get('hd_tire_src').getSourceImage(), 'dt_tire', 240, 0.50);
+
+    return scene.textures.exists(baseKey) ? baseKey : fallbackKey;
+}
+
+// Inicializar partículas climáticas dinámicas según bioma
+function initWeatherParticles(biome) {
+    weatherParticles = [];
+    const count = 45;
+    for (let i = 0; i < count; i++) {
+        weatherParticles.push({
+            x: Math.random() * 960,
+            y: Math.random() * 540,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: 1.5 + Math.random() * 2.5,
+            size: 1.5 + Math.random() * 2.5,
+            alpha: 0.3 + Math.random() * 0.5,
+            wiggle: Math.random() * Math.PI * 2
+        });
     }
-    if (scene.textures.exists('hd_rock_src')) {
-        cleanWhiteBg(scene.textures.get('hd_rock_src').getSourceImage(), 'dt_rock', 242, 0.45);
-    }
-    if (scene.textures.exists('hd_bush_src')) {
-        cleanWhiteBg(scene.textures.get('hd_bush_src').getSourceImage(), 'dt_bushArea', 240, 0.40);
-    }
+}
+
+// Generar texturas HD profesionales de cartelería, vallas, Tecpro y pórtico
+function buildProRacingEnvironmentTextures(scene) {
+    if (!scene || !scene.textures || typeof document === 'undefined' || !document.createElement) return;
+
+    const makeTex = (key, w, h, drawFn) => {
+        try {
+            if (scene.textures.exists(key)) return;
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const ctx = cv.getContext ? cv.getContext('2d') : null;
+            if (!ctx) return;
+            drawFn(ctx, w, h);
+            scene.textures.addCanvas(key, cv);
+        } catch(e) {}
+    };
+
+    // 1. Valla PIRELLI (Amarillo y Rojo Motorsport)
+    makeTex('dt_billboard_pirelli', 130, 36, (ctx, w, h) => {
+        ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#facc15'; ctx.fillRect(2, 2, w - 4, 3); ctx.fillRect(2, h - 5, w - 4, 3);
+        ctx.font = '900 18px Arial Black, sans-serif';
+        ctx.fillStyle = '#dc2626'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('PIRELLI', w / 2, h / 2);
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1; ctx.strokeText('PIRELLI', w / 2, h / 2);
+    });
+
+    // 2. Valla BREMBO (Rojo y Blanco)
+    makeTex('dt_billboard_brembo', 130, 36, (ctx, w, h) => {
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(4, 4, 14, 14);
+        ctx.beginPath(); ctx.arc(11, 11, 5, 0, Math.PI * 2); ctx.fillStyle = '#dc2626'; ctx.fill();
+        ctx.font = 'bold 17px Arial, sans-serif';
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('brembo', w / 2 + 8, h / 2);
+    });
+
+    // 3. Valla MOTUL 300V
+    makeTex('dt_billboard_motul', 130, 36, (ctx, w, h) => {
+        ctx.fillStyle = '#be123c'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#ffffff'; ctx.beginPath();
+        ctx.moveTo(10, 0); ctx.lineTo(w - 10, 0); ctx.lineTo(w - 20, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+        ctx.font = '900 18px Arial Black, sans-serif';
+        ctx.fillStyle = '#be123c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('MOTUL', w / 2 - 10, h / 2);
+        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 11px Arial'; ctx.fillText('300V', w - 24, h / 2);
+    });
+
+    // 4. Valla DUSTRAC GT (Carbon & Neon Cyan)
+    makeTex('dt_billboard_dustrac', 130, 36, (ctx, w, h) => {
+        ctx.fillStyle = '#090d16'; ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#00f5d4'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, w - 2, h - 2);
+        ctx.font = '900 16px Arial, sans-serif';
+        ctx.fillStyle = '#00f5d4'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('DUSTRAC GT', w / 2, h / 2);
+    });
+
+    // 5. Valla MICHELIN (Azul Real y Amarillo)
+    makeTex('dt_billboard_michelin', 130, 36, (ctx, w, h) => {
+        ctx.fillStyle = '#1d4ed8'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#fde047'; ctx.fillRect(0, h - 6, w, 6);
+        ctx.font = '900 16px Arial, sans-serif';
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('MICHELIN', w / 2, h / 2 - 2);
+    });
+
+    // 6. Valla BADLANDS APEX (Negro y Oro)
+    makeTex('dt_billboard_badlands', 130, 36, (ctx, w, h) => {
+        ctx.fillStyle = '#18181b'; ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 1.5; ctx.strokeRect(2, 2, w - 4, h - 4);
+        ctx.font = '900 15px Arial, sans-serif';
+        ctx.fillStyle = '#fbbf24'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('BADLANDS APEX', w / 2, h / 2);
+    });
+
+    // 7. Barrera de Seguridad Tecpro (Rojo y Blanco)
+    makeTex('dt_tecpro_barrier', 96, 26, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, w, h);
+        const segW = 16;
+        for (let x = 0; x < w; x += segW) {
+            const isRed = (x / segW) % 2 === 0;
+            ctx.fillStyle = isRed ? '#dc2626' : '#ffffff';
+            ctx.fillRect(x + 1, 2, segW - 2, h - 4);
+            ctx.fillStyle = isRed ? '#991b1b' : '#cbd5e1';
+            ctx.fillRect(x + 1, h - 6, segW - 2, 4);
+        }
+        ctx.fillStyle = '#111827'; ctx.fillRect(0, 0, w, 2); ctx.fillRect(0, h - 2, w, 2);
+    });
+
+    // 7.1 Quitamiedos Metálico de Doble Onda Armco (256px y 96px)
+    makeTex('dt_armco_long', 256, 22, (ctx, w, h) => {
+        // Base de sombra metálica
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, w, h);
+        // Chapa ondulada galvanizada
+        ctx.fillStyle = '#94a3b8'; ctx.fillRect(0, 2, w, h - 4);
+        ctx.fillStyle = '#cbd5e1'; ctx.fillRect(0, 4, w, 4); // Brillo superior
+        ctx.fillStyle = '#64748b'; ctx.fillRect(0, 11, w, 5); // Hendidura de onda
+        ctx.fillStyle = '#e2e8f0'; ctx.fillRect(0, 16, w, 2); // Reborde inferior
+        // Postes verticales y reflectores cada 32px
+        for (let x = 8; x < w; x += 32) {
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 2, 0, 4, h); // Poste de acero
+            ctx.fillStyle = '#38bdf8'; ctx.fillRect(x - 1, 2, 2, 4); // Reflector azul/blanco
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(x - 1, 14, 2, 4); // Reflector rojo
+        }
+    });
+
+    makeTex('dt_armco_short', 96, 22, (ctx, w, h) => {
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#94a3b8'; ctx.fillRect(0, 2, w, h - 4);
+        ctx.fillStyle = '#cbd5e1'; ctx.fillRect(0, 4, w, 4);
+        ctx.fillStyle = '#64748b'; ctx.fillRect(0, 11, w, 5);
+        ctx.fillStyle = '#e2e8f0'; ctx.fillRect(0, 16, w, 2);
+        for (let x = 8; x < w; x += 24) {
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(x - 2, 0, 4, h);
+            ctx.fillStyle = '#38bdf8'; ctx.fillRect(x - 1, 2, 2, 4);
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(x - 1, 14, 2, 4);
+        }
+    });
+
+    // 8. Flechas de Horquilla Chevron (>>>)
+    makeTex('dt_corner_chevron', 48, 32, (ctx, w, h) => {
+        ctx.fillStyle = '#090d16'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#facc15'; ctx.fillRect(2, 2, w - 4, h - 4);
+        ctx.fillStyle = '#090d16';
+        [8, 22, 36].forEach(cx => {
+            ctx.beginPath();
+            ctx.moveTo(cx - 5, 6); ctx.lineTo(cx + 3, 16); ctx.lineTo(cx - 5, 26);
+            ctx.lineTo(cx - 1, 26); ctx.lineTo(cx + 7, 16); ctx.lineTo(cx - 1, 6);
+            ctx.closePath(); ctx.fill();
+        });
+    });
+
+    // 9. Puesto de Comisario con Bandera
+    makeTex('dt_marshal_stand', 52, 52, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(8, 8, 36, 36);
+        ctx.fillStyle = '#334155'; ctx.fillRect(10, 10, 32, 32);
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2; ctx.strokeRect(10, 10, 32, 32);
+        ctx.fillStyle = '#ea580c'; ctx.beginPath(); ctx.arc(26, 26, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#22c55e'; ctx.fillRect(32, 12, 12, 8);
+    });
+
+    // 10. Pórtico de Meta Elevado (Gantry Truss)
+    makeTex('dt_gantry_overhead', 280, 52, (ctx, w, h) => {
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#475569'; ctx.lineWidth = 1.5; ctx.strokeRect(1, 1, w - 2, h - 2);
+        for (let x = 10; x < w; x += 24) {
+            ctx.beginPath(); ctx.moveTo(x, 2); ctx.lineTo(x + 16, h - 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + 16, 2); ctx.lineTo(x, h - 2); ctx.stroke();
+        }
+        ctx.fillStyle = '#090d16'; ctx.fillRect(50, 8, 180, 36);
+        ctx.strokeStyle = '#00f5d4'; ctx.lineWidth = 2; ctx.strokeRect(50, 8, 180, 36);
+        ctx.font = '900 16px Arial Black, sans-serif';
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('START  🏁  FINISH', w / 2, h / 2 - 4);
+        ctx.font = 'bold 9px Arial, sans-serif';
+        ctx.fillStyle = '#00f5d4'; ctx.fillText('DUSTRAC WORLD CHAMPIONSHIP', w / 2, h / 2 + 10);
+        [240, 248, 256, 264, 272].forEach(lx => {
+            ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(lx, 26, 3, 0, Math.PI * 2); ctx.fill();
+        });
+        [8, 16, 24, 32, 40].forEach(lx => {
+            ctx.fillStyle = '#22c55e'; ctx.beginPath(); ctx.arc(lx, 26, 3, 0, Math.PI * 2); ctx.fill();
+        });
+    });
+
+    // 11. Arcos y Pórticos de Patrocinio de lado a lado sobre la pista (280x52px)
+    const makeOverheadArch = (key, drawBrandBanner) => {
+        makeTex(key, 280, 52, (ctx, w, h) => {
+            // Estructura de celosía metálica de acero
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = '#475569'; ctx.lineWidth = 1.5; ctx.strokeRect(1, 1, w - 2, h - 2);
+
+            // Celosía cruzada
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.2;
+            for (let x = 8; x < w; x += 20) {
+                ctx.beginPath(); ctx.moveTo(x, 2); ctx.lineTo(x + 14, h - 2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x + 14, 2); ctx.lineTo(x, h - 2); ctx.stroke();
+            }
+
+            // Pilar izquierdo sobre el césped
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, 36, h);
+            ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.strokeRect(2, 2, 32, h - 4);
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(5, 6, 26, 6); ctx.fillRect(5, 22, 26, 6); ctx.fillRect(5, 38, 26, 6);
+
+            // Pilar derecho sobre el césped
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(w - 36, 0, 36, h);
+            ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.strokeRect(w - 34, 2, 32, h - 4);
+            ctx.fillStyle = '#facc15';
+            ctx.fillRect(w - 31, 6, 26, 6); ctx.fillRect(w - 31, 22, 26, 6); ctx.fillRect(w - 31, 38, 26, 6);
+
+            // Panel central de patrocinador (ancho 200px, centrado sobre el asfalto)
+            const bx = 40, by = 6, bw = 200, bh = 40;
+            ctx.save();
+            ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
+            drawBrandBanner(ctx, bx, by, bw, bh);
+            ctx.restore();
+
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.strokeRect(bx, by, bw, bh);
+        });
+    };
+
+    // MOTUL 300V Arch
+    makeOverheadArch('dt_arch_motul', (ctx, bx, by, bw, bh) => {
+        ctx.fillStyle = '#be123c'; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#ffffff'; ctx.beginPath();
+        ctx.moveTo(bx + 14, by); ctx.lineTo(bx + bw - 14, by); ctx.lineTo(bx + bw - 28, by + bh); ctx.lineTo(bx, by + bh);
+        ctx.closePath(); ctx.fill();
+        ctx.font = '900 20px Arial Black, sans-serif';
+        ctx.fillStyle = '#be123c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('MOTUL', bx + bw / 2 - 16, by + bh / 2);
+        ctx.fillStyle = '#0f172a'; ctx.font = '900 13px Arial';
+        ctx.fillText('300V', bx + bw - 32, by + bh / 2);
+    });
+
+    // PIRELLI Arch
+    makeOverheadArch('dt_arch_pirelli', (ctx, bx, by, bw, bh) => {
+        ctx.fillStyle = '#0a0a0a'; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#facc15'; ctx.fillRect(bx, by, bw, 3); ctx.fillRect(bx, by + bh - 4, bw, 3);
+        ctx.font = '900 21px Arial Black, sans-serif';
+        ctx.fillStyle = '#dc2626'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('PIRELLI', bx + bw / 2, by + bh / 2);
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1; ctx.strokeText('PIRELLI', bx + bw / 2, by + bh / 2);
+    });
+
+    // MICHELIN Arch
+    makeOverheadArch('dt_arch_michelin', (ctx, bx, by, bw, bh) => {
+        ctx.fillStyle = '#1d4ed8'; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#fde047'; ctx.fillRect(bx, by + bh - 6, bw, 6);
+        ctx.font = '900 20px Arial, sans-serif';
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('MICHELIN', bx + bw / 2, by + bh / 2 - 2);
+    });
+
+    // BREMBO Arch
+    makeOverheadArch('dt_arch_brembo', (ctx, bx, by, bw, bh) => {
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(bx, by, bw, bh);
+        ctx.font = '900 19px Arial, sans-serif';
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('brembo RACING', bx + bw / 2, by + bh / 2);
+    });
+
+    // CASTROL EDGE Arch
+    makeOverheadArch('dt_arch_castrol', (ctx, bx, by, bw, bh) => {
+        ctx.fillStyle = '#059669'; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(bx, by, bw, 3);
+        ctx.font = '900 19px Arial Black, sans-serif';
+        ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('CASTROL EDGE', bx + bw / 2, by + bh / 2);
+    });
+
+    // BADLANDS APEX Arch
+    makeOverheadArch('dt_arch_badlands', (ctx, bx, by, bw, bh) => {
+        ctx.fillStyle = '#111827'; ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.strokeRect(bx + 2, by + 2, bw - 4, bh - 4);
+        ctx.font = '900 18px Arial, sans-serif';
+        ctx.fillStyle = '#fbbf24'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('BADLANDS APEX GP', bx + bw / 2, by + bh / 2);
+    });
+}
+
+// Genera texturas HD fotorrealistas de césped y grava de forma instantánea sin bloqueos
+function buildHDEnvironmentTextures(scene) {
+    // 1. Césped HD Fotorrealista (Mowed Lawn)
+    try {
+        if (scene.textures.exists('hd_grass_src')) {
+            const src = scene.textures.get('hd_grass_src').getSourceImage();
+            if (src && src.width) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(src, 0, 0, 512, 512);
+                if (scene.textures.exists('dt_grass')) scene.textures.remove('dt_grass');
+                scene.textures.addCanvas('dt_grass', canvas);
+            }
+        }
+    } catch(e) { console.warn('hd_grass_src warn:', e); }
+
+    // 2. Gravilla / Arena HD de Escapatoria (Gravel Runoff)
+    try {
+        if (scene.textures.exists('hd_sand_src')) {
+            const src = scene.textures.get('hd_sand_src').getSourceImage();
+            if (src && src.width) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(src, 0, 0, 512, 512);
+                if (scene.textures.exists('dt_sand')) scene.textures.remove('dt_sand');
+                scene.textures.addCanvas('dt_sand', canvas);
+            }
+        }
+    } catch(e) { console.warn('hd_sand_src warn:', e); }
+
+    // NOTA: Los objetos ambientales (dt_tree, dt_grandstand, dt_tire, dt_rock, dt_bushArea)
+    // usan directamente sus texturas transparentes nativas pre-cargadas de assets/dustrac_clean/,
+    // evitando bucles de flood-fill de CPU en el hilo principal que provocaban la pantalla en negro.
 }
 
 // Remasteriza las piezas de asfalto y pianos de Dust Racing 2D con textura moderna
@@ -753,6 +1522,47 @@ function buildHDRoadTextures(scene) {
         }
 
         ctx.putImageData(imgData, 0, 0);
+
+        if (tileKey === 'dt_corner90') {
+            // Dibujar piano semicircular FIA profesional en el borde interior de la curva
+            const cx = w, cy = h;
+            const rInner = 60;
+            const rOuter = 96;
+            const totalStripes = 14;
+            for (let s = 0; s < totalStripes; s++) {
+                const startAng = Math.PI + (s / totalStripes) * (Math.PI / 2);
+                const endAng = Math.PI + ((s + 1) / totalStripes) * (Math.PI / 2);
+                const isRed = (s % 2 === 0);
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, rOuter, startAng, endAng, false);
+                ctx.arc(cx, cy, rInner, endAng, startAng, true);
+                ctx.closePath();
+
+                ctx.fillStyle = isRed ? '#dc2626' : '#f8fafc';
+                ctx.fill();
+
+                // Relieve 3D biselado del piano
+                ctx.strokeStyle = isRed ? '#991b1b' : '#cbd5e1';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Borde exterior delimitador
+            ctx.beginPath();
+            ctx.arc(cx, cy, rOuter, Math.PI, Math.PI * 1.5, false);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Sombra suave proyectada sobre la hierba del interior
+            ctx.beginPath();
+            ctx.arc(cx, cy, rInner - 2, Math.PI, Math.PI * 1.5, false);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+
         scene.textures.remove(tileKey);
         scene.textures.addCanvas(tileKey, canvas);
     });
@@ -882,6 +1692,356 @@ function buildHDBridgeTextures(scene) {
     scene.textures.addCanvas('dt_bridge_deck', canvas);
 }
 
+// Genera texturas HD y elementos procedurales para los distintos biomas (Nieve, Desierto, Ciudad, Montaña, Costa, Río y Puente de Piedra)
+function buildHDBiomeTextures(scene) {
+    if (!scene || !scene.textures) return;
+
+    // 1. BIOMA NIEVE: Suelo de Nieve y Hielo (dt_snow_ground)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 512;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 40; i++) {
+                const rx = Math.random() * 512, ry = Math.random() * 512;
+                const rad = 25 + Math.random() * 45;
+                const g = ctx.createRadialGradient(rx, ry, 5, rx, ry, rad);
+                g.addColorStop(0, 'rgba(226, 232, 240, 0.7)');
+                g.addColorStop(1, 'rgba(241, 245, 249, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(rx, ry, rad, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 350; i++) {
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 1.5, 1.5);
+            }
+            if (scene.textures.exists('dt_snow_ground')) scene.textures.remove('dt_snow_ground');
+            scene.textures.addCanvas('dt_snow_ground', cv);
+        }
+    } catch(e) { console.warn('snow ground tex error:', e); }
+
+    // 2. BIOMA NIEVE: Pino Nevado de Montaña (dt_snow_pine)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 80; cv.height = 80;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
+            ctx.beginPath(); ctx.arc(44, 46, 32, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#1e392a';
+            ctx.beginPath(); ctx.arc(40, 40, 32, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e2e8f0';
+            ctx.beginPath(); ctx.arc(40, 40, 26, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#162e22';
+            ctx.beginPath(); ctx.arc(40, 40, 20, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(40, 40, 14, 0, Math.PI * 2); ctx.fill();
+            if (scene.textures.exists('dt_snow_pine')) scene.textures.remove('dt_snow_pine');
+            scene.textures.addCanvas('dt_snow_pine', cv);
+        }
+    } catch(e) { console.warn('snow pine tex error:', e); }
+
+    // 3. BIOMA DESIERTO: Dunas de Arena Cálida (dt_desert_sand)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 512;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = '#d97706';
+            ctx.fillRect(0, 0, 512, 512);
+            for (let y = 0; y < 512; y += 18) {
+                const shift = Math.sin(y / 24) * 12;
+                ctx.fillStyle = (y % 36 === 0) ? '#b45309' : '#f59e0b';
+                ctx.globalAlpha = 0.35;
+                ctx.fillRect(0, y + shift, 512, 8);
+            }
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = '#78350f';
+            for (let i = 0; i < 400; i++) {
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 1, 1);
+            }
+            if (scene.textures.exists('dt_desert_sand')) scene.textures.remove('dt_desert_sand');
+            scene.textures.addCanvas('dt_desert_sand', cv);
+        }
+    } catch(e) { console.warn('desert sand tex error:', e); }
+
+    // 4. BIOMA DESIERTO: Cactus Gigante Saguaro (dt_cactus)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'rgba(67, 20, 7, 0.40)';
+            ctx.beginPath(); ctx.ellipse(36, 42, 22, 14, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#15803d';
+            ctx.beginPath(); ctx.arc(18, 26, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillRect(18, 26, 12, 8);
+            ctx.beginPath(); ctx.arc(46, 20, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillRect(34, 20, 12, 8);
+            ctx.fillStyle = '#166534';
+            ctx.beginPath(); ctx.arc(32, 32, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#86efac';
+            ctx.fillRect(31, 20, 2, 24);
+            ctx.fillRect(25, 24, 2, 16);
+            ctx.fillRect(37, 24, 2, 16);
+            if (scene.textures.exists('dt_cactus')) scene.textures.remove('dt_cactus');
+            scene.textures.addCanvas('dt_cactus', cv);
+        }
+    } catch(e) { console.warn('cactus tex error:', e); }
+
+    // 5. BIOMA CIUDAD: Pavimento y Aceras Urbanas (dt_city_ground)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 512;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            for (let x = 0; x <= 512; x += 64) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 512); ctx.stroke();
+            }
+            for (let y = 0; y <= 512; y += 64) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(512, y); ctx.stroke();
+            }
+            ctx.fillStyle = '#475569';
+            for (let x = 0; x < 512; x += 128) {
+                ctx.fillRect(x, 0, 4, 512);
+            }
+            if (scene.textures.exists('dt_city_ground')) scene.textures.remove('dt_city_ground');
+            scene.textures.addCanvas('dt_city_ground', cv);
+        }
+    } catch(e) { console.warn('city ground tex error:', e); }
+
+    // 6. BIOMA CIUDAD: Rascacielos Moderno con Helipuerto (dt_skyscraper)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 160; cv.height = 160;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.fillRect(10, 10, 150, 150);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 150, 150);
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(8, 8, 134, 134);
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(75, 75, 34, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = '#facc15';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('H', 75, 75);
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(16, 16, 26, 22);
+            ctx.fillRect(108, 16, 26, 22);
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath(); ctx.arc(6, 6, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(144, 6, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(6, 144, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(144, 144, 4, 0, Math.PI * 2); ctx.fill();
+            if (scene.textures.exists('dt_skyscraper')) scene.textures.remove('dt_skyscraper');
+            scene.textures.addCanvas('dt_skyscraper', cv);
+        }
+    } catch(e) { console.warn('skyscraper tex error:', e); }
+
+    // 7. BIOMA CIUDAD: Farola Doble de Autopista (dt_streetlight)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 48; cv.height = 48;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            const halo = ctx.createRadialGradient(24, 24, 4, 24, 24, 22);
+            halo.addColorStop(0, 'rgba(254, 240, 138, 0.8)');
+            halo.addColorStop(1, 'rgba(254, 240, 138, 0)');
+            ctx.fillStyle = halo;
+            ctx.beginPath(); ctx.arc(24, 24, 22, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#94a3b8';
+            ctx.beginPath(); ctx.arc(24, 24, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath(); ctx.arc(14, 24, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(34, 24, 3, 0, Math.PI * 2); ctx.fill();
+            if (scene.textures.exists('dt_streetlight')) scene.textures.remove('dt_streetlight');
+            scene.textures.addCanvas('dt_streetlight', cv);
+        }
+    } catch(e) { console.warn('streetlight tex error:', e); }
+
+    // 8. BIOMA MONTAÑA: Pradera Alpina y Laderas Rocosas (dt_mountain_ground)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 512;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = '#1c3121';
+            ctx.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 30; i++) {
+                const rx = Math.random() * 512, ry = Math.random() * 512;
+                const rw = 30 + Math.random() * 50, rh = 20 + Math.random() * 35;
+                ctx.fillStyle = '#334155';
+                ctx.beginPath(); ctx.ellipse(rx, ry, rw/2, rh/2, Math.random() * Math.PI, 0, Math.PI * 2); ctx.fill();
+            }
+            if (scene.textures.exists('dt_mountain_ground')) scene.textures.remove('dt_mountain_ground');
+            scene.textures.addCanvas('dt_mountain_ground', cv);
+        }
+    } catch(e) { console.warn('mountain ground tex error:', e); }
+
+    // 9. BIOMA COSTA: Palmera Tropical de la Riviera (dt_palm_tree)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 80; cv.height = 80;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
+            ctx.beginPath(); ctx.arc(44, 46, 30, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#059669';
+            for (let i = 0; i < 8; i++) {
+                const ang = (i * Math.PI) / 4;
+                ctx.save();
+                ctx.translate(40, 40);
+                ctx.rotate(ang);
+                ctx.beginPath();
+                ctx.ellipse(22, 0, 18, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#34d399';
+                ctx.fillRect(6, -1, 30, 2);
+                ctx.restore();
+            }
+            ctx.fillStyle = '#78350f';
+            ctx.beginPath(); ctx.arc(40, 40, 8, 0, Math.PI * 2); ctx.fill();
+            if (scene.textures.exists('dt_palm_tree')) scene.textures.remove('dt_palm_tree');
+            scene.textures.addCanvas('dt_palm_tree', cv);
+        }
+    } catch(e) { console.warn('palm tree tex error:', e); }
+
+    // 10. BIOMA COSTA: Yate / Barco en el Mar (dt_boat)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 54; cv.height = 96;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = 'rgba(2, 44, 34, 0.45)';
+            ctx.beginPath(); ctx.ellipse(30, 52, 22, 42, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.moveTo(27, 4);
+            ctx.bezierCurveTo(46, 24, 46, 80, 40, 92);
+            ctx.lineTo(14, 92);
+            ctx.bezierCurveTo(8, 80, 8, 24, 27, 4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#d97706';
+            ctx.fillRect(16, 24, 22, 54);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(18, 38, 18, 26);
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillRect(20, 40, 14, 8);
+            if (scene.textures.exists('dt_boat')) scene.textures.remove('dt_boat');
+            scene.textures.addCanvas('dt_boat', cv);
+        }
+    } catch(e) { console.warn('boat tex error:', e); }
+
+    // 11. AGUA: Mar / Océano Azul Turquesa (dt_water_ocean)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 512;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            const grad = ctx.createLinearGradient(0, 0, 512, 512);
+            grad.addColorStop(0, '#0369a1');
+            grad.addColorStop(0.5, '#0284c7');
+            grad.addColorStop(1, '#0891b2');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#e0f2fe';
+            ctx.globalAlpha = 0.35;
+            for (let y = 16; y < 512; y += 32) {
+                for (let x = 8; x < 512; x += 64) {
+                    ctx.beginPath();
+                    ctx.ellipse(x + Math.sin(y)*10, y, 22, 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.globalAlpha = 1.0;
+            if (scene.textures.exists('dt_water_ocean')) scene.textures.remove('dt_water_ocean');
+            scene.textures.addCanvas('dt_water_ocean', cv);
+        }
+    } catch(e) { console.warn('ocean tex error:', e); }
+
+    // 12. AGUA: Río Fluvial Agua Dulce (dt_water_river)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 256; cv.height = 256;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillStyle = '#38bdf8';
+            ctx.globalAlpha = 0.40;
+            for (let y = 8; y < 256; y += 20) {
+                ctx.fillRect(0, y + Math.sin(y)*4, 256, 6);
+            }
+            ctx.globalAlpha = 1.0;
+            if (scene.textures.exists('dt_water_river')) scene.textures.remove('dt_water_river');
+            scene.textures.addCanvas('dt_water_river', cv);
+        }
+    } catch(e) { console.warn('river tex error:', e); }
+
+    // 13. PUENTE DE PIEDRA: Tablero Histórico con Adoquines y Pretiles de Sillería (dt_stone_bridge_deck)
+    try {
+        const cv = document.createElement('canvas');
+        cv.width = 256; cv.height = 256;
+        const ctx = cv.getContext('2d');
+        if (ctx) {
+            ctx.clearRect(0, 0, 256, 256);
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(0, 44, 256, 168);
+            for (let y = 46; y < 210; y += 12) {
+                const rowShift = (y % 24 === 0) ? 0 : 8;
+                for (let x = -8 + rowShift; x < 256; x += 16) {
+                    ctx.fillStyle = (Math.random() > 0.5) ? '#475569' : '#3f4c5e';
+                    ctx.fillRect(x + 1, y + 1, 14, 10);
+                }
+            }
+            ctx.fillStyle = '#cbd5e1';
+            for (let x = 8; x < 256; x += 32) {
+                ctx.fillRect(x, 126, 16, 4);
+            }
+            [26, 212].forEach(py => {
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(0, py - 2, 256, 22);
+                ctx.fillStyle = '#64748b';
+                ctx.fillRect(0, py, 256, 18);
+                ctx.fillStyle = '#334155';
+                for (let x = 0; x < 256; x += 28) {
+                    ctx.fillRect(x, py, 2, 18);
+                }
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillRect(0, py, 256, 4);
+            });
+            if (scene.textures.exists('dt_stone_bridge_deck')) scene.textures.remove('dt_stone_bridge_deck');
+            scene.textures.addCanvas('dt_stone_bridge_deck', cv);
+        }
+    } catch(e) { console.warn('stone bridge tex error:', e); }
+}
+
+// Determinar el bioma del circuito
+function getTrackBiome(track) {
+    if (!track) return 'grassland';
+    if (track.biome) return track.biome;
+    const id = (track.id || '').toLowerCase();
+    if (id.includes('nordkette') || id.includes('snow') || id.includes('winter') || id.includes('ice')) return 'snow';
+    if (id.includes('desert') || id.includes('sandstorm') || id.includes('badlands') || id.includes('western') || id.includes('dune')) return 'desert';
+    if (id.includes('tokyo') || id.includes('city') || id.includes('twister') || id.includes('urban')) return 'city';
+    if (id.includes('riviera') || id.includes('coast') || id.includes('beach') || id.includes('monaco')) return 'coast';
+    if (id.includes('red_rock') || id.includes('crossroads') || id.includes('figure8') || id.includes('bridge') || id.includes('river')) return 'river_stone_bridge';
+    if (id.includes('schwarzwald') || id.includes('twineburg') || id.includes('mountain') || id.includes('pass') || id.includes('alpine')) return 'mountain';
+    return 'grassland';
+}
+
 function dustCreate() {
     raceScene = this;
     window.raceScene = this;
@@ -889,19 +2049,29 @@ function dustCreate() {
     try { buildHDEnvironmentTextures(this); } catch(e) { console.warn('HD env tex build error:', e); }
     try { buildHDRoadTextures(this); } catch(e) { console.warn('HD road tex build error:', e); }
     try { buildHDBridgeTextures(this); } catch(e) { console.warn('HD bridge tex build error:', e); }
+    try { buildHDBiomeTextures(this); } catch(e) { console.warn('HD biome tex build error:', e); }
 
-    // Configuración de Teclado
-    keys = this.input.keyboard.addKeys({
-        up: Phaser.Input.Keyboard.KeyCodes.UP,
-        down: Phaser.Input.Keyboard.KeyCodes.DOWN,
-        left: Phaser.Input.Keyboard.KeyCodes.LEFT,
-        right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-        w: Phaser.Input.Keyboard.KeyCodes.W,
-        s: Phaser.Input.Keyboard.KeyCodes.S,
-        a: Phaser.Input.Keyboard.KeyCodes.A,
-        d: Phaser.Input.Keyboard.KeyCodes.D,
-        space: Phaser.Input.Keyboard.KeyCodes.SPACE
-    });
+    // Configuración de Teclado (con salvaguarda para móviles y Telegram WebApp)
+    if (this.input && this.input.keyboard && Phaser.Input && Phaser.Input.Keyboard && Phaser.Input.Keyboard.KeyCodes) {
+        try {
+            keys = this.input.keyboard.addKeys({
+                up: Phaser.Input.Keyboard.KeyCodes.UP,
+                down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+                left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+                right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+                w: Phaser.Input.Keyboard.KeyCodes.W,
+                s: Phaser.Input.Keyboard.KeyCodes.S,
+                a: Phaser.Input.Keyboard.KeyCodes.A,
+                d: Phaser.Input.Keyboard.KeyCodes.D,
+                space: Phaser.Input.Keyboard.KeyCodes.SPACE,
+                shift: Phaser.Input.Keyboard.KeyCodes.SHIFT
+            }) || {};
+        } catch(e) {
+            keys = {};
+        }
+    } else {
+        keys = {};
+    }
 
     setupTouchControls();
     showMenu(this);
@@ -922,12 +2092,48 @@ function setupTouchControls() {
     bindTouch('btn-right', () => touchRight = true, () => touchRight = false);
     bindTouch('btn-accel', () => touchGas = true, () => touchGas = false);
     bindTouch('btn-brake', () => touchBrake = true, () => touchBrake = false);
+    bindTouch('btn-handbrake', () => touchHandbrake = true, () => touchHandbrake = false);
 }
 
 // ===== MENÚ PRINCIPAL: MODO HISTORIA Y CARRERA LIBRE =====
 function showMenu(scene) {
+    if (!scene || !scene.children || typeof scene.children.removeAll !== 'function') {
+        setTimeout(() => {
+            const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
+            if (sc && sc.children && typeof sc.children.removeAll === 'function') {
+                showMenu(sc);
+            }
+        }, 100);
+        return;
+    }
     gameState = 'MENU';
     scene.children.removeAll();
+
+    // 1. Resetear completamente la cámara al origen de pantalla (0, 0), zoom 1:1 y desvincularla del coche
+    if (scene.cameras && scene.cameras.main) {
+        if (typeof scene.cameras.main.stopFollow === 'function') scene.cameras.main.stopFollow();
+        if (typeof scene.cameras.main.setScroll === 'function') scene.cameras.main.setScroll(0, 0);
+        if (typeof scene.cameras.main.setZoom === 'function') scene.cameras.main.setZoom(1);
+        if (typeof scene.cameras.main.setBounds === 'function') scene.cameras.main.setBounds(0, 0, 960, 540);
+        if (typeof scene.cameras.main.setBackgroundColor === 'function') scene.cameras.main.setBackgroundColor('#0a0c14');
+    }
+
+    // 2. Limpiar referencias a objetos de la carrera anterior
+    playerCar = null;
+    aiCars = [];
+    trackBarriers = [];
+    trackObstacles = [];
+    skidmarks = [];
+    hudTachoGfx = null;
+    hudGearText = null;
+    hudRpmText = null;
+    hudGhostBadge = null;
+    hudDriftBadge = null;
+    hudSlipstreamBadge = null;
+    weatherGraphics = null;
+    speedLinesGraphics = null;
+    skidLayer = null;
+    gridGfx = null;
 
     // Fondo elegante estilo juego de carreras retro-moderno
     const bg = scene.add.graphics();
@@ -1114,8 +2320,8 @@ function showMenu(scene) {
                         font: 'bold 16px Arial', fill: '#fee440'
                     }).setOrigin(0.5);
 
-                    scene.add.text(cx, cy + 52, isSel ? '▶ SELECCIONADO' : 'CLICK PARA SELECCIONAR', {
-                        font: 'bold 10px Arial', fill: isSel ? '#ffffff' : '#00e676'
+                    scene.add.text(cx, cy + 52, isSel ? '▶ SELECCIONADO (CORRER)' : '▶ CLIC PARA CORRER', {
+                        font: 'bold 10px Arial', fill: isSel ? '#00f5d4' : '#00e676'
                     }).setOrigin(0.5);
 
                     const hit = scene.add.rectangle(cx, cy, 210, 130).setInteractive({ useHandCursor: true });
@@ -1123,7 +2329,8 @@ function showMenu(scene) {
                         dustAudio.init();
                         currentTrackId = t.id;
                         isCurrentRaceStory = true;
-                        showMenu(scene);
+                        // Iniciar la carrera inmediatamente con el circuito pulsado
+                        startRace(scene, t.id, selectedCarIndex, selectedTimeOfDay, true);
                     });
                 } else {
                     scene.add.text(cx, cy - 22, '🔒 BLOQUEADO', {
@@ -1171,7 +2378,8 @@ function showMenu(scene) {
                         dustAudio.init();
                         currentTrackId = t.id;
                         isCurrentRaceStory = true;
-                        showMenu(scene);
+                        // Iniciar la carrera inmediatamente con el circuito pulsado
+                        startRace(scene, t.id, selectedCarIndex, selectedTimeOfDay, true);
                     });
                 } else {
                     scene.add.text(cx - 120, cy - 8, `🔒 ${idx + 1}. ${t.name}`, {
@@ -1266,7 +2474,7 @@ function showMenu(scene) {
                 dustAudio.init();
                 currentTrackId = t.id;
                 isCurrentRaceStory = false;
-                showMenu(scene);
+                startRace(scene, t.id, selectedCarIndex, selectedTimeOfDay, false);
             });
         });
 
@@ -1380,34 +2588,159 @@ function showMenu(scene) {
 }
 
 // ===== INICIAR CARRERA Y CONSTRUIR MUNDO DUSTRAC OFICIAL =====
-function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
+function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = false) {
+    if (!scene || !scene.children || typeof scene.children.removeAll !== 'function') {
+        console.warn('Escena no preparada todavía para startRace. Reintentando...');
+        setTimeout(() => {
+            const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
+            if (sc && sc.children && typeof sc.children.removeAll === 'function') {
+                startRace(sc, trackId, carIdx, timeOfDay, isStory);
+            }
+        }, 100);
+        return;
+    }
+
     scene.children.removeAll();
 
+    raceScene = scene;
+    window.raceScene = scene;
+
+    currentTrackId = trackId;
     selectedTimeOfDay = timeOfDay;
     isCurrentRaceStory = isStory;
+    selectedCarIndex = carIdx;
 
     const tracks = window.DustracTracks || {};
-    const track = tracks[trackId];
+    let track = tracks[trackId] || tracks['rookie_ring'] || Object.values(tracks)[0];
     if (!track) {
         console.error('Circuito no encontrado:', trackId);
         return;
     }
+    trackId = track.id || trackId;
+    currentTrackId = trackId;
 
     gameState = 'COUNTDOWN';
     console.log(`🏁 Cargando nivel oficial: ${track.name} (${track.worldWidth}x${track.worldHeight}px)`);
 
-    // Límites de físicas y cámara del mundo
+    // Límites de físicas del mundo y cámara sin bloqueo perimetral
     scene.physics.world.setBounds(0, 0, track.worldWidth, track.worldHeight);
-    scene.cameras.main.setBounds(0, 0, track.worldWidth, track.worldHeight);
+    scene.cameras.main.setBounds(-2500, -2500, track.worldWidth + 5000, track.worldHeight + 5000);
+    scene.cameras.main.setBackgroundColor('#0d121d');
+    scene.cameras.main.setZoom(1.1);
 
-    // 1. TERRENO BASE: Césped Oficial de Dust Racing 2D
+    // 1. TERRENO BASE Y BIOMA AMBIENTAL (Nieve, Desierto, Ciudad, Montaña, Costa, Río y Puente de Piedra)
+    const biome = getTrackBiome(track);
+    let baseGroundKey = 'dt_grass';
+    if (biome === 'snow') baseGroundKey = 'dt_snow_ground';
+    else if (biome === 'desert') baseGroundKey = 'dt_desert_sand';
+    else if (biome === 'city') baseGroundKey = 'dt_city_ground';
+    else if (biome === 'mountain') baseGroundKey = 'dt_mountain_ground';
+    else if (biome === 'coast') baseGroundKey = 'dt_sand';
+    else if (biome === 'river_stone_bridge') baseGroundKey = 'dt_grass';
+
     scene.add.tileSprite(
         track.worldWidth / 2,
         track.worldHeight / 2,
         track.worldWidth,
         track.worldHeight,
-        'dt_grass'
+        baseGroundKey
     ).setDepth(0);
+
+    // DECORADO ESPECIAL: COSTA Y OCÉANO AZUL TURQUESA (biome === 'coast')
+    if (biome === 'coast') {
+        const oceanH = Math.min(880, Math.floor(track.worldHeight * 0.36));
+        const ocean = scene.add.tileSprite(
+            track.worldWidth / 2,
+            oceanH / 2,
+            track.worldWidth,
+            oceanH,
+            'dt_water_ocean'
+        ).setDepth(0.3);
+
+        scene.tweens.add({
+            targets: ocean,
+            tilePositionX: 512,
+            duration: 18000,
+            repeat: -1,
+            ease: 'Linear'
+        });
+
+        // Yates y veleros de lujo fondeados en el mar
+        for (let b = 0; b < 6; b++) {
+            const bx = 320 + (b * (track.worldWidth - 640) / 5);
+            const by = oceanH * 0.35 + (b % 2) * 55;
+            const boat = scene.add.sprite(bx, by, 'dt_boat').setDepth(0.5).setAngle(b % 2 === 0 ? 30 : -25);
+            scene.tweens.add({
+                targets: boat,
+                angle: boat.angle + 4,
+                y: by + 6,
+                duration: 2600 + b * 250,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    }
+
+    // DECORADO ESPECIAL: RÍO FLUVIAL CON AGUA AZUL (biome === 'river_stone_bridge')
+    if (biome === 'river_stone_bridge') {
+        const bridgeTile = track.tiles.find(t => t.t === 'bridge');
+        const riverX = bridgeTile ? (bridgeTile.i * 256 + 128) : (track.worldWidth / 2);
+        const river = scene.add.tileSprite(
+            riverX,
+            track.worldHeight / 2,
+            280,
+            track.worldHeight,
+            'dt_water_river'
+        ).setDepth(0.3);
+
+        // Orillas de piedra del río
+        scene.add.rectangle(riverX - 144, track.worldHeight / 2, 8, track.worldHeight, 0x475569, 0.85).setDepth(0.4);
+        scene.add.rectangle(riverX + 144, track.worldHeight / 2, 8, track.worldHeight, 0x475569, 0.85).setDepth(0.4);
+
+        scene.tweens.add({
+            targets: river,
+            tilePositionY: 256,
+            duration: 9000,
+            repeat: -1,
+            ease: 'Linear'
+        });
+    }
+
+    // DECORADO ESPECIAL: RASCACIELOS Y EDIFICIOS URBANOS PERIFÉRICOS (biome === 'city')
+    if (biome === 'city') {
+        const citySpots = [
+            { x: 180, y: 180 }, { x: track.worldWidth - 180, y: 180 },
+            { x: 180, y: track.worldHeight - 180 }, { x: track.worldWidth - 180, y: track.worldHeight - 180 },
+            { x: track.worldWidth / 2, y: 160 }, { x: track.worldWidth / 2, y: track.worldHeight - 160 }
+        ];
+        citySpots.forEach(sp => {
+            if (sp.x > 0 && sp.x < track.worldWidth && sp.y > 0 && sp.y < track.worldHeight) {
+                scene.add.sprite(sp.x, sp.y, 'dt_skyscraper').setDisplaySize(180, 180).setDepth(10);
+            }
+        });
+    }
+
+    // DECORADO ESPECIAL: VENTISCA DE COPOS DE NIEVE (biome === 'snow')
+    if (biome === 'snow') {
+        for (let s = 0; s < 45; s++) {
+            const sx = Math.random() * track.worldWidth;
+            const sy = Math.random() * track.worldHeight;
+            const flake = scene.add.circle(sx, sy, 1.5 + Math.random() * 2, 0xffffff, 0.75).setDepth(25);
+            scene.tweens.add({
+                targets: flake,
+                x: sx + 120 + Math.random() * 80,
+                y: sy + 180 + Math.random() * 120,
+                duration: 2200 + Math.random() * 1800,
+                repeat: -1,
+                ease: 'Linear',
+                onRepeat: () => {
+                    flake.x = Math.random() * track.worldWidth;
+                    flake.y = Math.random() * track.worldHeight;
+                }
+            });
+        }
+    }
 
     // Mapa de colisiones y superficies por celda (i, j)
     scene.tileMap = new Map();
@@ -1424,15 +2757,19 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
             scene.roadTiles.push({ x: tx, y: ty, i: tile.i, j: tile.j, t: tile.t });
         }
 
-        // A) Trampas de Arena y Transiciones Oficiales
+        // A) Trampas de Arena y Escapatorias de Nieve / Grava
         if (tile.t === 'sand') {
-            scene.add.sprite(tx, ty, 'dt_sand').setDisplaySize(256, 256).setDepth(1);
+            const sandSprite = scene.add.sprite(tx, ty, 'dt_sand').setDisplaySize(256, 256).setDepth(1);
+            if (biome === 'snow') sandSprite.setTint(0xf1f5f9);
         } else if (tile.t === 'sandGrassStraight') {
-            scene.add.sprite(tx, ty, 'dt_sandGrassStraight').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            const sgSprite = scene.add.sprite(tx, ty, 'dt_sandGrassStraight').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            if (biome === 'snow') sgSprite.setTint(0xf1f5f9);
         } else if (tile.t === 'sandGrassCorner') {
-            scene.add.sprite(tx, ty, 'dt_sandGrassCorner').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            const sgSprite = scene.add.sprite(tx, ty, 'dt_sandGrassCorner').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            if (biome === 'snow') sgSprite.setTint(0xf1f5f9);
         } else if (tile.t === 'sandGrassCorner2') {
-            scene.add.sprite(tx, ty, 'dt_sandGrassCorner2').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            const sgSprite = scene.add.sprite(tx, ty, 'dt_sandGrassCorner2').setDisplaySize(256, 256).setAngle(tile.o).setDepth(1);
+            if (biome === 'snow') sgSprite.setTint(0xf1f5f9);
         }
 
         // B) Segmentos de Asfalto con Pianos Oficiales Limpios (Transparencia Perfecta)
@@ -1451,25 +2788,25 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
         } else if (tile.t === 'straight45Female') {
             scene.add.sprite(tx, ty, 'dt_straight45Female').setDisplaySize(256, 256).setAngle(tile.o).setDepth(2);
         } else if (tile.t === 'bridge') {
-            // El puente elevado cruza a desnivel sobre la pista:
-            // En Suzuka y Crossroads el tablero elevado transcurre de Norte a Sur (90 deg),
-            // y la calzada inferior del túnel transcurre de Este a Oeste (0 deg).
+            // El puente elevado cruza a desnivel sobre la pista o sobre el río:
+            const isStoneBridge = (biome === 'river_stone_bridge');
+            const deckTexture = isStoneBridge ? 'dt_stone_bridge_deck' : 'dt_bridge_deck';
             const deckAngle = 90;
             const underAngle = 0;
 
-            // 1. Asfalto inferior por el que cruzan los coches por el túnel
+            // 1. Asfalto o corriente inferior
             scene.add.sprite(tx, ty, 'dt_straight').setDisplaySize(256, 256).setAngle(underAngle).setDepth(2);
 
-            // 2. Sombra de oclusión ambiental profunda en el paso inferior del túnel
+            // 2. Sombra de oclusión ambiental profunda en el paso inferior
             scene.add.rectangle(tx, ty, 208, 256, 0x000000, 0.45).setDepth(3);
 
             // 3. Sombra arquitectónica proyectada por la altura del puente sobre el suelo
             scene.add.rectangle(tx + 14, ty + 12, 192, 256, 0x000000, 0.42).setDepth(14);
 
-            // 4. Tablero del puente elevado con textura fotorrealista HD
-            scene.add.sprite(tx, ty, 'dt_bridge_deck').setDisplaySize(256, 256).setAngle(deckAngle).setDepth(15);
+            // 4. Tablero del puente elevado con textura HD (puente de piedra o puente GP)
+            scene.add.sprite(tx, ty, deckTexture).setDisplaySize(256, 256).setAngle(deckAngle).setDepth(15);
 
-            // 5. Pilares y estribos de hormigón reforzado (Concrete Abutments) en los 4 extremos del túnel
+            // 5. Pilares y estribos de piedra o de hormigón reforzado
             const pillarW = 28;
             const pillarH = 34;
             const pillars = [
@@ -1480,26 +2817,43 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
             ];
 
             pillars.forEach(p => {
-                // Sombra del pilar
                 scene.add.rectangle(p.x + 4, p.y + 4, pillarW, pillarH, 0x000000, 0.45).setDepth(15);
-                // Bloque de hormigón con relieve y franja de seguridad FIA
                 const col = scene.add.graphics().setDepth(16);
-                col.fillStyle(0x64748b, 1);
-                col.fillRoundedRect(p.x - pillarW/2, p.y - pillarH/2, pillarW, pillarH, 4);
-                col.fillStyle(0x94a3b8, 1);
-                col.fillRect(p.x - pillarW/2 + 2, p.y - pillarH/2 + 2, pillarW - 4, 6);
-                col.fillStyle(0xfacc15, 1);
-                col.fillRect(p.x - pillarW/2 + 2, p.y + pillarH/2 - 8, pillarW - 4, 6);
-                col.fillStyle(0x0f172a, 1);
-                col.fillRect(p.x - pillarW/2 + 6, p.y + pillarH/2 - 8, 4, 6);
-                col.fillRect(p.x - pillarW/2 + 16, p.y + pillarH/2 - 8, 4, 6);
+                if (isStoneBridge) {
+                    col.fillStyle(0x475569, 1);
+                    col.fillRoundedRect(p.x - pillarW/2, p.y - pillarH/2, pillarW, pillarH, 4);
+                    col.fillStyle(0x64748b, 1);
+                    col.fillRect(p.x - pillarW/2 + 2, p.y - pillarH/2 + 2, pillarW - 4, 8);
+                } else {
+                    col.fillStyle(0x64748b, 1);
+                    col.fillRoundedRect(p.x - pillarW/2, p.y - pillarH/2, pillarW, pillarH, 4);
+                    col.fillStyle(0x94a3b8, 1);
+                    col.fillRect(p.x - pillarW/2 + 2, p.y - pillarH/2 + 2, pillarW - 4, 6);
+                    col.fillStyle(0xfacc15, 1);
+                    col.fillRect(p.x - pillarW/2 + 2, p.y + pillarH/2 - 8, pillarW - 4, 6);
+                    col.fillStyle(0x0f172a, 1);
+                    col.fillRect(p.x - pillarW/2 + 6, p.y + pillarH/2 - 8, 4, 6);
+                    col.fillRect(p.x - pillarW/2 + 16, p.y + pillarH/2 - 8, 4, 6);
+                }
+
+                // Registrar pilar de puente como obstáculo físico sólido
+                trackBarriers.push({
+                    x: p.x,
+                    y: p.y,
+                    width: pillarW,
+                    height: pillarH,
+                    angle: 0,
+                    halfW: pillarW / 2,
+                    halfH: pillarH / 2,
+                    isPillar: true
+                });
             });
 
-            // 6. Pórtico de señalización FIA / Gran Premio sobre la barandilla del puente
+            // 6. Pórtico de señalización
             const gantry = scene.add.graphics().setDepth(17);
             gantry.fillStyle(0x0f172a, 0.95);
             gantry.fillRoundedRect(tx - 70, ty - 6, 140, 12, 3);
-            gantry.lineStyle(1.5, 0x00f5d4, 1);
+            gantry.lineStyle(1.5, isStoneBridge ? 0xf59e0b : 0x00f5d4, 1);
             gantry.strokeRoundedRect(tx - 70, ty - 6, 140, 12, 3);
         }
     });
@@ -1507,13 +2861,23 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     // 3. CAPA DE MARCAS DE GOMA DE DERRAPE PERMANENTES (SKID MARKS)
     skidLayer = scene.add.graphics().setDepth(4);
 
-    // 4. OBJETOS DEL ENTORNO OFICIALES (Árboles, Tribunas, Neumáticos, Rocas)
+    // 4. OBJETOS DEL ENTORNO OFICIALES Y TEMÁTICOS SEGÚN BIOMA
     track.objects.forEach(obj => {
         if (obj.r === 'tree') {
-            // Sombra suave ambiental proyectada a 45 grados
             scene.add.ellipse(obj.x + 8, obj.y + 10, 58, 48, 0x000000, 0.40).setDepth(13);
-            const tree = scene.add.sprite(obj.x, obj.y, 'dt_tree').setDisplaySize(72, 72).setDepth(14);
-            // Balanceo sutil de viento
+            let treeKey = 'dt_tree';
+            let treeSize = 72;
+            if (biome === 'snow') {
+                treeKey = 'dt_snow_pine';
+                treeSize = 78;
+            } else if (biome === 'desert') {
+                treeKey = 'dt_cactus';
+                treeSize = 64;
+            } else if (biome === 'coast') {
+                treeKey = 'dt_palm_tree';
+                treeSize = 80;
+            }
+            const tree = scene.add.sprite(obj.x, obj.y, treeKey).setDisplaySize(treeSize, treeSize).setDepth(14);
             scene.tweens.add({
                 targets: tree,
                 angle: (Math.random() - 0.5) * 4,
@@ -1523,18 +2887,14 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
                 ease: 'Sine.easeInOut'
             });
         } else if (obj.r === 'grandstand') {
-            // Tribuna con público en alta definición:
-            // Detectamos si es una sección modular conectada (paso ~128-150px) o una tribuna aislada
             const isIsolated = !track.objects.some(other => other !== obj && other.r === 'grandstand' && Math.hypot(obj.x - other.x, obj.y - other.y) < 220);
             const gsW = isIsolated ? 230 : 160;
             const gsH = isIsolated ? 160 : 130;
 
-            // Sombra arquitectónica proyectada
             scene.add.rectangle(obj.x + 12, obj.y + 16, gsW - 5, gsH - 5, 0x000000, 0.40)
                 .setAngle(obj.o)
                 .setDepth(11);
 
-            // Sprite de grada en alta definición
             scene.add.sprite(obj.x, obj.y, 'dt_grandstand')
                 .setDisplaySize(gsW, gsH)
                 .setAngle(obj.o)
@@ -1544,37 +2904,197 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
             scene.add.sprite(obj.x, obj.y, 'dt_tire').setDisplaySize(28, 28).setAngle(obj.o).setDepth(6);
         } else if (obj.r === 'rock') {
             scene.add.ellipse(obj.x + 2, obj.y + 3, 28, 24, 0x000000, 0.38).setDepth(5);
-            scene.add.sprite(obj.x, obj.y, 'dt_rock').setDisplaySize(32, 32).setAngle(obj.o).setDepth(6);
+            const rock = scene.add.sprite(obj.x, obj.y, 'dt_rock').setDisplaySize(32, 32).setAngle(obj.o).setDepth(6);
+            if (biome === 'desert') rock.setTint(0xca8a04);
+            else if (biome === 'snow') rock.setTint(0xe2e8f0);
         } else if (obj.r === 'bushArea') {
             scene.add.ellipse(obj.x + 3, obj.y + 4, 96, 96, 0x000000, 0.30).setDepth(4);
-            scene.add.sprite(obj.x, obj.y, 'dt_bushArea').setDisplaySize(100, 100).setAngle(obj.o).setDepth(5);
+            const bush = scene.add.sprite(obj.x, obj.y, 'dt_bushArea').setDisplaySize(100, 100).setAngle(obj.o).setDepth(5);
+            if (biome === 'snow') bush.setTint(0xe2e8f0);
+            else if (biome === 'desert') bush.setTint(0xb45309);
         } else if (obj.r === 'pit') {
             scene.add.sprite(obj.x, obj.y, 'dt_pit').setDisplaySize(256, 54).setAngle(obj.o).setDepth(5);
+        } else if (obj.r === 'wallLong' || obj.r === 'wall') {
+            const isLong = (obj.r === 'wallLong');
+            const bW = isLong ? 256 : 96;
+            const bH = 22;
+            const texKey = isLong ? 'dt_armco_long' : 'dt_armco_short';
+
+            // Sombra arquitectónica bajo el quitamiedos metálico
+            scene.add.rectangle(obj.x + 3, obj.y + 4, bW, bH, 0x000000, 0.45)
+                .setAngle(obj.o)
+                .setDepth(11);
+
+            scene.add.sprite(obj.x, obj.y, texKey)
+                .setDisplaySize(bW, bH)
+                .setAngle(obj.o)
+                .setDepth(12);
+
+            // Registrar en lista de barreras físicas infranqueables
+            trackBarriers.push({
+                x: obj.x,
+                y: obj.y,
+                width: bW,
+                height: bH,
+                angle: obj.o,
+                halfW: bW / 2,
+                halfH: bH / 2,
+                isLong: isLong
+            });
+        } else if (obj.r === 'dustRacing2DBanner') {
+            scene.add.rectangle(obj.x + 3, obj.y + 4, 115, 26, 0x000000, 0.40)
+                .setAngle(obj.o)
+                .setDepth(11);
+            scene.add.sprite(obj.x, obj.y, 'dt_billboard_dustrac')
+                .setDisplaySize(115, 28)
+                .setAngle(obj.o)
+                .setDepth(12);
+        }
+    });
+
+    // 4.1 COORDENADAS OFICIALES DE SALIDA / META
+    const finishTile = track.tiles.find(t => t.t === 'finish');
+    const fx = finishTile ? finishTile.i * 256 + 128 : (track.nodes[0] ? track.nodes[0].x : 500);
+    const fy = finishTile ? finishTile.j * 256 + 128 : (track.nodes[0] ? track.nodes[0].y : 500);
+
+    let closestNodeIdx = 0, minDist = Infinity;
+    const allNodes = track.nodes || [];
+    allNodes.forEach((n, idx) => {
+        const d = Math.hypot(n.x - fx, n.y - fy);
+        if (d < minDist) { minDist = d; closestNodeIdx = idx; }
+    });
+    const nextNode = allNodes[(closestNodeIdx + 1) % allNodes.length] || { x: fx + 100, y: fy };
+    const prevNode = allNodes[(closestNodeIdx - 1 + allNodes.length) % allNodes.length] || { x: fx - 100, y: fy };
+    const flowX = nextNode.x - prevNode.x;
+    const flowY = nextNode.y - prevNode.y;
+
+    const normO = finishTile ? (((finishTile.o % 360) + 360) % 360) : 0;
+    let dirX = 0, dirY = 0, startAngleDeg = 0;
+    if (normO === 90 || normO === 270) {
+        dirX = flowX >= 0 ? 1 : -1;
+        dirY = 0;
+        startAngleDeg = dirX > 0 ? 0 : 180;
+    } else {
+        dirX = 0;
+        dirY = flowY >= 0 ? 1 : -1;
+        startAngleDeg = dirY > 0 ? 90 : -90;
+    }
+
+    const perpX = -dirY;
+    const perpY = dirX;
+
+    // 4.2 AMBIENTACIÓN MOTORSPORT PROFESIONAL Y OBJETOS REALISTAS DEL CIRCUITO
+    try { buildProRacingEnvironmentTextures(scene); } catch(e) {}
+    try { initWeatherParticles(biome); } catch(e) {}
+
+    // A) Pórtico de salida/meta elevado perfectamente perpendicular a la pista
+    if (scene.textures && scene.textures.exists('dt_gantry_overhead')) {
+        scene.add.sprite(fx, fy, 'dt_gantry_overhead')
+            .setDisplaySize(280, 52)
+            .setAngle(startAngleDeg + 90)
+            .setDepth(18);
+        scene.add.rectangle(fx - dirX * 10, fy - dirY * 10, 280, 16, 0x000000, 0.40)
+            .setAngle(startAngleDeg + 90)
+            .setDepth(3.6);
+    }
+
+    // B) Parrilla de salida con cajetines numerados en el asfalto (P1 a P6) alineados a la recta
+    const gridGfx = scene.add.graphics().setDepth(3.5);
+    const gridOffsets = [
+        { dist: 55, side: 22, pos: '1' },
+        { dist: 55, side: -22, pos: '2' },
+        { dist: 115, side: 22, pos: '3' },
+        { dist: 115, side: -22, pos: '4' },
+        { dist: 175, side: 22, pos: '5' },
+        { dist: 175, side: -22, pos: '6' }
+    ];
+
+    const boxW = (dirX !== 0) ? 44 : 30;
+    const boxH = (dirX !== 0) ? 30 : 44;
+
+    gridOffsets.forEach(box => {
+        const bx = fx - dirX * box.dist + perpX * box.side;
+        const by = fy - dirY * box.dist + perpY * box.side;
+
+        // Cajetín blanco de salida
+        gridGfx.lineStyle(2, 0xffffff, 0.85);
+        gridGfx.strokeRoundedRect(bx - boxW / 2, by - boxH / 2, boxW, boxH, 4);
+
+        // Texto del número de posición
+        const txt = scene.add.text(bx, by, box.pos, {
+            font: '900 14px Arial Black',
+            fill: '#fde047',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(3.6);
+        if (txt && typeof txt.setAngle === 'function') txt.setAngle(startAngleDeg);
+    });
+
+    // C) Trazada engomada de competición (Rubbered Racing Line) a lo largo de las curvas
+    const nodes = track.nodes || [];
+    if (nodes.length > 2 && skidLayer) {
+        skidLayer.lineStyle(26, 0x07090f, 0.22);
+        for (let i = 0; i < nodes.length; i++) {
+            const nA = nodes[i];
+            const nB = nodes[(i + 1) % nodes.length];
+            const nPrev = nodes[(i - 1 + nodes.length) % nodes.length];
+
+            const a1 = Math.atan2(nA.y - nPrev.y, nA.x - nPrev.x);
+            const a2 = Math.atan2(nB.y - nA.y, nB.x - nA.x);
+            let diffAng = Math.abs(a2 - a1);
+            if (diffAng > Math.PI) diffAng = Math.PI * 2 - diffAng;
+
+            if (diffAng > 0.18) {
+                skidLayer.lineBetween(nA.x, nA.y, nB.x, nB.y);
+            }
+        }
+    }
+
+    // D) Arcos y Pórticos de Patrocinio elevados de lado a lado (Overhead Gantries: los coches pasan por debajo)
+    const archesList = [
+        'dt_arch_motul', 'dt_arch_pirelli', 'dt_arch_michelin',
+        'dt_arch_brembo', 'dt_arch_castrol', 'dt_arch_badlands'
+    ];
+    let archIdx = 0;
+
+    track.tiles.forEach(tile => {
+        const tx = tile.i * 256 + 128;
+        const ty = tile.j * 256 + 128;
+
+        // Situar arcos de patrocinador en rectas espaciadas, lejos de la meta y de puentes
+        if (tile.t === 'straight' && (tile.i + tile.j) % 6 === 0) {
+            const archKey = archesList[archIdx % archesList.length];
+            archIdx++;
+
+            const isNearFinish = Math.hypot(tx - fx, ty - fy) < 420;
+            const hasConflict = (track.objects || []).some(obj => Math.hypot(obj.x - tx, obj.y - ty) < 140);
+
+            if (!isNearFinish && !hasConflict) {
+                // El arco mide 280px y cruza la calzada de 200px de lado a lado:
+                // Sus torres descansan sobre el césped a ambos lados y el panel central cuelga sobre la pista.
+                // - En recta vertical (o=0 u o=180): el arco cruza horizontalmente Este-Oeste (ángulo 0°).
+                // - En recta horizontal (o=90 u o=270): el arco cruza verticalmente Norte-Sur (ángulo 90°).
+                const isVerticalRoad = (tile.o === 0 || tile.o === 180);
+                const archAngle = isVerticalRoad ? 0 : 90;
+
+                // 1. Sombra arquitectónica proyectada sobre el asfalto (profundidad 3.6: los coches pasan SOBRE la sombra)
+                if (isVerticalRoad) {
+                    scene.add.rectangle(tx, ty + 12, 260, 20, 0x000000, 0.40).setDepth(3.6);
+                } else {
+                    scene.add.rectangle(tx + 12, ty, 260, 20, 0x000000, 0.40).setAngle(90).setDepth(3.6);
+                }
+
+                // 2. Arco de patrocinio elevado con torretas de seguridad (profundidad 18: los coches pasan POR DEBAJO)
+                scene.add.sprite(tx, ty, archKey)
+                    .setDisplaySize(280, 52)
+                    .setAngle(archAngle)
+                    .setDepth(18);
+            }
         }
     });
 
     // 5. PARRILLA DE SALIDA Y SPAWN DE COCHES OFICIAL
     // Ubicación oficial de meta: todos los coches salen DETRÁS de la línea de meta mirando hacia adelante
-    const finishTile = track.tiles.find(t => t.t === 'finish');
-    const fx = finishTile ? finishTile.i * 256 + 128 : (track.nodes[0] ? track.nodes[0].x : 500);
-    const fy = finishTile ? finishTile.j * 256 + 128 : (track.nodes[0] ? track.nodes[0].y : 500);
-
-    const n0 = track.nodes[0] || { x: fx, y: fy - 100 };
-    let dirX = n0.x - fx;
-    let dirY = n0.y - fy;
-    const len = Math.hypot(dirX, dirY);
-    if (len > 0.001) {
-        dirX /= len;
-        dirY /= len;
-    } else {
-        dirX = 0;
-        dirY = -1;
-    }
-    const startAngleRad = Math.atan2(dirY, dirX);
-    const startAngleDeg = Phaser.Math.RadToDeg(startAngleRad);
-
-    const perpX = -dirY;
-    const perpY = dirX;
 
     // Resetear variables de carrera
     playerLap = 1;
@@ -1582,6 +3102,9 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     playerNextNodeIdx = 0;
     bestLapTime = null;
     offTrackTimer = 0;
+    driftCharge = 0;
+    driftBoostTimer = 0;
+    raceStartTime = 0;
 
     // Coche del Jugador (Pole Position, colocado detrás de la línea de meta)
     let pCarData = DUST_CARS[carIdx] || DUST_CARS[0];
@@ -1589,16 +3112,20 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
         const nftCar = getEquippedNftCar();
         if (nftCar) {
             const perf = calculateCarPerformance(nftCar);
+            const pArch = (typeof getCarArchetype === 'function') ? getCarArchetype(nftCar) : 'lambo_wedge';
+            const coloredTex = getOrCreateColoredCarTexture(scene, nftCar.colorHex, nftCar.sprite || 'car_red', pArch);
             pCarData = {
                 id: nftCar.id,
-                texture: nftCar.sprite || 'car_red',
+                texture: coloredTex,
+                hasCustomTexture: true,
+                colorHex: nftCar.colorHex,
                 name: nftCar.name,
                 subtitle: `Niv. ${nftCar.level || 1} • ${nftCar.colorName}`,
                 speed: perf.speedKmh,
                 accel: perf.accelVal,
                 handling: perf.handlingVal,
                 braking: perf.brakingVal,
-                tint: nftCar.colorTint || nftCar.colorHex
+                tint: null
             };
         }
     }
@@ -1616,28 +3143,92 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     playerCar.targetNodeIdx = 0;
     playerCar.lastCheckpoint = -1;
 
-    // 5 Rivales con Inteligencia Artificial colocados en la parrilla detrás del jugador
+    // 5 Rivales con Selección Aleatoria, 3 Niveles de Rendimiento Equilibrados y Siluetas Únicas
     aiCars = [];
-    const rivals = DUST_CARS.filter((_, i) => i !== carIdx);
+    const AI_TIER_A = [
+        { name: "Valkyrie AMR Pro", texture: "car_blue", colorHex: "#0284c7", archetype: "le_mans_proto", speed: 430, accel: 355, handling: 4.9, driver: "Marco 'Apex' Rossi", laneOffset: -24, drivingStyle: "apex_hunter" },
+        { name: "Stuttgart Manthey 911", texture: "car_yellow", colorHex: "#facc15", archetype: "porsche_boxer", speed: 425, accel: 350, handling: 4.8, driver: "Klaus 'Precision' Weber", laneOffset: 24, drivingStyle: "sweeper" },
+        { name: "Hyperion Senna 720S", texture: "car_cyan", colorHex: "#06b6d4", archetype: "ferrari_corsa", speed: 420, accel: 345, handling: 4.9, driver: "Ayrton 'Phantom' Silva", laneOffset: -16, drivingStyle: "apex_hunter" },
+        { name: "Chiron Pur Sport Apex", texture: "car_blue", colorHex: "#1d4ed8", archetype: "bugatti_w16", speed: 432, accel: 360, handling: 4.7, driver: "Hans 'Blitz' Becker", laneOffset: 16, drivingStyle: "draft_passer" }
+    ];
+
+    const AI_TIER_B = [
+        { name: "Bavaria ROWE M4", texture: "car_green", colorHex: "#15803d", archetype: "dtm_coupe", speed: 385, accel: 310, handling: 4.6, driver: "Matteo 'Fire' Bruno", laneOffset: -18, drivingStyle: "apex_hunter" },
+        { name: "Scuderia 488 GT3", texture: "car_red", colorHex: "#e53935", archetype: "ferrari_corsa", speed: 378, accel: 305, handling: 4.5, driver: "Carlos 'Torque' Vega", laneOffset: 20, drivingStyle: "sweeper" },
+        { name: "Solaris Dames GT", texture: "car_orange", colorHex: "#ea580c", archetype: "bentley_gt3", speed: 370, accel: 298, handling: 4.7, driver: "Sophie 'Viper' Laurent", laneOffset: 0, drivingStyle: "draft_passer" }
+    ];
+
+    const AI_TIER_C = [
+        { name: "Tokyo Metro Turbo", texture: "car_pink", colorHex: "#ec4899", archetype: "jdm_supra", speed: 340, accel: 270, handling: 4.3, driver: "Kenji 'Rookie' Takahashi", laneOffset: -22, drivingStyle: "draft_passer" },
+        { name: "Britannia Mini Cup", texture: "car_pink", colorHex: "#f472b6", archetype: "hot_hatch", speed: 335, accel: 265, handling: 4.4, driver: "Elena 'Mirage' Rostova", laneOffset: 22, drivingStyle: "sweeper" },
+        { name: "Monza Urban Hatch", texture: "car_grey", colorHex: "#64748b", archetype: "rally_evo", speed: 325, accel: 255, handling: 4.2, driver: "Jean 'Cruiser' Dupont", laneOffset: -14, drivingStyle: "apex_hunter" },
+        { name: "Sahara Dune Runner", texture: "car_orange", colorHex: "#ea580c", archetype: "dakar_truck", speed: 342, accel: 272, handling: 4.1, driver: "Tarek 'Sand' Mansour", laneOffset: 14, drivingStyle: "draft_passer" }
+    ];
+
+    // Mezclar y elegir exactamente: 2 Coches Buenos (Tier A), 1 Medio (Tier B), 2 Coches Lentos (Tier C)
+    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+    const chosenA = shuffle(AI_TIER_A).slice(0, 2);
+    const chosenB = shuffle(AI_TIER_B).slice(0, 1);
+    const chosenC = shuffle(AI_TIER_C).slice(0, 2);
+    let gridRivals = shuffle([...chosenA, ...chosenB, ...chosenC]);
+
+    // Garantizar máxima diversidad táctica en la parrilla (al menos 1 cazador de ápice y 1 trazada amplia)
+    const currentStyles = gridRivals.map(r => r.drivingStyle);
+    if (!currentStyles.includes('sweeper')) {
+        const swp = [...AI_TIER_A, ...AI_TIER_B, ...AI_TIER_C].find(r => r.drivingStyle === 'sweeper');
+        if (swp) gridRivals[gridRivals.length - 1] = swp;
+    }
+    if (!currentStyles.includes('apex_hunter')) {
+        const apx = [...AI_TIER_A, ...AI_TIER_B, ...AI_TIER_C].find(r => r.drivingStyle === 'apex_hunter');
+        if (apx) gridRivals[0] = apx;
+    }
+
     for (let i = 0; i < 5; i++) {
-        const aiData = rivals[i % rivals.length];
+        const rivalDef = gridRivals[i] || AI_TIER_B[0];
+        const texKey = getOrCreateColoredCarTexture(scene, rivalDef.colorHex, rivalDef.texture, rivalDef.archetype);
+        const aiData = {
+            id: 'ai_' + i,
+            texture: texKey,
+            hasCustomTexture: true,
+            colorHex: rivalDef.colorHex,
+            name: rivalDef.name,
+            subtitle: rivalDef.driver,
+            speed: rivalDef.speed,
+            accel: rivalDef.accel,
+            handling: rivalDef.handling,
+            braking: 3.5,
+            tint: null
+        };
+
         const row = Math.floor((i + 1) / 2);
         const col = (i + 1) % 2 === 1 ? -1 : 1;
         const aiDistBehind = playerDistBehind + (row * 50);
-        const aiSideOffset = col * 22;
+        const aiSideOffset = col * 26;
 
         const sx = fx - dirX * aiDistBehind + perpX * aiSideOffset;
         const sy = fy - dirY * aiDistBehind + perpY * aiSideOffset;
 
-        const ai = spawnVehicle(scene, sx, sy, aiData.texture, startAngleDeg, false, aiData);
+        const ai = spawnVehicle(scene, sx, sy, texKey, startAngleDeg, false, aiData);
         ai.targetNodeIdx = 0;
         ai.lastCheckpoint = -1;
         ai.aiVelocity = 0;
+        ai.profile = {
+            driver: rivalDef.driver,
+            speedFactor: 1.0,
+            accelFactor: 1.0,
+            handlingFactor: 1.0,
+            laneOffset: rivalDef.laneOffset || 0,
+            drivingStyle: rivalDef.drivingStyle || 'balanced'
+        };
+        ai.laneOffset = ai.profile.laneOffset;
+        ai.overtakeTimer = 0;
+        ai.overtakeDir = 0;
         aiCars.push(ai);
     }
 
     // 6. CAPA AMBIENTAL DE ILUMINACIÓN Y OSCURIDAD (Día / Atardecer / Noche)
-    if (selectedTimeOfDay === 'night') {
+    const isNightTrack = (selectedTimeOfDay === 'night' || (track && track.tod === 'night') || trackId === 'neo_tokyo_bay');
+    if (isNightTrack) {
         // Velo nocturno azul profundo cinematográfico sobre el asfalto y entorno
         const nightAmbient = scene.add.rectangle(
             track.worldWidth / 2, track.worldHeight / 2,
@@ -1653,8 +3244,11 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
         ).setDepth(8);
     }
 
-    // Cámara con seguimiento suave y look-ahead
-    scene.cameras.main.startFollow(playerCar, true, 0.08, 0.08);
+    // Cámara fija 1:1 centrada perfectamente en el coche sin retardo ni desfase
+    scene.cameras.main.startFollow(playerCar, false, 1.0, 1.0);
+    if (typeof scene.cameras.main.setFollowOffset === 'function') {
+        scene.cameras.main.setFollowOffset(0, 0);
+    }
     scene.cameras.main.setZoom(1.1);
 
     // Crear Telemetría e Interfaz HUD
@@ -1664,10 +3258,11 @@ function startRace(scene, trackId, carIdx, timeOfDay = 'day', isStory = false) {
     startCountdown(scene);
 }
 
-// Spawnear vehículo con dimensiones 48x25 exactas de Dust Racing 2D
+// Spawnear vehículo con dimensiones supercar realistas (68x34) para asfalto de 256px
 function spawnVehicle(scene, x, y, textureKey, angleDeg, isPlayer, carData) {
     const car = scene.physics.add.sprite(x, y, textureKey);
-    car.setDisplaySize(48, 25);
+    car.setDisplaySize(68, 34);
+    if (car.body) car.body.setSize(58, 26);
     car.setAngle(angleDeg);
     car.setDepth(10);
     car.setCollideWorldBounds(true);
@@ -1676,52 +3271,115 @@ function spawnVehicle(scene, x, y, textureKey, angleDeg, isPlayer, carData) {
     car.currentLap = 1;
     car.lastCheckpoint = 0;
 
-    if (carData && carData.tint) {
+    if (carData && carData.tint && !carData.hasCustomTexture) {
         try {
             const tintNum = typeof carData.tint === 'string' ? parseInt(carData.tint.replace('#', '0x'), 16) : carData.tint;
             if (!isNaN(tintNum)) car.setTint(tintNum);
         } catch(e) {}
     }
 
-    // Sombra suave proyectada bajo el coche
-    car.shadow = scene.add.ellipse(x + 3, y + 4, 46, 22, 0x000000, 0.45).setDepth(9);
+    // Sombra suave proyectada bajo el coche (contacto directo con suelo sin efecto de coche duplicado)
+    car.shadow = scene.add.ellipse(x + 1, y + 1, 56, 24, 0x000000, 0.18).setDepth(9);
 
-    // Conos de luz de los faros delanteros
-    car.headlights = scene.add.graphics().setDepth(7);
+    // Neón Underglow bajo el chasis (Nocturno / Atardecer)
+    car.underglow = scene.add.graphics().setDepth(8.5);
+
+    // Discos de freno incandescentes al clavar frenos / derrapar
+    car.brakesGlow = scene.add.graphics().setDepth(11.5);
+
+    // Conos de luz de los faros delanteros (por encima del velo nocturno de profundidad 8)
+    car.headlights = scene.add.graphics().setDepth(8.5);
 
     return car;
 }
 
-// Semáforo de Salida
+// Semáforo Oficial FIA Grand Prix de 5 Luces Rojas
 function startCountdown(scene) {
-    let count = 3;
-    const txt = scene.add.text(480, 240, '3', {
-        font: '900 85px Arial',
-        fill: '#ff1744',
-        stroke: '#ffffff',
-        strokeThickness: 8
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+    const gantry = scene.add.container(480, 110).setScrollFactor(0).setDepth(100);
 
-    dustAudio.playCountdown(false);
+    // Caja y soporte metálico del pórtico
+    const box = scene.add.graphics();
+    box.fillStyle(0x0a0d14, 0.94);
+    box.fillRoundedRect(-165, -36, 330, 72, 10);
+    box.lineStyle(2, 0x334155, 1);
+    box.strokeRoundedRect(-165, -36, 330, 72, 10);
 
-    const event = scene.time.addEvent({
-        delay: 900,
-        repeat: 3,
+    // Título superior del pórtico
+    const headerTxt = scene.add.text(0, -22, 'FIA STARTING SYSTEM', {
+        font: '900 10px Arial Black',
+        fill: '#94a3b8'
+    }).setOrigin(0.5);
+    gantry.add([box, headerTxt]);
+
+    // 5 Luces FIA (cada una con círculo apagado)
+    const lights = [];
+    const startX = -120;
+    const spacing = 60;
+    for (let i = 0; i < 5; i++) {
+        const lx = startX + i * spacing;
+        const ly = 12;
+
+        // Bisel exterior oscuro
+        const bezel = scene.add.circle(lx, ly, 18, 0x1e293b);
+        if (bezel && typeof bezel.setStrokeStyle === 'function') bezel.setStrokeStyle(1.5, 0x0f172a);
+        // Luz apagada (rojo muy oscuro/negro)
+        const bulb = scene.add.circle(lx, ly, 14, 0x220505);
+        gantry.add([bezel, bulb]);
+        lights.push(bulb);
+    }
+
+    let litCount = 0;
+    const lightTimer = scene.time.addEvent({
+        delay: 850,
+        repeat: 4,
         callback: () => {
-            count--;
-            if (count > 0) {
-                txt.setText(count.toString());
-                txt.setFill(count === 2 ? '#ff9100' : '#ffea00');
+            if (litCount < 5) {
+                // Encender luz roja i con beep
+                if (lights[litCount].setFillStyle) lights[litCount].setFillStyle(0xff0033);
+                if (lights[litCount].setStrokeStyle) lights[litCount].setStrokeStyle(3, 0xff8899);
                 dustAudio.playCountdown(false);
-            } else if (count === 0) {
-                txt.setText('¡GO!');
-                txt.setFill('#00e676');
-                dustAudio.playCountdown(true);
-                gameState = 'RACE';
-                lapStartTime = Date.now();
-            } else {
-                txt.destroy();
-                event.destroy();
+                litCount++;
+
+                if (litCount === 5) {
+                    // Todas las 5 luces rojas encendidas: pausa de tensión aleatoria FIA (0.8s - 1.4s)
+                    const randomHoldMs = 800 + Math.random() * 600;
+                    scene.time.delayedCall(randomHoldMs, () => {
+                        // ¡LIGHTS OUT! Se apagan todas de golpe y arranca la carrera
+                        lights.forEach(l => {
+                            if (l.setFillStyle) l.setFillStyle(0x00e676);
+                            if (l.setStrokeStyle) l.setStrokeStyle(2, 0x003311);
+                        });
+                        dustAudio.playCountdown(true);
+                        dustAudio.playBoost();
+
+                        const goText = scene.add.text(0, 56, '¡LIGHTS OUT & AWAY WE GO!', {
+                            font: '900 18px Arial Black',
+                            fill: '#00f5d4',
+                            stroke: '#000000',
+                            strokeThickness: 4
+                        }).setOrigin(0.5);
+                        gantry.add(goText);
+
+                        gameState = 'RACE';
+                        raceStartTime = Date.now();
+                        lapStartTime = Date.now();
+
+                        // Desvanecer pórtico tras 1.2 segundos
+                        scene.time.delayedCall(1200, () => {
+                            if (scene.tweens && typeof scene.tweens.add === 'function') {
+                                scene.tweens.add({
+                                    targets: gantry,
+                                    alpha: 0,
+                                    y: 80,
+                                    duration: 400,
+                                    onComplete: () => gantry.destroy()
+                                });
+                            } else {
+                                gantry.destroy();
+                            }
+                        });
+                    });
+                }
             }
         }
     });
@@ -1754,8 +3412,68 @@ function setupHud(scene, track) {
     hudSurfaceText = scene.add.text(480, 505, 'SUPERFICIE: ASFALTO (GRIP 100%)', { font: 'bold 12px Arial', fill: '#00f5d4' }).setOrigin(0.5);
     hud.add(hudSurfaceText);
 
+    // Badge de Modo Fantasma de Salida (Inmunidad a colisiones 5s)
+    hudGhostBadge = scene.add.text(480, 68, '', {
+        font: '900 15px Arial',
+        fill: '#00f5d4',
+        stroke: '#0a0c14',
+        strokeThickness: 4,
+        backgroundColor: '#0a0c14cc',
+        padding: { x: 14, y: 6 }
+    }).setOrigin(0.5, 0).setDepth(52);
+    hudGhostBadge.setVisible(false);
+    hud.add(hudGhostBadge);
+
+    // Badge de Derrape / Mini-Turbo
+    hudDriftBadge = scene.add.text(480, 478, '', {
+        font: '900 13px Arial',
+        fill: '#fee440',
+        stroke: '#0a0c14',
+        strokeThickness: 3,
+        backgroundColor: '#0a0c14b0',
+        padding: { x: 10, y: 4 }
+    }).setOrigin(0.5, 0).setDepth(52);
+    hudDriftBadge.setVisible(false);
+    hud.add(hudDriftBadge);
+
+    // Badge de Rebufo Aerodinámico (Slipstream / Drafting)
+    hudSlipstreamBadge = scene.add.text(480, 448, '', {
+        font: '900 13px Arial',
+        fill: '#00f5d4',
+        stroke: '#0a0c14',
+        strokeThickness: 3,
+        backgroundColor: '#0a0c14b0',
+        padding: { x: 10, y: 4 }
+    }).setOrigin(0.5, 0).setDepth(52);
+    hudSlipstreamBadge.setVisible(false);
+    hud.add(hudSlipstreamBadge);
+
+    // Efectos de atmósfera meteorológica (Nieve, Arena, Lluvia nocturna, Brisa marina)
+    weatherGraphics = scene.add.graphics().setScrollFactor(0).setDepth(48);
+
+    // Líneas de velocidad aerodinámicas a alta velocidad (Speed Streaks)
+    speedLinesGraphics = scene.add.graphics().setScrollFactor(0).setDepth(49);
+
     // Radar Minimapa en esquina inferior derecha
     radarGraphics = scene.add.graphics().setScrollFactor(0).setDepth(51);
+
+    // Tacómetro y Cockpit Instrument Cluster GT3 (Top-Right bajo la barra superior)
+    hudTachoGfx = scene.add.graphics().setScrollFactor(0).setDepth(52);
+    hud.add(hudTachoGfx);
+
+    hudGearText = scene.add.text(785, 56, 'GEAR 1', {
+        font: '900 12px Arial Black',
+        fill: '#00f5d4',
+        backgroundColor: '#0a0d14dd',
+        padding: { x: 7, y: 3 }
+    }).setOrigin(0.5, 0).setDepth(53);
+    hud.add(hudGearText);
+
+    hudRpmText = scene.add.text(880, 56, '1800 RPM', {
+        font: 'bold 11px Arial',
+        fill: '#f8fafc'
+    }).setOrigin(0.5, 0).setDepth(53);
+    hud.add(hudRpmText);
 }
 
 // ===== UPDATE: MOTOR FÍSICO Y DE JUEGO A 60 FPS =====
@@ -1782,8 +3500,121 @@ function dustUpdate(time, delta) {
         raceScene.cameras.main.zoom = Phaser.Math.Linear(raceScene.cameras.main.zoom, targetZoom, 0.04);
     }
 
+    // Actualizar badges de HUD (Modo Fantasma inicial y Derrape/Turbo)
+    if (hudGhostBadge) {
+        const isGhostMode = (gameState === 'RACE' && (Date.now() - raceStartTime) < 5000);
+        if (isGhostMode) {
+            const remSec = Math.ceil((5000 - (Date.now() - raceStartTime)) / 1000);
+            hudGhostBadge.setText(`👻 MODO FANTASMA: ${remSec}s (SALIDA LIMPIA SIN CHOQUES)`).setFill('#00f5d4').setVisible(true);
+        } else if (gameState === 'RACE' && (Date.now() - raceStartTime) < 6500) {
+            hudGhostBadge.setText(`🛡️ COLISIÓN Y CONTACTO ACTIVADOS`).setFill('#fee440').setVisible(true);
+        } else {
+            hudGhostBadge.setVisible(false);
+        }
+    }
+
+    if (hudDriftBadge) {
+        if (driftBoostTimer > 0) {
+            hudDriftBadge.setText(`🚀 ¡BOOST DE DERRAPE ACTIVO!`).setFill('#00f5d4').setVisible(true);
+        } else if (driftCharge >= 0.35) {
+            hudDriftBadge.setText(`⚡ DERRAPE CARGADO • ¡SUELTA PARA TURBO!`).setFill('#fee440').setVisible(true);
+        } else if (touchHandbrake || (keys && ((keys.space && keys.space.isDown) || (keys.shift && keys.shift.isDown)))) {
+            hudDriftBadge.setText(`💨 DERRAPANDO...`).setFill('#ffffff').setVisible(true);
+        } else {
+            hudDriftBadge.setVisible(false);
+        }
+    }
+
+    if (hudSlipstreamBadge) {
+        if (playerInSlipstream && gameState === 'RACE') {
+            hudSlipstreamBadge.setText(`💨 REBUFO AERODINÁMICO (+14% VELOCIDAD)`).setVisible(true);
+        } else {
+            hudSlipstreamBadge.setVisible(false);
+        }
+    }
+
+    // Efecto de líneas de velocidad aerodinámicas desactivado para una visión 100% limpia y sin distracciones
+    if (speedLinesGraphics) {
+        speedLinesGraphics.clear();
+    }
+
+    // Partículas meteorológicas dinámicas por bioma (Nieve, Arena, Lluvia, Brisa)
+    if (weatherGraphics && gameState === 'RACE' && weatherParticles.length > 0) {
+        weatherGraphics.clear();
+        const biome = getTrackBiome(track);
+        const isNight = selectedTimeOfDay === 'night';
+
+        if (biome === 'snow') {
+            weatherGraphics.fillStyle(0xffffff, 0.75);
+            weatherParticles.forEach(p => {
+                p.y += p.vy * 0.95;
+                p.x += Math.sin(p.wiggle) * 0.8 - 0.4;
+                p.wiggle += 0.05;
+                if (p.y > 540) { p.y = -10; p.x = Math.random() * 960; }
+                if (p.x < -10) p.x = 970;
+                weatherGraphics.fillCircle(p.x, p.y, p.size);
+            });
+        } else if (biome === 'desert') {
+            weatherGraphics.fillStyle(0xfde68a, 0.52);
+            weatherParticles.forEach(p => {
+                p.x += (p.vy * 1.5) + 1.2;
+                p.y += Math.sin(p.wiggle) * 0.6;
+                p.wiggle += 0.04;
+                if (p.x > 960) { p.x = -10; p.y = Math.random() * 540; }
+                weatherGraphics.fillCircle(p.x, p.y, p.size * 0.85);
+            });
+        } else if (biome === 'city' || isNight) {
+            weatherGraphics.lineStyle(1.4, 0x38bdf8, 0.42);
+            weatherParticles.forEach(p => {
+                p.y += p.vy * 2.5;
+                p.x -= 0.8;
+                if (p.y > 540) { p.y = -15; p.x = Math.random() * 960; }
+                weatherGraphics.lineBetween(p.x, p.y, p.x - 2, p.y + 12);
+            });
+        } else if (biome === 'coast') {
+            weatherGraphics.fillStyle(0xe0f2fe, 0.48);
+            weatherParticles.forEach(p => {
+                p.x += (p.vy * 0.9);
+                p.y += Math.sin(p.wiggle) * 0.8;
+                p.wiggle += 0.03;
+                if (p.x > 960) { p.x = -10; p.y = Math.random() * 540; }
+                weatherGraphics.fillCircle(p.x, p.y, p.size * 0.7);
+            });
+        }
+    }
+
+    // Flashes fotográficos de espectadores en las tribunas
+    if (Math.random() < 0.05 && track && track.objects && raceScene && typeof raceScene.add === 'object' && raceScene.add.sprite) {
+        const grandstands = track.objects.filter(o => o.r === 'grandstand');
+        if (grandstands.length > 0) {
+            const gs = grandstands[Math.floor(Math.random() * grandstands.length)];
+            const flashX = gs.x + (Math.random() - 0.5) * 110;
+            const flashY = gs.y + (Math.random() - 0.5) * 60;
+            const fl = raceScene.add.sprite(flashX, flashY, 'dt_sparkle');
+            if (fl && fl.setDisplaySize) {
+                fl.setDisplaySize(16, 16);
+                if (fl.setTint) fl.setTint(0xffffff);
+                if (fl.setDepth) fl.setDepth(20);
+                if (raceScene.tweens && typeof raceScene.tweens.add === 'function') {
+                    raceScene.tweens.add({
+                        targets: fl,
+                        alpha: 0,
+                        scale: 2.2,
+                        duration: 90,
+                        onComplete: () => fl.destroy && fl.destroy()
+                    });
+                }
+            }
+        }
+    }
+
     // 1. Físicas y control del jugador
     updatePlayer(dt, track);
+
+    // Bloqueo total de cámara: el coche siempre va exactamente en el centro de la pantalla
+    if (raceScene && raceScene.cameras && raceScene.cameras.main && typeof raceScene.cameras.main.centerOn === 'function' && playerCar) {
+        raceScene.cameras.main.centerOn(playerCar.x, playerCar.y);
+    }
 
     // 2. Físicas de los 5 rivales IA
     if (gameState === 'RACE') {
@@ -1857,46 +3688,50 @@ function respawnPlayerOnTrack(track) {
     playerSpeed = 0;
     offTrackTimer = 0;
 
-    raceScene.cameras.main.flash(220, 255, 255, 255);
+    if (raceScene && raceScene.cameras && raceScene.cameras.main && typeof raceScene.cameras.main.flash === 'function') {
+        raceScene.cameras.main.flash(220, 255, 255, 255);
+    }
     dustAudio.playKerb();
 }
 
 // Actualizar coche del jugador con límites de pista y prevención de atajos
 function updatePlayer(dt, track) {
-    const cData = playerCar.carData;
-    const left = keys.left.isDown || keys.a.isDown || touchLeft;
-    const right = keys.right.isDown || keys.d.isDown || touchRight;
-    const gas = keys.up.isDown || keys.w.isDown || keys.space.isDown || touchGas;
-    const brake = keys.down.isDown || keys.s.isDown || touchBrake;
+    if (!playerCar || !raceScene) return;
+    const cData = playerCar.carData || {};
+    const left = Boolean((keys && keys.left && keys.left.isDown) || (keys && keys.a && keys.a.isDown) || touchLeft);
+    const right = Boolean((keys && keys.right && keys.right.isDown) || (keys && keys.d && keys.d.isDown) || touchRight);
+    const gas = Boolean((keys && keys.up && keys.up.isDown) || (keys && keys.w && keys.w.isDown) || touchGas);
+    const brake = Boolean((keys && keys.down && keys.down.isDown) || (keys && keys.s && keys.s.isDown) || touchBrake);
+    const handbrake = Boolean((keys && keys.space && keys.space.isDown) || (keys && keys.shift && keys.shift.isDown) || touchHandbrake);
 
     // Detección de distancia a la carretera más cercana (Límites de pista y Anti-Atajos)
     const roadInfo = getDistanceToRoad(playerCar.x, playerCar.y, raceScene);
     const ti = Math.floor(playerCar.x / 256);
     const tj = Math.floor(playerCar.y / 256);
-    const tile = raceScene.tileMap.get(`${ti},${tj}`);
+    const tile = (raceScene.tileMap && typeof raceScene.tileMap.get === 'function') ? raceScene.tileMap.get(`${ti},${tj}`) : null;
 
     let grip = 1.0;
     let surfaceLabel = 'ASFALTO (GRIP 100%)';
 
     if (tile && (tile.t === 'straight' || tile.t === 'finish' || tile.t.startsWith('corner') || tile.t.startsWith('straight45') || tile.t === 'bridge')) {
         offTrackTimer = Math.max(0, offTrackTimer - dt * 2);
+        grip = 1.0;
         if (tile.t === 'bridge') {
-            grip = 1.0;
             surfaceLabel = playerCar.onBridgeDeck ? 'PUENTE ELEVADO (CRUCE SUPERIOR)' : 'TÚNEL DE PISTA (CRUCE INFERIOR)';
         } else {
-            const distCenter = Math.hypot(playerCar.x - (ti * 256 + 128), playerCar.y - (tj * 256 + 128));
-            if (distCenter > 88 && distCenter < 122) {
-                surfaceLabel = 'PIANOS DE CARRERA (RUMBLE STRIP)';
-                dustAudio.playKerb();
-                raceScene.cameras.main.shake(50, 0.002);
-                grip = 0.95;
-            } else if (distCenter >= 122) {
-                grip = 0.60;
-                surfaceLabel = 'BORDE DE ASFALTO (DERIVA)';
-                spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x388e3c);
-            } else {
-                grip = 1.0;
-                surfaceLabel = 'ASFALTO (GRIP 100%)';
+            surfaceLabel = 'ASFALTO (GRIP 100%)';
+        }
+
+        // Detección de pisada de pianos / bordillos de competición (Rumble Strips)
+        const isBitingCurb = (roadInfo.dist >= 74 && roadInfo.dist <= 120 && Math.abs(playerSpeed) > 40);
+        if (isBitingCurb) {
+            surfaceLabel = 'PIANO DE CURVA (RUMBLE STRIP)';
+            dustAudio.playRumbleStrip(Math.round(Math.abs(playerSpeed) * 0.65));
+            // Microvibración háptica y de suspensión en el chasis
+            playerCar.x += (Math.random() - 0.5) * 1.2;
+            playerCar.y += (Math.random() - 0.5) * 1.2;
+            if (typeof window !== 'undefined' && window.navigator && typeof window.navigator.vibrate === 'function') {
+                try { window.navigator.vibrate(10); } catch(e) {}
             }
         }
     } else if (tile && tile.t === 'sand') {
@@ -1941,29 +3776,102 @@ function updatePlayer(dt, track) {
 
     hudSurfaceText.setText(`SUPERFICIE: ${surfaceLabel}`);
 
-    // Aceleración y Frenada
-    const topSpeed = cData.speed * grip;
-    const accelRate = cData.accel * grip;
+    // Detección de Rebufo Aerodinámico (Slipstream / Drafting)
+    let inDraftingZone = false;
+    if (aiCars && aiCars.length > 0 && gameState === 'RACE') {
+        const pRad = Phaser.Math.DegToRad(playerCar.angle);
+        const pCos = Math.cos(pRad);
+        const pSin = Math.sin(pRad);
+        for (let a = 0; a < aiCars.length; a++) {
+            const ai = aiCars[a];
+            if (!ai || !ai.active) continue;
+            const dx = ai.x - playerCar.x;
+            const dy = ai.y - playerCar.y;
+            const fwd = dx * pCos + dy * pSin;
+            const lat = Math.abs(-dx * pSin + dy * pCos);
+            if (fwd > 28 && fwd < 135 && lat < 28) {
+                inDraftingZone = true;
+                if (Math.random() < 0.28) {
+                    spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', 0x00f5d4);
+                }
+                break;
+            }
+        }
+    }
+    playerInSlipstream = inDraftingZone;
+
+    // Aceleración, Frenada y Freno de Mano (Derrape)
+    const slipstreamSpeedBonus = playerInSlipstream ? 1.14 : 1.0;
+    const slipstreamAccelBonus = playerInSlipstream ? 1.28 : 1.0;
+    const topSpeed = cData.speed * grip * slipstreamSpeedBonus;
+    const accelRate = cData.accel * grip * slipstreamAccelBonus;
 
     if (gameState === 'RACE') {
-        if (gas) {
-            playerSpeed = Math.min(topSpeed, playerSpeed + accelRate * dt);
-            if (left || right) {
-                dustAudio.playDrift();
-                drawSkid(playerCar.x, playerCar.y, playerCar.angle);
-                spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
+        const isTurning = left || right;
+
+        if (handbrake) {
+            // Freno de mano / Derrape activo:
+            // Permite un ángulo de rotación mucho más agresivo en curvas muy cerradas (+85% yaw rate)
+            // Manteniendo la inercia sin clavar las ruedas a 0
+            if (gas) {
+                // Power slide (gas + freno de mano para sostener el derrape en alta velocidad)
+                playerSpeed = Math.max(topSpeed * 0.45, Math.min(topSpeed * 0.92, playerSpeed + accelRate * 0.35 * dt));
+            } else {
+                // Derrape por inercia
+                playerSpeed = Math.max(topSpeed * 0.30, playerSpeed - accelRate * 0.70 * dt);
             }
-        } else if (brake) {
-            playerSpeed = Math.max(-topSpeed * 0.35, playerSpeed - accelRate * 2.2 * dt);
+
             dustAudio.playDrift();
-            drawSkid(playerCar.x, playerCar.y, playerCar.angle);
+            drawSkid(playerCar.x, playerCar.y, playerCar.angle, playerCar);
             spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
+
+            // Cargar impulso de salida del derrape (Mini-Turbo)
+            if (isTurning && playerSpeed > 90) {
+                driftCharge = Math.min(1.5, driftCharge + dt * 1.2);
+            }
         } else {
-            playerSpeed *= 0.982;
+            // Al soltar el freno de mano tras un derrape sostenido: ¡impulso de salida turbo!
+            if (driftCharge >= 0.35) {
+                const boostPower = Math.min(85, Math.round(driftCharge * 60));
+                playerSpeed = Math.min(topSpeed * 1.15, playerSpeed + boostPower);
+                driftBoostTimer = 0.5;
+                spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', 0x00f5d4);
+                try { if (dustAudio && typeof dustAudio.playBoost === 'function') dustAudio.playBoost(); } catch(e) {}
+            }
+            driftCharge = 0;
+
+            if (driftBoostTimer > 0) {
+                driftBoostTimer = Math.max(0, driftBoostTimer - dt);
+                spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', 0x00f5d4);
+            }
+
+            if (gas) {
+                playerSpeed = Math.min(topSpeed, playerSpeed + accelRate * dt);
+                if (isTurning && playerSpeed > 180) {
+                    dustAudio.playDrift();
+                    drawSkid(playerCar.x, playerCar.y, playerCar.angle, playerCar);
+                    spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
+                } else if (playerCar) {
+                    playerCar.prevSkidL = null;
+                    playerCar.prevSkidR = null;
+                }
+            } else if (brake) {
+                playerSpeed = Math.max(-topSpeed * 0.35, playerSpeed - accelRate * 2.2 * dt);
+                dustAudio.playDrift();
+                drawSkid(playerCar.x, playerCar.y, playerCar.angle, playerCar);
+                spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
+            } else {
+                playerSpeed *= 0.982;
+                if (playerCar) {
+                    playerCar.prevSkidL = null;
+                    playerCar.prevSkidR = null;
+                }
+            }
         }
 
-        // Giro
-        const steer = cData.handling * (playerSpeed > 40 ? 1 : playerSpeed / 40);
+        // Giro: el freno de mano multiplica la capacidad de giro (yaw) para clavar horquillas
+        const yawMultiplier = handbrake ? 1.85 : 1.0;
+        const steer = cData.handling * yawMultiplier * (playerSpeed > 40 ? 1 : playerSpeed / 40);
         if (left) playerCar.angle -= steer;
         if (right) playerCar.angle += steer;
     } else {
@@ -1977,57 +3885,292 @@ function updatePlayer(dt, track) {
 
     const kmh = Math.floor(Math.abs(playerSpeed) * 0.65);
     hudSpeedText.setText(`${kmh} KM/H`);
+    if (playerCar) playerCar.maxReachedSpeed = Math.max(playerCar.maxReachedSpeed || 0, kmh);
+
+    // Actualizar Tacómetro Cockpit GT3, Marchas y LEDs de Régimen
+    const maxKmh = Math.max(360, (cData.speed || 380) * 0.65);
+    let gear = 1;
+    let gearRpmRatio = 0;
+
+    if (kmh < 65) {
+        gear = 1;
+        gearRpmRatio = kmh / 65;
+    } else if (kmh < 130) {
+        gear = 2;
+        gearRpmRatio = (kmh - 65) / 65;
+    } else if (kmh < 205) {
+        gear = 3;
+        gearRpmRatio = (kmh - 130) / 75;
+    } else if (kmh < 280) {
+        gear = 4;
+        gearRpmRatio = (kmh - 205) / 75;
+    } else if (kmh < 350) {
+        gear = 5;
+        gearRpmRatio = (kmh - 280) / 70;
+    } else {
+        gear = 6;
+        gearRpmRatio = Math.min(1.0, (kmh - 350) / 90);
+    }
+
+    if (gear !== lastPlayerGear && kmh > 15) {
+        dustAudio.playGearShift(gear);
+        lastPlayerGear = gear;
+    }
+
+    const currentRpm = Math.floor(2200 + gearRpmRatio * 6800);
+    if (hudGearText) hudGearText.setText(`GEAR ${gear}`);
+    if (hudRpmText) {
+        hudRpmText.setText(`${currentRpm} RPM`);
+        hudRpmText.setFill(gearRpmRatio > 0.88 ? '#ff1744' : (gearRpmRatio > 0.70 ? '#facc15' : '#f8fafc'));
+    }
+
+    // Tira de 8 LEDs de Régimen FIA/GT3
+    if (hudTachoGfx) {
+        hudTachoGfx.clear();
+        const tx = 750, ty = 76, ledW = 20, ledH = 8, gap = 4;
+        hudTachoGfx.fillStyle(0x0a0d14, 0.85);
+        hudTachoGfx.fillRoundedRect(tx - 6, ty - 4, (ledW + gap) * 8 + 8, ledH + 8, 4);
+
+        const litLeds = Math.floor(gearRpmRatio * 8.5);
+        for (let li = 0; li < 8; li++) {
+            const lx = tx + li * (ledW + gap);
+            let ledColor = 0x1e293b;
+            if (li < litLeds) {
+                if (li < 3) ledColor = 0x10b981; // Verde
+                else if (li < 6) ledColor = 0xf59e0b; // Ámbar
+                else ledColor = (gearRpmRatio > 0.94 && Math.floor(Date.now() / 80) % 2 === 0) ? 0x38bdf8 : 0xef4444; // Destello al corte
+            }
+            hudTachoGfx.fillStyle(ledColor, 1);
+            hudTachoGfx.fillRoundedRect(lx, ty, ledW, ledH, 2);
+        }
+    }
 
     checkLap(playerCar, track);
 }
 
-// Actualizar IA de rivales con sujeción de seguridad al trazado
+function wrapAngleDeg(deg) {
+    let d = (deg + 180) % 360;
+    if (d < 0) d += 360;
+    return d - 180;
+}
+
+// Actualizar IA de rivales: sólida, competitiva, con adelantamientos dinámicos y trazadas diversas
 function updateAiCar(ai, dt, track) {
     const nodes = track.nodes;
     if (!nodes || nodes.length === 0) return;
 
+    const profile = ai.profile || { speedFactor: 1.0, accelFactor: 1.0, handlingFactor: 1.0, laneOffset: 0, drivingStyle: 'balanced' };
     const targetNode = nodes[ai.targetNodeIdx];
-    const angleRad = Math.atan2(targetNode.y - ai.y, targetNode.x - ai.x);
+    if (!targetNode) return;
+
+    // 1. Detección de curvatura y dirección de giro
+    const prevNode = nodes[(ai.targetNodeIdx - 1 + nodes.length) % nodes.length] || targetNode;
+    const nextNode = nodes[(ai.targetNodeIdx + 1) % nodes.length] || targetNode;
+    const inAngle = Math.atan2(targetNode.y - prevNode.y, targetNode.x - prevNode.x);
+    const outAngle = Math.atan2(nextNode.y - targetNode.y, nextNode.x - targetNode.x);
+    const cornerDeg = wrapAngleDeg(Phaser.Math.RadToDeg(outAngle - inAngle));
+    const isSharpTurn = Math.abs(cornerDeg) > 18;
+    const turnDir = Math.sign(cornerDeg) || 1; // 1 = giro a derecha, -1 = giro a izquierda
+
+    // 2. Detección de tráfico próximo (adelantamientos activos, rebufo y espacio lateral)
+    const curRad = Phaser.Math.DegToRad(ai.angle);
+    const forwardCos = Math.cos(curRad);
+    const forwardSin = Math.sin(curRad);
+    let carDirectlyAhead = false;
+    let inAiDrafting = false;
+    let closestAheadDist = Infinity;
+    let aheadCarLatSide = 0; // -1 si el coche delantero está a la izquierda, +1 si a la derecha
+    let sideRepulsion = 0;
+
+    const allVehicles = (typeof raceScene !== 'undefined' && raceScene) ? [playerCar, ...aiCars] : [];
+    for (let j = 0; j < allVehicles.length; j++) {
+        const other = allVehicles[j];
+        if (!other || other === ai || !other.active) continue;
+        const odx = other.x - ai.x;
+        const ody = other.y - ai.y;
+        const fwdDist = odx * forwardCos + ody * forwardSin;
+        const latDist = -odx * forwardSin + ody * forwardCos; // Positivo a la derecha, negativo a la izquierda
+
+        // Coche directamente delante en línea de choque (distancia < 125px)
+        if (fwdDist > 0 && fwdDist < 125 && Math.abs(latDist) < 32) {
+            if (fwdDist < closestAheadDist) {
+                closestAheadDist = fwdDist;
+                aheadCarLatSide = latDist >= 0 ? 1 : -1;
+            }
+            if (fwdDist < 36 && Math.abs(latDist) < 22) {
+                carDirectlyAhead = true; // Parachoques con parachoques
+            } else if (fwdDist >= 36) {
+                inAiDrafting = true; // Rebufo y preparación de adelantamiento
+            }
+        }
+
+        // Coches en paralelo / lucha rueda a rueda: darse espacio lateral
+        if (Math.abs(fwdDist) < 48 && Math.abs(latDist) < 36) {
+            sideRepulsion += (latDist > 0 ? -1 : 1) * 8;
+        }
+    }
+
+    // 3. Sistema de Adelantamiento Activo y Trazada Diferenciada por Piloto
+    if (ai.overtakeTimer > 0) ai.overtakeTimer -= dt;
+
+    if (closestAheadDist < 125) {
+        // El coche delantero está cerca: buscar carril despejado para adelantar
+        if (!ai.overtakeDir || ai.overtakeTimer <= 0) {
+            // Si el rival va por la derecha, adelantar por la izquierda (-1); si va por la izquierda, por la derecha (+1)
+            ai.overtakeDir = aheadCarLatSide >= 0 ? -1 : 1;
+            ai.overtakeTimer = 1.35; // Mantener la maniobra durante 1.35s para no zigzaguear
+        }
+    } else if (ai.overtakeTimer <= 0) {
+        ai.overtakeDir = 0;
+    }
+
+    // Cálculo del offset lateral dinámico según personalidad y trazada de curva
+    let dynamicLaneOffset = profile.laneOffset || 0;
+    if (isSharpTurn) {
+        // En curvas, cada piloto traza según su estilo propio para no hacer fila india:
+        if (profile.drivingStyle === 'apex_hunter') {
+            dynamicLaneOffset = -turnDir * 24; // Se tira al vértice interior de la curva
+        } else if (profile.drivingStyle === 'sweeper') {
+            dynamicLaneOffset = turnDir * 22;  // Trazada exterior amplia con mayor velocidad de paso
+        } else {
+            dynamicLaneOffset = (profile.laneOffset || 0) * 0.85; // Mantiene su carril intermedio
+        }
+    }
+
+    // Si está adelantando, abrir carril hasta 32px en el lado libre
+    if (ai.overtakeDir !== 0) {
+        dynamicLaneOffset += ai.overtakeDir * 32;
+    }
+
+    // Añadir repulsión lateral rueda a rueda
+    if (sideRepulsion !== 0) {
+        dynamicLaneOffset += sideRepulsion;
+    }
+
+    // Limitar offset seguro dentro del ancho del asfalto (máx ±36px de 100px disponibles)
+    dynamicLaneOffset = Math.max(-36, Math.min(36, dynamicLaneOffset));
+
+    // Posición objetivo en la trazada de asfalto
+    let tx = targetNode.x;
+    let ty = targetNode.y;
+    if (dynamicLaneOffset !== 0) {
+        const dx = nextNode.x - targetNode.x;
+        const dy = nextNode.y - targetNode.y;
+        const len = Math.hypot(dx, dy) || 1;
+        tx += (-dy / len) * dynamicLaneOffset;
+        ty += (dx / len) * dynamicLaneOffset;
+    }
+
+    const angleRad = Math.atan2(ty - ai.y, tx - ai.x);
     const targetDeg = Phaser.Math.RadToDeg(angleRad);
+    const diff = wrapAngleDeg(targetDeg - ai.angle);
 
-    const diff = Phaser.Math.Angle.WrapDegrees(targetDeg - ai.angle);
-    const step = ai.carData.handling * 0.9;
-    ai.angle += Math.sign(diff) * Math.min(Math.abs(diff), step);
+    // Giro reactivo y preciso
+    const turnStep = ai.carData.handling * (profile.handlingFactor || 1.0) * (isSharpTurn ? 1.20 : 1.08);
+    ai.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnStep);
 
-    const maxSpeed = ai.carData.speed * 0.88;
-    ai.aiVelocity = Math.min(maxSpeed, (ai.aiVelocity || 0) + ai.carData.accel * 0.75 * dt);
+    // 4. Velocidad y Rebufo para Adelantar
+    const aiRoad = getDistanceToRoad(ai.x, ai.y, raceScene);
+    const isAiOffTrack = aiRoad.dist > 130;
 
-    const dist = Math.hypot(ai.x - targetNode.x, ai.y - targetNode.y);
+    let baseTopSpeed = ai.carData.speed * (profile.speedFactor || 1.0);
+    if (inAiDrafting || ai.overtakeDir !== 0) {
+        baseTopSpeed *= 1.10; // Impulso de rebufo (+10%) para completar el adelantamiento
+    }
 
-    // Contención de seguridad: si un choque empujó a la IA lejos de la trazada
-    if (dist > 350) {
-        ai.angle = targetDeg;
-        ai.aiVelocity = Math.min(ai.aiVelocity, 120);
+    const curveScrub = isSharpTurn ? (Math.abs(diff) > 22 ? 0.84 : 0.94) : (Math.abs(diff) > 28 ? 0.92 : 1.0);
+    let targetVel = baseTopSpeed * curveScrub;
+
+    // Solo frenar ligeramente si está rozando el parachoques trasero sin espacio lateral todavía
+    if (carDirectlyAhead) targetVel = Math.min(targetVel, targetVel * 0.95);
+    if (isAiOffTrack) targetVel *= 0.50; // Pérdida drástica de agarre en hierba
+
+    // Aceleración y deceleración
+    ai.aiVelocity = ai.aiVelocity || 0;
+    if (ai.aiVelocity < targetVel) {
+        ai.aiVelocity = Math.min(targetVel, ai.aiVelocity + ai.carData.accel * (profile.accelFactor || 1.0) * dt);
+    } else {
+        ai.aiVelocity = Math.max(targetVel, ai.aiVelocity - ai.carData.accel * (isAiOffTrack ? 1.6 : 0.55) * dt);
+    }
+
+    // 4. Sistema Anti-Atasco (Watchdog): detecta si el coche colisionó contra un pilar/valla y no avanza
+    if (!ai.stuckTracker) ai.stuckTracker = { lastX: ai.x, lastY: ai.y, stuckTimer: 0 };
+    const moved = Math.hypot(ai.x - ai.stuckTracker.lastX, ai.y - ai.stuckTracker.lastY);
+    if (moved < 7 && Math.abs(ai.aiVelocity) > 50) {
+        ai.stuckTracker.stuckTimer += dt;
+    } else {
+        ai.stuckTracker.stuckTimer = 0;
+        ai.stuckTracker.lastX = ai.x;
+        ai.stuckTracker.lastY = ai.y;
+    }
+
+    // Maniobra de escape o rescate si lleva más de 0.65s bloqueado
+    if (ai.stuckTracker.stuckTimer > 0.65 && ai.stuckTracker.stuckTimer < 1.4) {
+        // Marcha atrás y rotación para desenganchar el morro
+        ai.aiVelocity = -130;
+        ai.angle += (ai.targetNodeIdx % 2 === 0 ? 35 : -35) * dt * 2;
+    } else if (ai.stuckTracker.stuckTimer >= 1.4) {
+        // Rescate inmediato a la trazada del circuito
+        ai.x = targetNode.x;
+        ai.y = targetNode.y;
+        ai.angle = Phaser.Math.RadToDeg(Math.atan2(nextNode.y - targetNode.y, nextNode.x - targetNode.x));
+        ai.aiVelocity = 180;
+        ai.stuckTracker.stuckTimer = 0;
+        if (raceScene) spawnDust(raceScene, ai.x, ai.y, 'dt_sparkle', 0x00f5d4);
     }
 
     const rad = Phaser.Math.DegToRad(ai.angle);
     ai.setVelocity(Math.cos(rad) * ai.aiVelocity, Math.sin(rad) * ai.aiVelocity);
 
-    if (dist < 150) {
+    // Huellas y humo de derrape en curvas
+    if (Math.abs(diff) > 26 && ai.aiVelocity > 160) {
+        drawSkid(ai.x, ai.y, ai.angle, ai);
+        spawnTireSmoke(raceScene, ai.x, ai.y, ai.angle);
+    } else {
+        ai.prevSkidL = null;
+        ai.prevSkidR = null;
+    }
+
+    // 5. Radio de paso de nodo estricto: 68px en curvas (garantiza paso por asfalto sin atajos) y 110px en rectas
+    const waypointRadius = isSharpTurn ? 68 : 110;
+    const dist = Math.hypot(ai.x - tx, ai.y - ty);
+
+    if (dist < waypointRadius) {
         const prevAiIdx = ai.targetNodeIdx;
         ai.lastCheckpoint = prevAiIdx;
         ai.targetNodeIdx = (ai.targetNodeIdx + 1) % nodes.length;
         if (prevAiIdx === nodes.length - 1) {
-            ai.currentLap++;
+            ai.currentLap = (ai.currentLap || 0) + 1;
         }
     }
 }
 
-// Dibujar marcas permanentes de derrape
-function drawSkid(x, y, angleDeg) {
+// Dibujar marcas permanentes de derrape con bandas de rodadura continua (Skid Marks Pro)
+function drawSkid(x, y, angleDeg, carObj) {
     if (!skidLayer) return;
     const rad = Phaser.Math.DegToRad(angleDeg + 90);
-    const px = Math.cos(rad) * 11;
-    const py = Math.sin(rad) * 11;
+    const px = Math.cos(rad) * 12;
+    const py = Math.sin(rad) * 12;
+    const wL = { x: x + px, y: y + py };
+    const wR = { x: x - px, y: y - py };
 
-    skidLayer.fillStyle(0x0a0c0e, 0.4);
-    skidLayer.fillCircle(x + px, y + py, 2.5);
-    skidLayer.fillCircle(x - px, y - py, 2.5);
+    if (carObj && carObj.prevSkidL && carObj.prevSkidR) {
+        const dL = Math.hypot(wL.x - carObj.prevSkidL.x, wL.y - carObj.prevSkidL.y);
+        if (dL < 48 && dL > 1.5) {
+            skidLayer.lineStyle(5.2, 0x07090e, 0.52);
+            skidLayer.lineBetween(carObj.prevSkidL.x, carObj.prevSkidL.y, wL.x, wL.y);
+            skidLayer.lineBetween(carObj.prevSkidR.x, carObj.prevSkidR.y, wR.x, wR.y);
+        }
+    } else {
+        skidLayer.fillStyle(0x07090e, 0.52);
+        skidLayer.fillCircle(wL.x, wL.y, 2.6);
+        skidLayer.fillCircle(wR.x, wR.y, 2.6);
+    }
+
+    if (carObj) {
+        carObj.prevSkidL = wL;
+        carObj.prevSkidR = wR;
+    }
 }
 
 // Partículas de polvo y derrape
@@ -2109,6 +4252,11 @@ function handleCollisions() {
     if (!playerCar || !raceScene) return;
     const now = Date.now();
 
+    // Inmunidad a colisiones durante los primeros 5 segundos de carrera (Modo Fantasma de salida limpia)
+    if (gameState === 'RACE' && (now - raceStartTime) < 5000) {
+        return;
+    }
+
     // 1. Colisión Jugador vs IA (separación elástica suave sin saltos bruscos)
     aiCars.forEach(ai => {
         const dx = playerCar.x - ai.x;
@@ -2163,11 +4311,86 @@ function handleCollisions() {
                 a1.y += Math.sin(ang) * push;
                 a2.x -= Math.cos(ang) * push;
                 a2.y -= Math.sin(ang) * push;
-
-                a1.aiVelocity = (a1.aiVelocity || 0) * 0.96;
-                a2.aiVelocity = (a2.aiVelocity || 0) * 0.96;
             }
         }
+    }
+
+    // 3. Colisión de Coches vs Quitamiedos y Barreras de Seguridad Infranqueables (evita atajos por el césped)
+    if (trackBarriers && trackBarriers.length > 0) {
+        const allCars = [playerCar, ...aiCars];
+        const carRadius = 18;
+
+        allCars.forEach(car => {
+            if (!car || !car.active) return;
+
+            trackBarriers.forEach(b => {
+                const rad = Phaser.Math.DegToRad(-b.angle);
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
+                const dx = car.x - b.x;
+                const dy = car.y - b.y;
+
+                const localX = cos * dx - sin * dy;
+                const localY = sin * dx + cos * dy;
+
+                const clampedX = Math.min(b.halfW, Math.max(-b.halfW, localX));
+                const clampedY = Math.min(b.halfH, Math.max(-b.halfH, localY));
+
+                const diffX = localX - clampedX;
+                const diffY = localY - clampedY;
+                const dist = Math.hypot(diffX, diffY);
+
+                if (dist < carRadius) {
+                    let normX = 0, normY = 0;
+                    let pen = carRadius - dist;
+
+                    if (dist > 0.001) {
+                        normX = diffX / dist;
+                        normY = diffY / dist;
+                    } else {
+                        const penY = (b.halfH + carRadius) - Math.abs(localY);
+                        const penX = (b.halfW + carRadius) - Math.abs(localX);
+                        if (penY < penX) {
+                            normY = localY >= 0 ? 1 : -1;
+                            pen = penY;
+                        } else {
+                            normX = localX >= 0 ? 1 : -1;
+                            pen = penX;
+                        }
+                    }
+
+                    const invRad = Phaser.Math.DegToRad(b.angle);
+                    const invCos = Math.cos(invRad);
+                    const invSin = Math.sin(invRad);
+
+                    const pushLocalX = normX * pen;
+                    const pushLocalY = normY * pen;
+
+                    const pushWorldX = invCos * pushLocalX - invSin * pushLocalY;
+                    const pushWorldY = invSin * pushLocalX + invCos * pushLocalY;
+
+                    car.x += pushWorldX;
+                    car.y += pushWorldY;
+
+                    if (car.isPlayer) {
+                        playerSpeed *= 0.88;
+                        if (now - lastCrashSoundTime > 220) {
+                            dustAudio.playCrash();
+                            lastCrashSoundTime = now;
+                        }
+                        if (raceScene && raceScene.cameras && raceScene.cameras.main && Math.abs(playerSpeed) > 100) {
+                            raceScene.cameras.main.shake(70, 0.004);
+                        }
+                    } else {
+                        car.aiVelocity = (car.aiVelocity || 0) * 0.88;
+                    }
+
+                    if (Math.random() > 0.3) {
+                        spawnDust(raceScene, car.x, car.y, 'dt_sparkle', 0xffd700);
+                    }
+                }
+            });
+        });
     }
 }
 
@@ -2214,7 +4437,7 @@ function endRace() {
     overlay.fillStyle(0x080a10, 0.90);
     overlay.fillRect(0, 0, 960, 540);
 
-    const posMatch = hudPosText ? hudPosText.text.match(/\d+/) : null;
+    const posMatch = (hudPosText && typeof hudPosText.text === 'string') ? hudPosText.text.match(/\d+/) : null;
     const playerRank = posMatch ? parseInt(posMatch[0]) : 1;
     const isPodium = playerRank <= 3;
 
@@ -2242,7 +4465,12 @@ function endRace() {
     }
     saveStoryProgress(progress);
 
-    // Título y Trofeo
+    // Título, Piloto y Trofeo
+    const curPilot = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO';
+    raceScene.add.text(480, 82, `PILOTO OFICIAL: ${curPilot.toUpperCase()}`, {
+        font: '900 15px Arial Black', fill: '#facc15', stroke: '#000000', strokeThickness: 3
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
     const medalEmoji = playerRank === 1 ? '🥇 ¡VICTORIA! 1º PUESTO' : (playerRank === 2 ? '🥈 2º PUESTO (SUBCAMPEÓN)' : (playerRank === 3 ? '🥉 3º PUESTO (PODIO)' : `POSICIÓN ${playerRank}º / 6`));
     const titleColor = playerRank === 1 ? '#fee440' : (playerRank === 2 ? '#e2e8f0' : (playerRank === 3 ? '#ff9800' : '#ef5350'));
 
@@ -2260,22 +4488,86 @@ function endRace() {
         font: 'bold 18px Arial', fill: '#fee440'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-    // Mejor tiempo de vuelta
+    // Mejor tiempo de vuelta y Tiempo Total oficial
     const bestSec = bestLapTime ? (bestLapTime / 1000).toFixed(2) + 's' : '--';
-    raceScene.add.text(480, 252, `MEJOR VUELTA: ${bestSec} • TIEMPO TOTAL: ${((Date.now() - lapStartTime) / 1000).toFixed(1)}s`, {
-        font: 'bold 14px Arial', fill: '#90a4ae'
+    const totalRaceSec = raceStartTime ? ((Date.now() - raceStartTime) / 1000).toFixed(1) : ((Date.now() - lapStartTime) / 1000).toFixed(1);
+    raceScene.add.text(480, 245, `MEJOR VUELTA: ${bestSec} • TIEMPO TOTAL: ${totalRaceSec}s`, {
+        font: 'bold 13px Arial', fill: '#90a4ae'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-    let btnY = 360;
+    // Recompensas Web3 en $CR, Gemas y Piezas Mecánicas por clasificación
+    let crReward = playerRank === 1 ? 1000 : (playerRank === 2 ? 600 : (playerRank === 3 ? 400 : 200));
+    let gemReward = playerRank === 1 ? 25 : (playerRank === 2 ? 15 : (playerRank === 3 ? 10 : 0));
+    let xpReward = playerRank === 1 ? 250 : (playerRank === 2 ? 180 : (playerRank === 3 ? 120 : 70));
+    let xpResult = null;
+    let partsWonSummary = [];
+
+    if (typeof loadNftUserData === 'function') {
+        const u = loadNftUserData();
+        u.credits = (u.credits || 0) + crReward;
+        u.gems = (u.gems || 0) + gemReward;
+
+        // Botín de piezas mecánicas del taller: 1º (4), 2º (3), 3º (2), Resto (1)
+        const partsWonCount = playerRank === 1 ? 4 : (playerRank === 2 ? 3 : (playerRank === 3 ? 2 : 1));
+        if (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && partsWonCount > 0) {
+            if (!u.partsInventory) u.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
+            const catalogKeys = Object.keys(WORKSHOP_PIECES_CATALOG);
+            for (let i = 0; i < partsWonCount; i++) {
+                const pKey = catalogKeys[Math.floor(Math.random() * catalogKeys.length)];
+                u.partsInventory[pKey] = (u.partsInventory[pKey] || 0) + 1;
+                const pDef = WORKSHOP_PIECES_CATALOG[pKey] || { name: pKey, icon: '🔧' };
+                partsWonSummary.push(`${pDef.icon} ${pDef.name}`);
+            }
+        }
+        saveNftUserData(u);
+    }
+
+    if (typeof addXpToEquippedCar === 'function') {
+        xpResult = addXpToEquippedCar(xpReward);
+    }
+
+    let xpText = `⭐ +${xpReward} XP`;
+    if (xpResult && xpResult.leveledUp) {
+        xpText = `🔥 ¡NIV. ${xpResult.newLevel}! (+${xpReward} XP)`;
+    }
+
+    raceScene.add.text(480, 268, `💰 +${crReward} $CR  •  💎 +${gemReward} TON  •  ${xpText}`, {
+        font: 'bold 13px Arial', fill: '#00f5d4'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    let completedSponsors = [];
+    if (typeof updateSponsorshipProgress === 'function') {
+        completedSponsors = updateSponsorshipProgress({
+            rank: playerRank,
+            topSpeed: playerCar ? (playerCar.maxReachedSpeed || 320) : 320,
+            drifts: playerCar ? (playerCar.driftBoostCount || 1) : 1
+        });
+    }
+
+    if (partsWonSummary.length > 0) {
+        const partsText = `📦 BOTÍN DE TALLER: +${partsWonSummary.length} PIEZAS (${partsWonSummary.slice(0, 3).join(', ')}${partsWonSummary.length > 3 ? '...' : ''})`;
+        raceScene.add.text(480, 288, partsText, {
+            font: 'bold 12px Arial', fill: '#facc15'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+    }
+
+    if (completedSponsors.length > 0) {
+        const spNames = completedSponsors.map(s => s.name).join(', ');
+        raceScene.add.text(480, 306, `🤝 ¡OBJETIVO DE PATROCINIO COMPLETADO: ${spNames}!`, {
+            font: '900 12px Arial', fill: '#00f5d4', backgroundColor: '#0a0d14dd', padding: { x: 8, y: 3 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+    }
+
+    let btnY = 376;
 
     if (isCurrentRaceStory) {
         if (isPodium && nextTrack) {
-            raceScene.add.text(480, 292, `¡DESBLOQUEADO NUEVO CIRCUITO: ${nextTrack.name.toUpperCase()}!`, {
-                font: '900 15px Arial', fill: '#00e676'
+            raceScene.add.text(480, 314, `¡DESBLOQUEADO NUEVO CIRCUITO: ${nextTrack.name.toUpperCase()}!`, {
+                font: '900 14px Arial', fill: '#00e676'
             }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-            const nextBtn = raceScene.add.text(480, 342, 'CONTINUAR HISTORIA (SIGUIENTE PISTA) ▶', {
-                font: '900 16px Arial', fill: '#ffffff', backgroundColor: '#2e7d32', padding: { x: 24, y: 12 }
+            const nextBtn = raceScene.add.text(480, 356, 'CONTINUAR HISTORIA (SIGUIENTE PISTA) ▶', {
+                font: '900 15px Arial', fill: '#ffffff', backgroundColor: '#2e7d32', padding: { x: 20, y: 10 }
             }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
 
             nextBtn.on('pointerdown', () => {
@@ -2283,23 +4575,23 @@ function endRace() {
                 startRace(raceScene, currentTrackId, selectedCarIndex, selectedTimeOfDay, true);
             });
 
-            btnY = 412;
+            btnY = 416;
         } else if (isPodium && !nextTrack) {
-            raceScene.add.text(480, 292, '🏆 ¡FELICIDADES! ¡HAS COMPLETADO LOS 22 CIRCUITOS DEL MODO HISTORIA! 🏆', {
-                font: '900 15px Arial', fill: '#fee440'
+            raceScene.add.text(480, 314, '🏆 ¡FELICIDADES! ¡HAS COMPLETADO LOS 22 CIRCUITOS DEL MODO HISTORIA! 🏆', {
+                font: '900 14px Arial', fill: '#fee440'
             }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
-            btnY = 360;
+            btnY = 370;
         } else {
-            raceScene.add.text(480, 292, 'Necesitas quedar entre los 3 primeros (Top 3) para avanzar en la historia.', {
-                font: 'bold 14px Arial', fill: '#ff5252'
+            raceScene.add.text(480, 314, 'Necesitas quedar entre los 3 primeros (Top 3) para avanzar en la historia.', {
+                font: 'bold 13px Arial', fill: '#ff5252'
             }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
-            btnY = 360;
+            btnY = 370;
         }
     }
 
     // Botón Repetir Carrera
     const retryBtn = raceScene.add.text(340, btnY, 'REPETIR CARRERA ↺', {
-        font: 'bold 15px Arial', fill: '#ffffff', backgroundColor: '#1e88e5', padding: { x: 18, y: 10 }
+        font: 'bold 14px Arial', fill: '#ffffff', backgroundColor: '#1e88e5', padding: { x: 16, y: 9 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
 
     retryBtn.on('pointerdown', () => {
@@ -2308,42 +4600,16 @@ function endRace() {
 
     // Botón Volver al Menú
     const menuBtn = raceScene.add.text(620, btnY, 'VOLVER AL MENÚ DE PISTAS', {
-        font: 'bold 15px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 18, y: 10 }
+        font: 'bold 14px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 16, y: 9 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
-
-    // Recompensas Web3 en $CR y Gemas por clasificación
-    let crReward = playerRank === 1 ? 1000 : (playerRank === 2 ? 600 : (playerRank === 3 ? 400 : 200));
-    let gemReward = playerRank === 1 ? 25 : (playerRank === 2 ? 15 : (playerRank === 3 ? 10 : 0));
-    let xpReward = playerRank === 1 ? 250 : (playerRank === 2 ? 180 : (playerRank === 3 ? 120 : 70));
-    let xpResult = null;
-
-    if (typeof loadNftUserData === 'function') {
-        const u = loadNftUserData();
-        u.credits = (u.credits || 0) + crReward;
-        u.gems = (u.gems || 0) + gemReward;
-        saveNftUserData(u);
-    }
-
-    if (typeof addXpToEquippedCar === 'function') {
-        xpResult = addXpToEquippedCar(xpReward);
-    }
-
-    let xpText = `⭐ +${xpReward} XP COCHE`;
-    if (xpResult && xpResult.leveledUp) {
-        xpText = `🔥 ¡SUBIDO A NIV. ${xpResult.newLevel}! (+${xpReward} XP)`;
-    }
-
-    raceScene.add.text(480, 276, `💰 +${crReward} $CR  •  💎 +${gemReward} TON  •  ${xpText}`, {
-        font: 'bold 13px Arial', fill: '#00f5d4'
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
     menuBtn.on('pointerdown', () => {
         showMenu(raceScene);
     });
 
     // Botón Salir al Hub Principal
-    const hubBtn = raceScene.add.text(480, btnY + 46, '🏠 SALIR AL HUB PRINCIPAL (GARAJE / CAJAS / TIENDA)', {
-        font: 'bold 12px Arial', fill: '#ffffff', backgroundColor: '#e53935', padding: { x: 18, y: 8 }
+    const hubBtn = raceScene.add.text(480, btnY + 44, '🏠 SALIR AL HUB PRINCIPAL (GARAJE / CAJAS / TIENDA)', {
+        font: 'bold 11px Arial', fill: '#ffffff', backgroundColor: '#e53935', padding: { x: 16, y: 7 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
 
     hubBtn.on('pointerdown', () => {
@@ -2403,20 +4669,89 @@ function updateCarsBridgeLayers(track) {
     });
 }
 
+// Emisor de chispas de titanio en el fondo plano / pianos de circuito
+function spawnTitaniumSparks(scene, x, y, angleDeg) {
+    if (!scene || Math.random() > 0.40) return;
+    const rad = Phaser.Math.DegToRad(angleDeg + 180 + (Math.random() - 0.5) * 45);
+    const p = scene.add.sprite(
+        x - Math.cos(Phaser.Math.DegToRad(angleDeg)) * 16 + (Math.random() - 0.5) * 6,
+        y - Math.sin(Phaser.Math.DegToRad(angleDeg)) * 16 + (Math.random() - 0.5) * 6,
+        'dt_sparkle'
+    ).setDisplaySize(12, 12).setDepth(12).setTint(0xffd700);
+
+    scene.tweens.add({
+        targets: p,
+        x: p.x + Math.cos(rad) * 32,
+        y: p.y + Math.sin(rad) * 32,
+        alpha: 0,
+        scale: 0.2,
+        duration: 160 + Math.random() * 80,
+        onComplete: () => p.destroy()
+    });
+}
+
 // Actualizar sombras, faros día/noche y llamaradas de escape de todos los coches
 function updateCarVisuals() {
     const all = [playerCar, ...aiCars];
-    const isPlayerBraking = keys.down.isDown || keys.s.isDown || touchBrake;
-    const isNight = selectedTimeOfDay === 'night';
+    const isPlayerBraking = Boolean((keys && keys.down && keys.down.isDown) || (keys && keys.s && keys.s.isDown) || touchBrake || (keys && keys.space && keys.space.isDown) || (keys && keys.shift && keys.shift.isDown) || touchHandbrake);
+    const curTrk = (typeof tracks !== 'undefined' && tracks[currentTrackId]) || (typeof TRACKS_DATA !== 'undefined' && TRACKS_DATA[currentTrackId]) || null;
+    const isNight = selectedTimeOfDay === 'night' || (curTrk && curTrk.tod === 'night') || (currentTrackId === 'neo_tokyo_bay');
     const isSunset = selectedTimeOfDay === 'sunset';
+    const isGhostMode = (gameState === 'RACE' && (Date.now() - raceStartTime) < 5000);
+    const carAlpha = isGhostMode ? 0.72 : 1.0;
 
     all.forEach(car => {
         if (!car || !car.active) return;
+        if (typeof car.setAlpha === 'function') car.setAlpha(carAlpha);
 
         if (car.shadow) {
-            car.shadow.x = car.x + 3;
-            car.shadow.y = car.y + 4;
+            car.shadow.x = car.x + 1;
+            car.shadow.y = car.y + 1;
             car.shadow.angle = car.angle;
+        }
+
+        // Neón Underglow bajo el chasis (Nocturno / Atardecer)
+        if (car.underglow) {
+            car.underglow.clear();
+            if (isNight || isSunset) {
+                const hexColor = (car.carData && car.carData.colorHex) ? car.carData.colorHex : '#00f5d4';
+                const cInt = parseInt(String(hexColor).replace('#', ''), 16) || 0x00f5d4;
+                const ugAlpha = isNight ? 0.38 : 0.18;
+                car.underglow.fillStyle(cInt, ugAlpha);
+                car.underglow.fillEllipse(car.x, car.y, 44, 26);
+                car.underglow.fillStyle(cInt, ugAlpha * 0.45);
+                car.underglow.fillEllipse(car.x, car.y, 58, 36);
+            }
+        }
+
+        // Discos de freno al rojo vivo (Brake Glow) al frenar fuerte o derrapar
+        if (car.brakesGlow) {
+            car.brakesGlow.clear();
+            const isBrakingHard = (car.isPlayer ? (isPlayerBraking || touchHandbrake) : false) && Math.abs(playerSpeed) > 130;
+            if (isBrakingHard) {
+                const heatFactor = Math.min(1.0, (Math.abs(playerSpeed) - 130) / 180);
+                const rad = Phaser.Math.DegToRad(car.angle);
+                const perp = rad + Math.PI / 2;
+                const cosA = Math.cos(rad), sinA = Math.sin(rad);
+                const cosP = Math.cos(perp), sinP = Math.sin(perp);
+
+                const wheels = [
+                    { x: car.x + cosA * 16 + cosP * 9, y: car.y + sinA * 16 + sinP * 9 },
+                    { x: car.x + cosA * 16 - cosP * 9, y: car.y + sinA * 16 - sinP * 9 },
+                    { x: car.x - cosA * 15 + cosP * 10, y: car.y - sinA * 15 + sinP * 10 },
+                    { x: car.x - cosA * 15 - cosP * 10, y: car.y - sinA * 15 - sinP * 10 }
+                ];
+
+                car.brakesGlow.fillStyle(0xff3d00, 0.85 * heatFactor);
+                wheels.forEach(wh => car.brakesGlow.fillCircle(wh.x, wh.y, 3.2));
+                car.brakesGlow.fillStyle(0xffea00, 0.95 * heatFactor);
+                wheels.forEach(wh => car.brakesGlow.fillCircle(wh.x, wh.y, 1.6));
+
+                // Chispas de titanio al derrapar o clavar frenos a alta velocidad
+                if (touchHandbrake || (keys && keys.space && keys.space.isDown) || Math.abs(playerSpeed) > 230) {
+                    spawnTitaniumSparks(raceScene, car.x, car.y, car.angle);
+                }
+            }
         }
 
         if (car.headlights) {
