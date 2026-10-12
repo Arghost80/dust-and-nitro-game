@@ -3275,67 +3275,164 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         }
     });
 
-    // E) Paneles de Distancia de Frenada (150m, 100m, 50m) estilo Gran Premio FIA GT
+    // Helper seguro para verificar si una coordenada toca asfalto o pianos
+    const isPointOnRoad = (px, py) => {
+        const ti = Math.floor(px / 256);
+        const tj = Math.floor(py / 256);
+        if (scene.tileMap && typeof scene.tileMap.get === 'function') {
+            const t = scene.tileMap.get(`${ti},${tj}`);
+            if (t && (t.t === 'straight' || t.t === 'finish' || t.t.startsWith('corner') || t.t.startsWith('straight45') || t.t === 'bridge')) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const isBoxSafeFromRoad = (px, py, halfW, halfH) => {
+        if (!track || px < 40 || px >= track.worldWidth - 40 || py < 40 || py >= track.worldHeight - 40) return false;
+        if (isPointOnRoad(px, py)) return false;
+        if (isPointOnRoad(px + halfW, py + halfH)) return false;
+        if (isPointOnRoad(px - halfW, py - halfH)) return false;
+        if (isPointOnRoad(px + halfW, py - halfH)) return false;
+        if (isPointOnRoad(px - halfW, py + halfH)) return false;
+        return true;
+    };
+
+    // E) Paneles de Distancia de Frenada FIA (150m, 100m, 50m) ANTES de Curvas Pronunciadas
+    // Colocados exclusivamente en la recta de aproximación exterior y FUERA del asfalto/pianos
     if (nodes && nodes.length > 4) {
+        let lastBrakeIdx = -999;
         for (let i = 0; i < nodes.length; i++) {
+            // Evitar duplicar paneles en secuencias de curvas enlazadas o chicanes
+            if (i - lastBrakeIdx < 4) continue;
+
             const curr = nodes[i];
             const prev = nodes[(i - 1 + nodes.length) % nodes.length];
             const next = nodes[(i + 1) % nodes.length];
+
             const a1 = Math.atan2(curr.y - prev.y, curr.x - prev.x);
             const a2 = Math.atan2(next.y - curr.y, next.x - curr.x);
             let turnAngle = Math.abs(a2 - a1);
             if (turnAngle > Math.PI) turnAngle = Math.PI * 2 - turnAngle;
 
-            // Si la curva es pronunciada (> 0.40 rad), situar paneles de distancia antes de la frenada
-            if (turnAngle > 0.40) {
-                const turnDir = Math.sin(a2 - a1) > 0 ? 1 : -1;
-                const approachDirX = Math.cos(a1);
-                const approachDirY = Math.sin(a1);
-                const approachPerpX = -approachDirY * turnDir;
-                const approachPerpY = approachDirX * turnDir;
+            // Únicamente en curvas significativas (> 0.45 rad / ~26°)
+            if (turnAngle < 0.45) continue;
 
-                const boardDistances = [
-                    { dist: 165, key: 'dt_brake_150' },
-                    { dist: 115, key: 'dt_brake_100' },
-                    { dist: 65, key: 'dt_brake_50' }
-                ];
+            // Medir la distancia recta de aproximación antes de la curva
+            let straightDist = 0;
+            let k = i;
+            while (straightDist < 600) {
+                const p1 = nodes[(k - 1 + nodes.length) % nodes.length];
+                const p2 = nodes[(k - 2 + nodes.length) % nodes.length];
+                const stepAngle = Math.abs(Math.atan2(p1.y - p2.y, p1.x - p2.x) - a1);
+                const normStepAngle = stepAngle > Math.PI ? Math.PI * 2 - stepAngle : stepAngle;
+                if (normStepAngle > 0.35) break; // Termina el tramo recto
+                straightDist += Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                k = (k - 1 + nodes.length) % nodes.length;
+            }
+            straightDist += Math.hypot(curr.x - prev.x, curr.y - prev.y);
 
-                boardDistances.forEach(bd => {
-                    const bx = curr.x - approachDirX * bd.dist + approachPerpX * 132;
-                    const by = curr.y - approachDirY * bd.dist + approachPerpY * 132;
-                    const bAngle = Phaser.Math.RadToDeg(a1) + 90;
-                    // Sombra direccional
-                    scene.add.rectangle(bx + lightConfig.shadowDx * 0.3, by + lightConfig.shadowDy * 0.3, 38, 22, 0x000000, lightConfig.shadowAlpha).setAngle(bAngle).setDepth(5);
-                    // Panel de distancia
-                    scene.add.sprite(bx, by, bd.key).setDisplaySize(38, 22).setAngle(bAngle).setDepth(6);
-                });
+            // Debe ser una aproximación recta real (mínimo ~380px)
+            if (straightDist < 380) continue;
+
+            const dirX = Math.cos(a1);
+            const dirY = Math.sin(a1);
+            const exitX = Math.cos(a2);
+            const exitY = Math.sin(a2);
+            const cross = dirX * exitY - dirY * exitX;
+            if (Math.abs(cross) < 0.05) continue;
+
+            // Vector perpendicular orientado ESTRICTAMENTE hacia el exterior de la curva
+            const turnSign = cross > 0 ? 1 : -1;
+            const outX = dirY * turnSign;
+            const outY = -dirX * turnSign;
+
+            // Orientación del panel legible a lo largo del margen exterior
+            let bAngle = Phaser.Math.RadToDeg(a1);
+            if (bAngle > 90) bAngle -= 180;
+            else if (bAngle < -90) bAngle += 180;
+
+            const boardDistances = [
+                { dist: Math.min(straightDist * 0.70, 340), key: 'dt_brake_150' },
+                { dist: Math.min(straightDist * 0.48, 230), key: 'dt_brake_100' },
+                { dist: Math.min(straightDist * 0.26, 120), key: 'dt_brake_50' }
+            ];
+
+            let placedAny = false;
+            boardDistances.forEach(bd => {
+                // Probar offsets en el césped exterior para asegurar que jamás invada el asfalto o pianos
+                for (let offset = 180; offset <= 270; offset += 30) {
+                    const bx = curr.x - dirX * bd.dist + outX * offset;
+                    const by = curr.y - dirY * bd.dist + outY * offset;
+
+                    // Validación estricta: libre de asfalto y pianos
+                    if (isBoxSafeFromRoad(bx, by, 22, 14)) {
+                        const roadDist = (typeof getDistanceToRoad === 'function') ? getDistanceToRoad(bx, by, scene).dist : 200;
+                        if (roadDist >= 160) {
+                            // Sombra direccional en el césped
+                            scene.add.rectangle(bx + lightConfig.shadowDx * 0.3, by + lightConfig.shadowDy * 0.3, 38, 22, 0x000000, lightConfig.shadowAlpha)
+                                .setAngle(bAngle)
+                                .setDepth(5);
+                            // Panel de distancia FIA
+                            scene.add.sprite(bx, by, bd.key)
+                                .setDisplaySize(38, 22)
+                                .setAngle(bAngle)
+                                .setDepth(6);
+                            placedAny = true;
+                            break;
+                        }
+                    }
+                }
+            });
+
+            if (placedAny) {
+                lastBrakeIdx = i;
             }
         }
     }
 
     // F) Vehículos Oficiales de Asistencia de Circuito en Escapatorias Seguras
     if (nodes && nodes.length > 2) {
-        // 1. Safety Car GT3 oficial aparcado junto a la recta de meta
-        const scX = fx - dirX * 130 - perpX * 145;
-        const scY = fy - dirY * 130 - perpY * 145;
-        scene.add.rectangle(scX + lightConfig.shadowDx * 0.4, scY + lightConfig.shadowDy * 0.4, 64, 28, 0x000000, lightConfig.shadowAlpha).setAngle(startAngleDeg).setDepth(5);
-        scene.add.sprite(scX, scY, 'dt_safety_car').setDisplaySize(64, 28).setAngle(startAngleDeg).setDepth(6);
-        // Baliza estroboscópica ámbar parpadeante en el techo
-        const strobe = scene.add.circle(scX, scY, 4, 0xf59e0b, 0.95).setDepth(7);
-        scene.tweens.add({ targets: strobe, alpha: 0.15, duration: 420, yoyo: true, repeat: -1 });
+        // 1. Safety Car GT3 oficial aparcado junto a la recta de meta (en escapatoria exterior segura)
+        for (const side of [-1, 1]) {
+            let scPlaced = false;
+            for (let offset = 180; offset <= 270; offset += 30) {
+                const scX = fx - dirX * 130 + perpX * offset * side;
+                const scY = fy - dirY * 130 + perpY * offset * side;
+                if (isBoxSafeFromRoad(scX, scY, 36, 18)) {
+                    scene.add.rectangle(scX + lightConfig.shadowDx * 0.4, scY + lightConfig.shadowDy * 0.4, 64, 28, 0x000000, lightConfig.shadowAlpha).setAngle(startAngleDeg).setDepth(5);
+                    scene.add.sprite(scX, scY, 'dt_safety_car').setDisplaySize(64, 28).setAngle(startAngleDeg).setDepth(6);
+                    const strobe = scene.add.circle(scX, scY, 4, 0xf59e0b, 0.95).setDepth(7);
+                    scene.tweens.add({ targets: strobe, alpha: 0.15, duration: 420, yoyo: true, repeat: -1 });
+                    scPlaced = true;
+                    break;
+                }
+            }
+            if (scPlaced) break;
+        }
 
-        // 2. Coche Médico y Grúa de Asistencia en una escapatoria del circuito
+        // 2. Coche Médico y Grúa de Asistencia en una escapatoria amplia del circuito
         const midNode = nodes[Math.floor(nodes.length * 0.5)];
         if (midNode) {
-            const medX = midNode.x + 155;
-            const medY = midNode.y + 155;
-            scene.add.rectangle(medX + lightConfig.shadowDx * 0.4, medY + lightConfig.shadowDy * 0.4, 60, 26, 0x000000, lightConfig.shadowAlpha).setDepth(5);
-            scene.add.sprite(medX, medY, 'dt_medical_car').setDisplaySize(60, 26).setDepth(6);
+            let medPlaced = false;
+            for (let offset = 190; offset <= 310; offset += 35) {
+                for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+                    const medX = midNode.x + dx * offset;
+                    const medY = midNode.y + dy * offset;
+                    const craneX = medX + 75;
+                    const craneY = medY + 12;
+                    if (isBoxSafeFromRoad(medX, medY, 36, 18) && isBoxSafeFromRoad(craneX, craneY, 38, 20)) {
+                        scene.add.rectangle(medX + lightConfig.shadowDx * 0.4, medY + lightConfig.shadowDy * 0.4, 60, 26, 0x000000, lightConfig.shadowAlpha).setDepth(5);
+                        scene.add.sprite(medX, medY, 'dt_medical_car').setDisplaySize(60, 26).setDepth(6);
 
-            const craneX = medX + 75;
-            const craneY = medY + 12;
-            scene.add.rectangle(craneX + lightConfig.shadowDx * 0.4, craneY + lightConfig.shadowDy * 0.4, 66, 30, 0x000000, lightConfig.shadowAlpha).setDepth(5);
-            scene.add.sprite(craneX, craneY, 'dt_recovery_crane').setDisplaySize(66, 30).setDepth(6);
+                        scene.add.rectangle(craneX + lightConfig.shadowDx * 0.4, craneY + lightConfig.shadowDy * 0.4, 66, 30, 0x000000, lightConfig.shadowAlpha).setDepth(5);
+                        scene.add.sprite(craneX, craneY, 'dt_recovery_crane').setDisplaySize(66, 30).setDepth(6);
+                        medPlaced = true;
+                        break;
+                    }
+                }
+                if (medPlaced) break;
+            }
         }
     }
 
@@ -3346,11 +3443,22 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             const n = nodes[i];
             // Cono de luz sobre el asfalto (profundidad 3.2: bajo los coches pero sobre el asfalto)
             scene.add.sprite(n.x, n.y, 'dt_light_cone').setDisplaySize(210, 210).setDepth(3.2);
-            // Torre de focos colocada fuera del trazado
-            const towerX = n.x + 135;
-            const towerY = n.y + 135;
-            scene.add.rectangle(towerX + 4, towerY + 6, 44, 44, 0x000000, 0.65).setDepth(13);
-            scene.add.sprite(towerX, towerY, 'dt_floodlight_tower').setDisplaySize(44, 44).setDepth(14);
+
+            // Torre de focos colocada de forma segura fuera del trazado
+            let towerPlaced = false;
+            for (let tOffset = 180; tOffset <= 280; tOffset += 35) {
+                for (const [tdx, tdy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+                    const towerX = n.x + tdx * tOffset;
+                    const towerY = n.y + tdy * tOffset;
+                    if (isBoxSafeFromRoad(towerX, towerY, 26, 26)) {
+                        scene.add.rectangle(towerX + 4, towerY + 6, 44, 44, 0x000000, 0.65).setDepth(13);
+                        scene.add.sprite(towerX, towerY, 'dt_floodlight_tower').setDisplaySize(44, 44).setDepth(14);
+                        towerPlaced = true;
+                        break;
+                    }
+                }
+                if (towerPlaced) break;
+            }
         }
     }
 
