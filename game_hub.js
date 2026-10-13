@@ -1476,6 +1476,56 @@ function buyUpgrade(type, cost) {
 // 5. MODO COMPETICIÓN: SALAS DE APUESTAS DE TOKENS (WAGER ARENAS)
 // -------------------------------------------------------------
 
+// Catálogo de Bolsas de Circuitos Aleatorios para Modo Competición (Anti-Monotonía & Anti-Bots)
+const WAGER_TRACK_POOLS = {
+    room_bronze: [
+        { id: 'rookie_ring', name: 'Rookie Ring Speedway', env: 'asfalto' },
+        { id: 'radiator_oval', name: 'Radiator Oval Park', env: 'óvalo' },
+        { id: 'curvastone_park', name: 'Curvastone Park', env: 'asfalto' },
+        { id: 'twister_chicanes', name: 'Twister S-Chicanes', env: 'técnico' },
+        { id: 'triangle', name: 'Triangle Oval GP', env: 'tri-óvalo' },
+        { id: 'red_rock_junction', name: 'Red Rock Junction', env: 'dos niveles' }
+    ],
+    room_silver: [
+        { id: 'tri_apex_coliseum', name: 'Tri-Apex Coliseum', env: 'tri-óvalo' },
+        { id: 'schwarzwald_sprint', name: 'Schwarzwald Sprint', env: 'bosque' },
+        { id: 'overpass_figure8', name: 'Overpass Figure-8', env: 'puente 3D' },
+        { id: 'sakura_ring', name: 'Sakura Ring National', env: 'japonés' },
+        { id: 'diamond_apex', name: 'Diamond Apex Arena', env: 'alta aceleración' },
+        { id: 'western_valley', name: 'Western Valley GP', env: 'cañón' }
+    ],
+    room_gold: [
+        { id: 'brianza_speedway', name: 'Brianza Autodromo', env: 'velocidad pura' },
+        { id: 'monza', name: 'Monza Speed Ring', env: 'legendario' },
+        { id: 'crossroads', name: 'Crossroads Double Deck', env: 'cruce elevado' },
+        { id: 'desert_canyon', name: 'Desert Canyon Canyonway', env: 'desierto' },
+        { id: 'sandstorm_dunes', name: 'Sandstorm Dunes Rally', env: 'dunas' },
+        { id: 'badlands_endurance', name: 'Badlands 24H Endurance', env: 'resistencia' },
+        { id: 'twineburg', name: 'Twineburg Forest', env: 'trazada mixta' }
+    ],
+    room_elite: [
+        { id: 'neo_tokyo_bay', name: 'Neo-Tokyo Harbor Bay (Wangan)', env: 'nocturno' },
+        { id: 'suzuka', name: 'Suzuka Grand Prix', env: 'fia técnico' },
+        { id: 'nordkette_pass', name: 'Nordkette Alpine Pass', env: 'nieve alpina' },
+        { id: 'riviera_coast', name: 'Riviera Coastway', env: 'costero' },
+        { id: 'silverstone_airfield', name: 'Silverstone Airfield', env: 'aeródromo' },
+        { id: 'inter_laguna', name: 'Inter-Laguna Speedway', env: 'gran premio' },
+        { id: 'sarthe_endurance', name: 'Circuit de la Sarthe GP', env: '24 horas' }
+    ]
+};
+
+function getRandomWagerTrack(room) {
+    const roomId = (room && room.id) ? room.id : 'room_bronze';
+    const pool = WAGER_TRACK_POOLS[roomId] || WAGER_TRACK_POOLS.room_bronze;
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    return {
+        id: picked.id,
+        name: picked.name,
+        env: picked.env,
+        poolCount: pool.length
+    };
+}
+
 const WAGER_ROOMS_CONFIG = [
     {
         id: 'room_bronze',
@@ -1489,11 +1539,11 @@ const WAGER_ROOMS_CONFIG = [
         maxPlayers: 4,
         maxRacers: 4,
         trackId: 'rookie_ring',
-        trackName: 'Rookie Ring Speedway',
+        trackName: 'Circuito Aleatorio (6 Trazadas)',
         aiDifficulty: 'Principiante',
         aiContributionPct: 0.50, // IA aporta 2.5 tokens (50%)
         btnClass: 'btn-green',
-        description: 'Parrilla de 4 pilotos para aprender y arriesgar poco. Bote de hasta 20 tokens.'
+        description: 'Parrilla de 4 pilotos con circuito sorteado al azar para máxima emoción. Bote de hasta 20 tokens.'
     },
     {
         id: 'room_silver',
@@ -1507,11 +1557,11 @@ const WAGER_ROOMS_CONFIG = [
         maxPlayers: 4,
         maxRacers: 4,
         trackId: 'radiator_oval',
-        trackName: 'Radiator Oval Park',
+        trackName: 'Circuito Aleatorio (6 Trazadas)',
         aiDifficulty: 'Media GT3',
         aiContributionPct: 0.50, // IA aporta 5 tokens (50%)
         btnClass: 'btn-cyan',
-        description: 'Apuestas intermedias en óvalo peraltado rápido. Bote de hasta 40 tokens.'
+        description: 'Apuestas intermedias con trazadas técnicas sorteadas aleatoriamente. Bote de hasta 40 tokens.'
     },
     {
         id: 'room_gold',
@@ -1525,11 +1575,11 @@ const WAGER_ROOMS_CONFIG = [
         maxPlayers: 4,
         maxRacers: 4,
         trackId: 'monza_speedway',
-        trackName: 'Monza Brianza Grand Prix',
+        trackName: 'Circuito Aleatorio (7 Trazadas)',
         aiDifficulty: 'Avanzada FIA',
         aiContributionPct: 0.50, // IA aporta 10 tokens (50%)
         btnClass: 'btn-yellow',
-        description: 'Trazada legendaria de alta velocidad para pilotos veteranos. Bote de hasta 80 tokens.'
+        description: 'Trazadas legendarias de alta velocidad con circuito imprevisto. Bote de hasta 80 tokens.'
     },
     {
         id: 'room_elite',
@@ -1543,11 +1593,11 @@ const WAGER_ROOMS_CONFIG = [
         maxPlayers: 4,
         maxRacers: 4,
         trackId: 'tokyo_twister',
-        trackName: 'Neo-Tokyo Harbor Bay (Wangan)',
+        trackName: 'Circuito Aleatorio (7 Trazadas VIP)',
         aiDifficulty: 'Élite Le Mans',
         aiContributionPct: 0.50, // IA aporta 25 tokens (50%)
         btnClass: 'btn-primary',
-        description: 'La arena definitiva para grandes apostadores. Máximo bote acumulado de hasta 200 tokens.'
+        description: 'La arena definitiva para grandes apostadores. Circuitos nocturnos y alpinos sorteados al azar.'
     }
 ];
 
@@ -1766,6 +1816,12 @@ function openWagerLobby(roomId) {
     saveNftUserData(userData);
     renderHubHeader();
 
+    // Sortear circuito aleatorio para que cada carrera sea una sorpresa única
+    const rolledTrack = getRandomWagerTrack(room);
+    room.currentTrackId = rolledTrack.id;
+    room.currentTrackName = rolledTrack.name;
+    room.currentTrackEnv = rolledTrack.env;
+
     const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
     const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
 
@@ -1892,7 +1948,10 @@ function renderWagerLobbyModal(isReady = false) {
                         ${room.badge} • ${room.buyIn} ${room.currency}
                     </span>
                     <h2 style="font-size: 20px; font-weight: 900; margin: 6px 0 2px;">${room.icon} ${room.name}</h2>
-                    <div style="font-size: 11px; color: #94a3b8;">🏁 Circuito: <strong style="color:#00f5d4;">${room.trackName}</strong></div>
+                    <div style="font-size: 11.5px; color: #cbd5e1; margin-top: 3px;">
+                        🎲 Trazada Sorteada: <strong style="color:#fde047; text-transform: uppercase;">${escapeHtml(room.currentTrackName || room.trackName)}</strong>
+                        <span style="font-size: 10px; color: #00f5d4; background: rgba(0,245,212,0.12); padding: 1px 6px; border-radius: 4px; font-weight: 800;">AZAR 🔀</span>
+                    </div>
                 </div>
                 <button class="settings-close-x" onclick="closeWagerLobby(true)" title="Cancelar y recuperar tokens">✖</button>
             </div>
@@ -2078,7 +2137,9 @@ function launchWagerRace(overrideRoom = null, overrideSlots = null, overridePot 
     const tryLaunch = () => {
         const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
         if (sc && typeof sc.physics === 'object') {
-            startRace(sc, room.trackId, carIdx, 'day', false, wagerConfig);
+            const trackTarget = (room && room.currentTrackId) ? room.currentTrackId : (room.trackId || 'rookie_ring');
+            const timeTarget = (trackTarget === 'neo_tokyo_bay' || trackTarget === 'tokyo_twister') ? 'night' : 'day';
+            startRace(sc, trackTarget, carIdx, timeTarget, false, wagerConfig);
         } else {
             setTimeout(tryLaunch, 100);
         }

@@ -4232,7 +4232,8 @@ function setupHud(scene, track) {
     if (typeof window !== 'undefined' && window.activeWagerConfig && window.activeWagerConfig.room) {
         const wRoom = window.activeWagerConfig.room;
         const wPot = window.activeWagerConfig.potData ? window.activeWagerConfig.potData.netPot : (wRoom.buyIn * 4 * 0.95);
-        const wagerHudBadge = scene.add.text(480, 52, `🪙 ${wRoom.name} • BOTE NETO: ${wPot} ${wRoom.currency}`, {
+        const trackTitle = (wRoom.currentTrackName || (track && track.name) || wRoom.trackName || '').replace(/\s*\([^)]*\)/, '');
+        const wagerHudBadge = scene.add.text(480, 52, `🪙 ${wRoom.name} • 🎲 ${trackTitle.toUpperCase()} • BOTE: ${wPot} ${wRoom.currency}`, {
             font: '900 11px Arial Black',
             fill: '#fde047',
             backgroundColor: '#0a0d14ee',
@@ -5757,8 +5758,9 @@ function handleWagerRaceEnd(scene, playerRank) {
         font: '900 20px Arial Black', fill: '#00f5d4', stroke: '#000000', strokeThickness: 4
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-    scene.add.text(480, 72, `${wRoom.name.toUpperCase()} (Buy-in: ${wRoom.buyIn} ${wRoom.currency}) • PILOTO: ${curPilot.toUpperCase()}`, {
-        font: 'bold 13px Arial', fill: '#94a3b8'
+    const trkName = (wRoom.currentTrackName || (raceScene && raceScene.track && raceScene.track.name) || wRoom.trackName || 'Circuito').replace(/\s*\([^)]*\)/, '').toUpperCase();
+    scene.add.text(480, 72, `${wRoom.name.toUpperCase()} (Buy-in: ${wRoom.buyIn} ${wRoom.currency}) • 🎲 PISTA: ${trkName} • PILOTO: ${curPilot.toUpperCase()}`, {
+        font: 'bold 12px Arial', fill: '#94a3b8'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
     // Medalla y clasificación

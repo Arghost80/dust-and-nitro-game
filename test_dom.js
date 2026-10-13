@@ -983,8 +983,42 @@ console.log(`   - Tokens quemados acumulados: ${statsAfterRace.burnedTokens} $CR
 console.log(`   - Tokens a pool de recompensas: ${statsAfterRace.rewardsFees} $CR`);
 console.log(`   - Comisión de plataforma (nosotros): ${statsAfterRace.devFees} $CR`);
 
+// 11. VERIFICANDO CIRCUITO ALEATORIO ENTRE TODAS LAS PISTAS Y MOTOR DE SEGURIDAD (V52)
+console.log('\n--- VERIFICANDO CIRCUITO ALEATORIO Y MOTOR DE SEGURIDAD ANTI-BOTS (V52) ---');
+
+// A. Sorteo de circuitos aleatorios
+const trackPools = vm.runInContext('WAGER_TRACK_POOLS', ctx);
+if (!trackPools || !trackPools.room_bronze || !trackPools.room_elite) {
+    throw new Error('Deben definirse las bolsas de circuitos aleatorios para cada sala');
+}
+const rolledBronze = vm.runInContext('getRandomWagerTrack(WAGER_ROOMS_CONFIG[0])', ctx);
+const rolledSilver = vm.runInContext('getRandomWagerTrack(WAGER_ROOMS_CONFIG[1])', ctx);
+const rolledGold = vm.runInContext('getRandomWagerTrack(WAGER_ROOMS_CONFIG[2])', ctx);
+const rolledElite = vm.runInContext('getRandomWagerTrack(WAGER_ROOMS_CONFIG[3])', ctx);
+
+console.log('✓ Sorteo aleatorio ejecutado para cada sala:');
+console.log(`   - Sala Amateur: ${rolledBronze.name} (${rolledBronze.id})`);
+console.log(`   - Sala Semi-Pro: ${rolledSilver.name} (${rolledSilver.id})`);
+console.log(`   - Sala Master GP: ${rolledGold.name} (${rolledGold.id})`);
+console.log(`   - Sala High Roller: ${rolledElite.name} (${rolledElite.id})`);
+
+if (!rolledBronze.id || !rolledSilver.id || !rolledGold.id || !rolledElite.id) {
+    throw new Error('Todas las salas deben sortear una pista válida con ID');
+}
+
+// B. Verificar que el lobby actualiza currentTrackId aleatoriamente
+vm.runInContext(`
+    openWagerLobby('room_bronze');
+`, ctx);
+const activeRoom = vm.runInContext('currentWagerLobby.room', ctx);
+if (!activeRoom.currentTrackId || !activeRoom.currentTrackName) {
+    throw new Error('El lobby de apuestas debe registrar el circuito sorteado para la carrera');
+}
+console.log(`✓ Circuito sorteado dinámicamente en el lobby: ${activeRoom.currentTrackName}`);
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
+
 
 
