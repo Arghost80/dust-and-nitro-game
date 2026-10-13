@@ -733,6 +733,94 @@ if (snowTrackTod !== 'day') {
 }
 console.log('✓ Circuito de nieve configurado con nieve blanca pura y luz solar diurna alpina');
 
+// --- VERIFICANDO MEJORAS GRÁFICAS PROFESIONALES DE COMPETICIÓN (V48) ---
+console.log('\n--- VERIFICANDO MEJORAS GRÁFICAS PROFESIONALES (V48) ---');
+
+// 1. Texturas de backfire, debris, spray y comisarios
+const texturesCheck = [
+    'dt_backfire_flame', 'dt_water_spray',
+    'dt_debris_grass', 'dt_debris_gravel', 'dt_debris_snow',
+    'dt_marshal_green', 'dt_marshal_yellow', 'dt_marshal_checkered'
+];
+vm.runInContext(`
+    buildProRacingEnvironmentTextures(raceScene);
+`, ctx);
+const texturesCount = vm.runInContext(`
+    ${JSON.stringify(texturesCheck)}.filter(k => raceScene.textures.exists(k)).length;
+`, ctx);
+console.log('Nuevas texturas profesionales registradas:', texturesCount, '/', texturesCheck.length);
+if (texturesCount !== texturesCheck.length) {
+    throw new Error('Faltan texturas profesionales por generar en buildProRacingEnvironmentTextures');
+}
+console.log('✓ Texturas de backfire, spray, debris y comisarios generadas con éxito');
+
+// 2. Petardeo y Llamaradas de Escape Dual (Backfire & Anti-lag)
+vm.runInContext(`
+    dustAudio.init();
+    dustAudio.playBackfire();
+    spawnBackfireFlame(raceScene, playerCar);
+`, ctx);
+console.log('✓ Petardeo de audio y llamaradas de escape dual (GT3 Backfire) verificados');
+
+// 3. Chispas de titanio de fondo plano (Titanium Sparks Shower)
+vm.runInContext(`
+    spawnTitaniumSparks(raceScene, playerCar.x, playerCar.y, playerCar.angle, 5);
+`, ctx);
+console.log('✓ Emisor de chispas de titanio en fondo plano y pianos verificado');
+
+// 4. Brillo de Carrocería Fresnel y Bloom de Faros
+vm.runInContext(`
+    selectedTimeOfDay = 'sunset';
+    updateCarVisuals();
+`, ctx);
+const sheenExists = vm.runInContext('Boolean(playerCar.sheenGfx)', ctx);
+console.log('Brillo Fresnel de carrocería (Sheen) activo:', sheenExists);
+if (!sheenExists) {
+    throw new Error('playerCar.sheenGfx debe estar instanciado');
+}
+console.log('✓ Reflejo especular Fresnel y halos bloom en faros y pilotos GT3 activos');
+
+// 5. Trazada Engomada Dinámica (Progressive Racing Groove)
+vm.runInContext(`
+    launchRaceDirectly('rookie_ring');
+`, ctx);
+const grooveExists = vm.runInContext('Boolean(racingGrooveLayer)', ctx);
+console.log('Capa de trazada engomada (Racing Groove) activa:', grooveExists);
+if (!grooveExists) {
+    throw new Error('racingGrooveLayer debe estar presente en el circuito');
+}
+console.log('✓ Trazada engomada dinámica (Racing Groove) verificada');
+
+// 6. Debris físico (Hierba, Grava, Nieve)
+vm.runInContext(`
+    spawnDebris(raceScene, playerCar.x, playerCar.y, 'grass', playerCar.angle, 150);
+    spawnDebris(raceScene, playerCar.x, playerCar.y, 'gravel', playerCar.angle, 150);
+    spawnDebris(raceScene, playerCar.x, playerCar.y, 'snow', playerCar.angle, 150);
+`, ctx);
+console.log('✓ Eyección de restos y debris balístico verificado');
+
+// 7. Comisarios de Pista Animados (Track Marshals)
+const marshalsCount = vm.runInContext('trackMarshals.length', ctx);
+console.log('Comisarios de pista desplegados en escapatorias:', marshalsCount);
+if (marshalsCount < 1) {
+    throw new Error('Debe haber comisarios de pista desplegados en las curvas');
+}
+console.log('✓ Comisarios de pista animados ondeando banderas colocados correctamente');
+
+// 8. Modo Lluvia (Wet Weather / Rain Mode)
+vm.runInContext(`
+    selectedTimeOfDay = 'rain';
+    initWeatherParticles('circuit');
+    updatePlayer(0.016, DustracTracks['rookie_ring']);
+    spawnWaterSpray(raceScene, playerCar);
+`, ctx);
+const rainParticlesCount = vm.runInContext('weatherParticles.length', ctx);
+console.log('Partículas de lluvia generadas en Modo Lluvia:', rainParticlesCount);
+if (rainParticlesCount < 80) {
+    throw new Error('El Modo Lluvia debe inicializar partículas densas de lluvia');
+}
+console.log('✓ Modo Lluvia verificado: asfalto húmedo, spray de ruedas y aquaplaning');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

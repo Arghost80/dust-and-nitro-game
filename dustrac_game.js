@@ -188,7 +188,7 @@ class DustAudio {
     }
 
     playBackfire() {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -212,7 +212,7 @@ class DustAudio {
     }
 
     playRumbleStrip(speedKmh = 180) {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         if (this._lastRumbleTime && now - this._lastRumbleTime < 0.065) return;
         this._lastRumbleTime = now;
@@ -242,7 +242,7 @@ class DustAudio {
     }
 
     playGearShift(gear = 2) {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -258,7 +258,7 @@ class DustAudio {
     }
 
     playSand() {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -273,7 +273,7 @@ class DustAudio {
     }
 
     playCrash() {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -289,7 +289,7 @@ class DustAudio {
     }
 
     playLap() {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -307,7 +307,7 @@ class DustAudio {
     }
 
     playCountdown(isGo) {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -322,7 +322,7 @@ class DustAudio {
     }
 
     playBoost() {
-        if (!this.ctx) return;
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -517,8 +517,9 @@ let playerNextNodeIdx = 0;
 let lapStartTime = 0;
 let bestLapTime = null;
 
-let skidLayer, radarGraphics;
+let skidLayer, racingGrooveLayer, radarGraphics;
 let trackBarriers = [];
+let trackMarshals = [];
 let hudPosText, hudLapText, hudTimeText, hudSpeedText, hudSurfaceText, hudGhostBadge, hudDriftBadge, hudSlipstreamBadge, hudTachoGfx, hudGearText, hudRpmText, lastPlayerGear = 1;
 let playerInSlipstream = false;
 let speedLinesGraphics, weatherGraphics;
@@ -1144,18 +1145,19 @@ function getOrCreateColoredCarTexture(scene, colorHex, fallbackKey = 'car_red', 
     return scene.textures.exists(baseKey) ? baseKey : fallbackKey;
 }
 
-// Inicializar partículas climáticas dinámicas según bioma
+// Inicializar partículas climáticas dinámicas según bioma y meteorología (Lluvia, Nieve, Polvo)
 function initWeatherParticles(biome) {
     weatherParticles = [];
-    const count = 45;
+    const isRain = selectedTimeOfDay === 'rain';
+    const count = isRain ? 95 : 45;
     for (let i = 0; i < count; i++) {
         weatherParticles.push({
             x: Math.random() * 960,
             y: Math.random() * 540,
-            vx: (Math.random() - 0.5) * 1.5,
-            vy: 1.5 + Math.random() * 2.5,
-            size: 1.5 + Math.random() * 2.5,
-            alpha: 0.3 + Math.random() * 0.5,
+            vx: isRain ? -2.2 - Math.random() * 1.8 : (Math.random() - 0.5) * 1.5,
+            vy: isRain ? 9.5 + Math.random() * 6.5 : 1.5 + Math.random() * 2.5,
+            size: isRain ? 14 + Math.random() * 10 : 1.5 + Math.random() * 2.5,
+            alpha: isRain ? 0.45 + Math.random() * 0.45 : 0.3 + Math.random() * 0.5,
             wiggle: Math.random() * Math.PI * 2
         });
     }
@@ -1569,6 +1571,98 @@ function buildProRacingEnvironmentTextures(scene) {
         ctx.fillRect(0, 0, 36, h);
         ctx.fillRect(w - 36, 0, 36, h);
     });
+
+    // 22. Llamarada de escape Backfire (Dual core GT3 flame)
+    makeTex('dt_backfire_flame', 32, 32, (ctx, w, h) => {
+        const grad = ctx.createRadialGradient(w/2, h/2, 2, w/2, h/2, 14);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+        grad.addColorStop(0.3, 'rgba(0, 245, 212, 0.9)');
+        grad.addColorStop(0.65, 'rgba(255, 107, 0, 0.85)');
+        grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(w/2, h/2, 15, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // 23. Spray de agua volumétrico de rueda (Wet weather rooster tail)
+    makeTex('dt_water_spray', 32, 32, (ctx, w, h) => {
+        const grad = ctx.createRadialGradient(w/2, h/2, 1, w/2, h/2, 15);
+        grad.addColorStop(0, 'rgba(240, 249, 255, 0.85)');
+        grad.addColorStop(0.4, 'rgba(186, 230, 253, 0.55)');
+        grad.addColorStop(0.8, 'rgba(125, 211, 252, 0.25)');
+        grad.addColorStop(1, 'rgba(224, 242, 254, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(w/2, h/2, 15, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // 24. Debris de Césped (Briznas volando fuera de pista)
+    makeTex('dt_debris_grass', 16, 16, (ctx, w, h) => {
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.moveTo(3, 14); ctx.lineTo(8, 2); ctx.lineTo(11, 14); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath();
+        ctx.moveTo(7, 14); ctx.lineTo(13, 4); ctx.lineTo(15, 14); ctx.closePath(); ctx.fill();
+    });
+
+    // 25. Debris de Gravilla / Arena (Guijarros de escapatoria)
+    makeTex('dt_debris_gravel', 14, 14, (ctx, w, h) => {
+        ctx.fillStyle = '#78716c';
+        ctx.beginPath();
+        ctx.moveTo(4, 2); ctx.lineTo(12, 4); ctx.lineTo(11, 12); ctx.lineTo(3, 10); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#a8a29e';
+        ctx.fillRect(5, 4, 3, 3);
+        ctx.fillStyle = '#44403c';
+        ctx.fillRect(8, 7, 3, 3);
+    });
+
+    // 26. Debris de Nieve (Copos compactos de escapatoria)
+    makeTex('dt_debris_snow', 14, 14, (ctx, w, h) => {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(7, 7, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(8, 8, 2, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // 27. Comisarios de Pista Animados (Track Marshals ondeando banderas)
+    makeTex('dt_marshal_green', 48, 48, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(8, 8, 32, 32);
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1.5; ctx.strokeRect(8, 8, 32, 32);
+        ctx.fillStyle = '#ea580c'; ctx.beginPath(); ctx.arc(22, 22, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(24, 22); ctx.lineTo(38, 14); ctx.stroke();
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath(); ctx.moveTo(38, 14); ctx.lineTo(46, 17); ctx.lineTo(39, 26); ctx.lineTo(34, 22); ctx.closePath(); ctx.fill();
+    });
+
+    makeTex('dt_marshal_yellow', 48, 48, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(8, 8, 32, 32);
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1.5; ctx.strokeRect(8, 8, 32, 32);
+        ctx.fillStyle = '#ea580c'; ctx.beginPath(); ctx.arc(22, 22, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(24, 22); ctx.lineTo(38, 14); ctx.stroke();
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath(); ctx.moveTo(38, 14); ctx.lineTo(46, 17); ctx.lineTo(39, 26); ctx.lineTo(34, 22); ctx.closePath(); ctx.fill();
+    });
+
+    makeTex('dt_marshal_checkered', 48, 48, (ctx, w, h) => {
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(8, 8, 32, 32);
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 1.5; ctx.strokeRect(8, 8, 32, 32);
+        ctx.fillStyle = '#ea580c'; ctx.beginPath(); ctx.arc(22, 22, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(24, 22); ctx.lineTo(38, 14); ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 2; j++) {
+                ctx.fillStyle = ((i + j) % 2 === 0) ? '#ffffff' : '#090d16';
+                ctx.fillRect(34 + i * 4, 14 + j * 5, 4, 5);
+            }
+        }
+    });
 }
 
 // Genera texturas HD fotorrealistas de césped y grava de forma instantánea sin bloqueos
@@ -1645,16 +1739,18 @@ function buildHDRoadTextures(scene) {
 
                 const r = d[i], g = d[i+1], b = d[i+2];
 
-                // Pianos rojos FIA con relieve 3D
+                // Pianos rojos FIA con relieve 3D de alta definición y biselado
                 if (r > 150 && g < 90 && b < 90) {
-                    const bevel = ((x + y) % 8 < 4) ? 22 : -22;
+                    const isGroove = ((x + y) % 16 < 2);
+                    const bevel = isGroove ? -38 : (((x + y) % 16 < 8) ? 30 : -22);
                     d[i] = Math.max(0, Math.min(255, 220 + bevel));
-                    d[i+1] = Math.max(0, Math.min(255, 28 + bevel));
-                    d[i+2] = Math.max(0, Math.min(255, 42 + bevel));
+                    d[i+1] = Math.max(0, Math.min(255, 28 + Math.round(bevel * 0.4)));
+                    d[i+2] = Math.max(0, Math.min(255, 42 + Math.round(bevel * 0.4)));
                 }
-                // Pianos blancos con relieve
+                // Pianos blancos con relieve 3D y biselado
                 else if (r > 190 && g > 190 && b > 190) {
-                    const bevel = ((x + y) % 8 < 4) ? 14 : -14;
+                    const isGroove = ((x + y) % 16 < 2);
+                    const bevel = isGroove ? -44 : (((x + y) % 16 < 8) ? 20 : -20);
                     d[i] = Math.max(0, Math.min(255, 245 + bevel));
                     d[i+1] = Math.max(0, Math.min(255, 248 + bevel));
                     d[i+2] = Math.max(0, Math.min(255, 252 + bevel));
@@ -1693,24 +1789,32 @@ function buildHDRoadTextures(scene) {
                 ctx.fillStyle = isRed ? '#dc2626' : '#f8fafc';
                 ctx.fill();
 
-                // Relieve 3D biselado del piano
+                // Relieve 3D biselado del piano: sombra en el borde interior, brillo en el exterior
                 ctx.strokeStyle = isRed ? '#991b1b' : '#cbd5e1';
                 ctx.lineWidth = 2;
                 ctx.stroke();
+
+                // Ranura física de separación entre bloques de bordillo
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(startAng) * rInner, cy + Math.sin(startAng) * rInner);
+                ctx.lineTo(cx + Math.cos(startAng) * rOuter, cy + Math.sin(startAng) * rOuter);
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
             }
 
-            // Borde exterior delimitador
+            // Borde exterior delimitador con brillo especular (arista superior)
             ctx.beginPath();
             ctx.arc(cx, cy, rOuter, Math.PI, Math.PI * 1.5, false);
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // Sombra suave proyectada sobre la hierba del interior
+            // Sombra física profunda proyectada sobre el interior
             ctx.beginPath();
             ctx.arc(cx, cy, rInner - 2, Math.PI, Math.PI * 1.5, false);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+            ctx.lineWidth = 5;
             ctx.stroke();
         }
 
@@ -2702,18 +2806,25 @@ function showMenu(scene) {
     }).setOrigin(0.5);
 
     const timesOfDay = [
-        { id: 'day', label: '☀️ MODO DÍA (Luz Natural)', desc: 'Faros Off' },
-        { id: 'sunset', label: '🌅 ATARDECER (Golden Hour)', desc: 'Tono Cálido' },
-        { id: 'night', label: '🌙 MODO NOCHE (Faros Xenón)', desc: 'Haz Dinámico' }
+        { id: 'day', label: '☀️ DÍA (Luz Natural)', desc: 'Faros Off' },
+        { id: 'sunset', label: '🌅 ATARDECER (Golden)', desc: 'Tono Cálido' },
+        { id: 'night', label: '🌙 NOCHE (Faros Xenón)', desc: 'Haz Dinámico' },
+        { id: 'rain', label: '🌧️ LLUVIA (Wet Track)', desc: 'Spray y Grip' }
     ];
 
     timesOfDay.forEach((tod, idx) => {
-        const bx = 260 + idx * 220;
+        const bx = 160 + idx * 215;
         const by = 428;
         const isSel = selectedTimeOfDay === tod.id;
 
         const tBox = scene.add.graphics();
-        tBox.fillStyle(isSel ? (tod.id === 'night' ? 0x1a237e : 0xef6c00) : 0x141822, 0.95);
+        let boxColor = 0x141822;
+        if (isSel) {
+            if (tod.id === 'night') boxColor = 0x1a237e;
+            else if (tod.id === 'rain') boxColor = 0x0284c7;
+            else boxColor = 0xef6c00;
+        }
+        tBox.fillStyle(boxColor, 0.95);
         tBox.fillRoundedRect(bx - 95, by - 16, 190, 32, 6);
         tBox.lineStyle(2, isSel ? 0xfee440 : 0x2e384d, 1);
         tBox.strokeRoundedRect(bx - 95, by - 16, 190, 32, 6);
@@ -3024,8 +3135,9 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         }
     });
 
-    // 3. CAPA DE MARCAS DE GOMA DE DERRAPE PERMANENTES (SKID MARKS)
+    // 3. CAPA DE MARCAS DE GOMA DE DERRAPE PERMANENTES Y TRAZADA ENGOMADA PROGRESIVA
     skidLayer = scene.add.graphics().setDepth(4);
+    racingGrooveLayer = scene.add.graphics().setDepth(3.45);
 
     // Configuración de Iluminación y Sombras Coherentes según la Hora del Día
     const lightConfig = {
@@ -3040,6 +3152,10 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         night: {
             shadowDx: 6, shadowDy: 8, shadowAlpha: 0.65,
             tint: 0x0369a1, tintAlpha: 0.18, vignetteAlpha: 0.38
+        },
+        rain: {
+            shadowDx: 8, shadowDy: 10, shadowAlpha: 0.28,
+            tint: 0x38bdf8, tintAlpha: 0.14, vignetteAlpha: 0.24
         }
     }[selectedTimeOfDay] || { shadowDx: 12, shadowDy: 14, shadowAlpha: 0.36, tint: null, vignetteAlpha: 0.16 };
 
@@ -3297,6 +3413,39 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             }
         }
     });
+
+    // E) Comisarios de pista animados (Animated Track Marshals con banderas FIA)
+    trackMarshals = [];
+    if (nodes && nodes.length > 4 && scene.textures && scene.textures.exists('dt_marshal_green')) {
+        const step = Math.max(1, Math.floor(nodes.length / 6));
+        for (let m = 0; m < nodes.length; m += step) {
+            const nA = nodes[m];
+            const nB = nodes[(m + 1) % nodes.length];
+            const ang = Math.atan2(nB.y - nA.y, nB.x - nA.x);
+            const perpX = -Math.sin(ang);
+            const perpY = Math.cos(ang);
+            const mx = nA.x + perpX * 145;
+            const my = nA.y + perpY * 145;
+
+            const roadD = getDistanceToRoad(mx, my, scene);
+            if (roadD.dist > 110 && mx > 60 && mx < track.worldWidth - 60 && my > 60 && my < track.worldHeight - 60) {
+                const marshal = scene.add.sprite(mx, my, 'dt_marshal_green')
+                    .setDisplaySize(42, 42)
+                    .setDepth(12);
+
+                scene.tweens.add({
+                    targets: marshal,
+                    angle: { from: -8, to: 8 },
+                    duration: 650 + (m % 3) * 120,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+
+                trackMarshals.push(marshal);
+            }
+        }
+    }
 
     // Helper seguro para verificar si una coordenada toca asfalto o pianos
     const isPointOnRoad = (px, py) => {
@@ -3970,7 +4119,16 @@ function dustUpdate(time, delta) {
         const biome = getTrackBiome(track);
         const isNight = selectedTimeOfDay === 'night';
 
-        if (biome === 'snow') {
+        if (selectedTimeOfDay === 'rain') {
+            weatherGraphics.lineStyle(1.8, 0xbae6fd, 0.58);
+            weatherParticles.forEach(p => {
+                p.y += p.vy;
+                p.x += p.vx;
+                if (p.y > 540) { p.y = -20; p.x = Math.random() * 960; }
+                if (p.x < -20) p.x = 980;
+                weatherGraphics.lineBetween(p.x, p.y, p.x + p.vx * 1.8, p.y + p.size);
+            });
+        } else if (biome === 'snow') {
             weatherGraphics.fillStyle(0xffffff, 0.75);
             weatherParticles.forEach(p => {
                 p.y += p.vy * 0.95;
@@ -4007,6 +4165,18 @@ function dustUpdate(time, delta) {
                 weatherGraphics.fillCircle(p.x, p.y, p.size * 0.7);
             });
         }
+    }
+
+    // Actualización dinámica de banderas en los puestos de comisarios (Track Marshals)
+    if (trackMarshals && trackMarshals.length > 0) {
+        const isIncident = (offTrackTimer > 0.45) || (Math.abs(playerSpeed) < 35 && gameState === 'RACE') || (lastCrashSoundTime && Date.now() - lastCrashSoundTime < 1800);
+        const isFinish = (gameState === 'FINISHED' || gameState === 'GAME_OVER');
+        const targetTex = isFinish ? 'dt_marshal_checkered' : (isIncident ? 'dt_marshal_yellow' : 'dt_marshal_green');
+        trackMarshals.forEach(m => {
+            if (m && m.active && m.texture && m.texture.key !== targetTex) {
+                m.setTexture(targetTex);
+            }
+        });
     }
 
     // Flashes fotográficos de espectadores en las tribunas
@@ -4124,6 +4294,7 @@ function respawnPlayerOnTrack(track) {
 function updatePlayer(dt, track) {
     if (!playerCar || !raceScene) return;
     const cData = playerCar.carData || {};
+    const biome = getTrackBiome(track);
     const left = Boolean((keys && keys.left && keys.left.isDown) || (keys && keys.a && keys.a.isDown) || touchLeft);
     const right = Boolean((keys && keys.right && keys.right.isDown) || (keys && keys.d && keys.d.isDown) || touchRight);
     const gas = Boolean((keys && keys.up && keys.up.isDown) || (keys && keys.w && keys.w.isDown) || touchGas);
@@ -4156,6 +4327,10 @@ function updatePlayer(dt, track) {
             // Microvibración háptica y de suspensión en el chasis
             playerCar.x += (Math.random() - 0.5) * 1.2;
             playerCar.y += (Math.random() - 0.5) * 1.2;
+            // Chispas de titanio al morder bordillos a velocidad
+            if (Math.abs(playerSpeed) > 110 && Math.random() < 0.6) {
+                spawnTitaniumSparks(raceScene, playerCar.x, playerCar.y, playerCar.angle, 3);
+            }
             if (typeof window !== 'undefined' && window.navigator && typeof window.navigator.vibrate === 'function') {
                 try { window.navigator.vibrate(10); } catch(e) {}
             }
@@ -4166,11 +4341,13 @@ function updatePlayer(dt, track) {
         surfaceLabel = 'TRAMPA DE ARENA (DECELERACIÓN)';
         dustAudio.playSand();
         spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xc5a059);
+        spawnDebris(raceScene, playerCar.x, playerCar.y, (biome === 'snow') ? 'snow' : 'gravel', playerCar.angle, playerSpeed);
     } else if (tile && tile.t.startsWith('sandGrass')) {
         offTrackTimer = Math.max(0, offTrackTimer - dt * 1.5);
         grip = 0.58;
         surfaceLabel = 'TRANSICIÓN ARENA-CÉSPED';
         spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0xd7ccc8);
+        spawnDebris(raceScene, playerCar.x, playerCar.y, (biome === 'snow') ? 'snow' : 'grass', playerCar.angle, playerSpeed);
     } else {
         // Fuera del asfalto: margen permitido de escapatoria ("salirse un poco") vs atajo ilegal
         if (roadInfo.dist <= 175) {
@@ -4178,12 +4355,14 @@ function updatePlayer(dt, track) {
             offTrackTimer = Math.max(0, offTrackTimer - dt);
             grip = 0.52;
             surfaceLabel = 'CÉSPED DE ESCAPATORIA (DERIVA)';
-            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x388e3c);
+            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', (biome === 'snow') ? 0xf8fafc : 0x388e3c);
+            spawnDebris(raceScene, playerCar.x, playerCar.y, (biome === 'snow') ? 'snow' : 'grass', playerCar.angle, playerSpeed);
         } else {
             // ATAJO ILEGAL: Fuera de los límites permitidos del trazado
             grip = 0.22;
             surfaceLabel = '⚠️ FUERA DE LÍMITES - RETORNA A PISTA';
-            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', 0x2e7d32);
+            spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_smoke', (biome === 'snow') ? 0xf8fafc : 0x2e7d32);
+            spawnDebris(raceScene, playerCar.x, playerCar.y, (biome === 'snow') ? 'snow' : 'grass', playerCar.angle, playerSpeed);
 
             // Frenada drástica y empuje elástico de retorno hacia el circuito
             playerSpeed *= 0.88;
@@ -4199,6 +4378,27 @@ function updatePlayer(dt, track) {
             }
         }
     }
+
+    // Efecto de lluvia (Wet Track): agarre reducido y spray de agua detrás de neumáticos
+    if (selectedTimeOfDay === 'rain') {
+        grip *= 0.84;
+        if (Math.abs(playerSpeed) > 75 && Math.random() < 0.42) {
+            spawnWaterSpray(raceScene, playerCar);
+        }
+    }
+
+    // Trazada engomada dinámica (Racing Groove): acumulación sutil de goma en apoyos fuertes
+    if (racingGrooveLayer && Math.abs(playerSpeed) > 120 && (left || right || brake || handbrake) && Math.random() < 0.20) {
+        racingGrooveLayer.fillStyle(0x05070a, 0.032);
+        racingGrooveLayer.fillCircle(playerCar.x, playerCar.y, 14);
+    }
+
+    // Petardeo de escape al soltar el acelerador a alta velocidad (Anti-lag GT3)
+    if (playerCar.wasGas && !gas && Math.abs(playerSpeed) > 160) {
+        dustAudio.playBackfire();
+        spawnBackfireFlame(raceScene, playerCar);
+    }
+    playerCar.wasGas = gas;
 
     hudSurfaceText.setText(`SUPERFICIE: ${surfaceLabel}`);
 
@@ -4700,7 +4900,7 @@ function spawnTireSmoke(scene, x, y, angleDeg) {
     });
 }
 
-// Llamarada de escape (Backfire Flame) al cambiar de marcha o soltar gas a altas RPM
+// Llamarada de escape dual y petardeo (Dual-Core Anti-lag Backfire Flame)
 function spawnBackfireFlame(scene, car) {
     if (!scene || !car || !car.active) return;
     const rad = Phaser.Math.DegToRad(car.angle);
@@ -4708,21 +4908,116 @@ function spawnBackfireFlame(scene, car) {
     const ry = car.y - Math.sin(rad) * 23;
     const perp = rad + Math.PI / 2;
 
-    [-6, 6].forEach(offset => {
+    [-6.5, 6.5].forEach(offset => {
         const fx = rx + Math.cos(perp) * offset;
         const fy = ry + Math.sin(perp) * offset;
 
-        const flame = scene.add.sprite(fx, fy, 'dt_sparkle')
-            .setDisplaySize(18, 18)
+        // Corona exterior de fuego naranja / incandescente GT3
+        const flameOuter = scene.add.sprite(fx, fy, (scene.textures && scene.textures.exists('dt_backfire_flame')) ? 'dt_backfire_flame' : 'dt_sparkle')
+            .setDisplaySize(20, 20)
             .setDepth(13)
-            .setTint(0x00f5d4); // Fuego azul/cian de competición GT3
+            .setTint(0xff6b00);
 
         scene.tweens.add({
-            targets: flame,
-            scale: 2.4,
+            targets: flameOuter,
+            scale: 2.2,
             alpha: 0,
-            duration: 120,
-            onComplete: () => flame.destroy()
+            duration: 130,
+            onComplete: () => flameOuter.destroy()
+        });
+
+        // Núcleo ultra-caliente cian / azul eléctrico de competición
+        const flameCore = scene.add.sprite(fx, fy, 'dt_sparkle')
+            .setDisplaySize(11, 11)
+            .setDepth(13.1)
+            .setTint(0x00f5d4);
+
+        scene.tweens.add({
+            targets: flameCore,
+            scale: 1.6,
+            alpha: 0,
+            duration: 90,
+            onComplete: () => flameCore.destroy()
+        });
+
+        // Micro-chispas de escape eyectadas hacia atrás
+        for (let s = 0; s < 2; s++) {
+            const spkAng = rad + Math.PI + (Math.random() - 0.5) * 0.7;
+            const sp = scene.add.sprite(fx, fy, 'dt_sparkle')
+                .setDisplaySize(7, 7)
+                .setDepth(13.2)
+                .setTint(Math.random() > 0.5 ? 0xffd700 : 0xff3d00);
+            scene.tweens.add({
+                targets: sp,
+                x: fx + Math.cos(spkAng) * (18 + Math.random() * 22),
+                y: fy + Math.sin(spkAng) * (18 + Math.random() * 22),
+                scale: 0.1,
+                alpha: 0,
+                duration: 130 + Math.random() * 70,
+                onComplete: () => sp.destroy()
+            });
+        }
+    });
+}
+
+// Eyección física de restos del terreno al salirse de pista (Physical Debris: Hierba, Grava, Nieve)
+function spawnDebris(scene, x, y, type = 'grass', carAngle = 0, carSpeed = 100) {
+    if (!scene || Math.random() > 0.45) return;
+    const texMap = {
+        grass: 'dt_debris_grass',
+        gravel: 'dt_debris_gravel',
+        snow: 'dt_debris_snow'
+    };
+    const key = (scene.textures && scene.textures.exists(texMap[type])) ? texMap[type] : 'dt_sparkle';
+    const rad = Phaser.Math.DegToRad(carAngle + 180 + (Math.random() - 0.5) * 60);
+    const spd = Math.min(65, (Math.abs(carSpeed) / 4) + 16 + Math.random() * 22);
+
+    const p = scene.add.sprite(
+        x + (Math.random() - 0.5) * 12,
+        y + (Math.random() - 0.5) * 12,
+        key
+    ).setDisplaySize(12, 12).setDepth(12);
+
+    scene.tweens.add({
+        targets: p,
+        x: p.x + Math.cos(rad) * spd,
+        y: p.y + Math.sin(rad) * spd,
+        angle: p.angle + (Math.random() - 0.5) * 360,
+        alpha: 0,
+        scale: 0.35,
+        duration: 240 + Math.random() * 120,
+        onComplete: () => p.destroy()
+    });
+}
+
+// Spray de agua volumétrico detrás de neumáticos en pista mojada (Rooster Tails)
+function spawnWaterSpray(scene, car) {
+    if (!scene || !car || !car.active) return;
+    const rad = Phaser.Math.DegToRad(car.angle);
+    const rx = car.x - Math.cos(rad) * 20;
+    const ry = car.y - Math.sin(rad) * 20;
+    const perp = rad + Math.PI / 2;
+    const tex = (scene.textures && scene.textures.exists('dt_water_spray')) ? 'dt_water_spray' : 'dt_smoke';
+
+    [-6.5, 6.5].forEach(offset => {
+        const sx = rx + Math.cos(perp) * offset;
+        const sy = ry + Math.sin(perp) * offset;
+        const sprayAngle = rad + Math.PI + (Math.random() - 0.5) * 0.45;
+        const dist = 24 + Math.random() * 32;
+
+        const sp = scene.add.sprite(sx, sy, tex)
+            .setDisplaySize(18, 18)
+            .setDepth(11.5)
+            .setAlpha(0.45);
+
+        scene.tweens.add({
+            targets: sp,
+            x: sx + Math.cos(sprayAngle) * dist,
+            y: sy + Math.sin(sprayAngle) * dist,
+            scale: 2.3,
+            alpha: 0,
+            duration: 220 + Math.random() * 90,
+            onComplete: () => sp.destroy()
         });
     });
 }
@@ -5149,34 +5444,45 @@ function updateCarsBridgeLayers(track) {
     });
 }
 
-// Emisor de chispas de titanio en el fondo plano / pianos de circuito
-function spawnTitaniumSparks(scene, x, y, angleDeg) {
-    if (!scene || Math.random() > 0.40) return;
-    const rad = Phaser.Math.DegToRad(angleDeg + 180 + (Math.random() - 0.5) * 45);
-    const p = scene.add.sprite(
-        x - Math.cos(Phaser.Math.DegToRad(angleDeg)) * 16 + (Math.random() - 0.5) * 6,
-        y - Math.sin(Phaser.Math.DegToRad(angleDeg)) * 16 + (Math.random() - 0.5) * 6,
-        'dt_sparkle'
-    ).setDisplaySize(12, 12).setDepth(12).setTint(0xffd700);
+// Emisor de chispas de titanio en el fondo plano / pianos de circuito (Titanium Sparks Shower)
+function spawnTitaniumSparks(scene, x, y, angleDeg, count = 4) {
+    if (!scene) return;
+    const rad = Phaser.Math.DegToRad(angleDeg);
+    const rearX = x - Math.cos(rad) * 16;
+    const rearY = y - Math.sin(rad) * 16;
 
-    scene.tweens.add({
-        targets: p,
-        x: p.x + Math.cos(rad) * 32,
-        y: p.y + Math.sin(rad) * 32,
-        alpha: 0,
-        scale: 0.2,
-        duration: 160 + Math.random() * 80,
-        onComplete: () => p.destroy()
-    });
+    for (let i = 0; i < count; i++) {
+        const spread = (Math.random() - 0.5) * 0.75;
+        const sparkAngle = rad + Math.PI + spread;
+        const dist = 26 + Math.random() * 38;
+        const tint = Math.random() < 0.35 ? 0xffffff : (Math.random() < 0.7 ? 0xffd700 : 0xff7700);
+
+        const p = scene.add.sprite(
+            rearX + (Math.random() - 0.5) * 8,
+            rearY + (Math.random() - 0.5) * 8,
+            'dt_sparkle'
+        ).setDisplaySize(9 + Math.random() * 5, 9 + Math.random() * 5).setDepth(12).setTint(tint);
+
+        scene.tweens.add({
+            targets: p,
+            x: rearX + Math.cos(sparkAngle) * dist,
+            y: rearY + Math.sin(sparkAngle) * dist,
+            alpha: 0,
+            scale: 0.15,
+            duration: 140 + Math.random() * 90,
+            onComplete: () => p.destroy()
+        });
+    }
 }
 
-// Actualizar sombras, faros día/noche y llamaradas de escape de todos los coches
+// Actualizar sombras, faros día/noche, destellos Fresnel y llamaradas de escape de todos los coches
 function updateCarVisuals() {
     const all = [playerCar, ...aiCars];
     const isPlayerBraking = Boolean((keys && keys.down && keys.down.isDown) || (keys && keys.s && keys.s.isDown) || touchBrake || (keys && keys.space && keys.space.isDown) || (keys && keys.shift && keys.shift.isDown) || touchHandbrake);
     const curTrk = (typeof tracks !== 'undefined' && tracks[currentTrackId]) || (typeof TRACKS_DATA !== 'undefined' && TRACKS_DATA[currentTrackId]) || null;
     const isNight = selectedTimeOfDay === 'night' || (curTrk && curTrk.tod === 'night') || (currentTrackId === 'neo_tokyo_bay');
     const isSunset = selectedTimeOfDay === 'sunset';
+    const isRain = selectedTimeOfDay === 'rain';
     const isGhostMode = (gameState === 'RACE' && (Date.now() - raceStartTime) < 5000);
     const carAlpha = isGhostMode ? 0.72 : 1.0;
 
@@ -5190,13 +5496,35 @@ function updateCarVisuals() {
             car.shadow.angle = car.angle;
         }
 
-        // Neón Underglow bajo el chasis (Nocturno / Atardecer)
+        // Brillo de carrocería fotorrealista (Fresnel Highlight según sol)
+        if (!car.sheenGfx && raceScene && typeof raceScene.add === 'object' && raceScene.add.graphics) {
+            car.sheenGfx = raceScene.add.graphics().setDepth(10.5);
+        }
+        if (car.sheenGfx) {
+            car.sheenGfx.clear();
+            if (selectedTimeOfDay !== 'night') {
+                const sunAngle = selectedTimeOfDay === 'sunset' ? 1.2 : 0.785;
+                const carRad = Phaser.Math.DegToRad(car.angle);
+                const dot = Math.abs(Math.cos(carRad - sunAngle));
+                if (dot > 0.25) {
+                    const sheenAlpha = (dot - 0.25) * (selectedTimeOfDay === 'sunset' ? 0.42 : 0.32);
+                    car.sheenGfx.fillStyle(0xffffff, sheenAlpha);
+                    car.sheenGfx.fillEllipse(car.x, car.y, 24, 9);
+                    if (dot > 0.75) {
+                        car.sheenGfx.fillStyle(0xffffff, (dot - 0.75) * 0.75);
+                        car.sheenGfx.fillCircle(car.x + Math.cos(carRad) * 6, car.y + Math.sin(carRad) * 6, 2.5);
+                    }
+                }
+            }
+        }
+
+        // Neón Underglow bajo el chasis (Nocturno / Atardecer / Lluvia)
         if (car.underglow) {
             car.underglow.clear();
-            if (isNight || isSunset) {
+            if (isNight || isSunset || isRain) {
                 const hexColor = (car.carData && car.carData.colorHex) ? car.carData.colorHex : '#00f5d4';
                 const cInt = parseInt(String(hexColor).replace('#', ''), 16) || 0x00f5d4;
-                const ugAlpha = isNight ? 0.38 : 0.18;
+                const ugAlpha = isNight ? 0.38 : (isRain ? 0.25 : 0.18);
                 car.underglow.fillStyle(cInt, ugAlpha);
                 car.underglow.fillEllipse(car.x, car.y, 44, 26);
                 car.underglow.fillStyle(cInt, ugAlpha * 0.45);
@@ -5229,7 +5557,7 @@ function updateCarVisuals() {
 
                 // Chispas de titanio al derrapar o clavar frenos a alta velocidad
                 if (touchHandbrake || (keys && keys.space && keys.space.isDown) || Math.abs(playerSpeed) > 230) {
-                    spawnTitaniumSparks(raceScene, car.x, car.y, car.angle);
+                    spawnTitaniumSparks(raceScene, car.x, car.y, car.angle, 4);
                 }
             }
         }
@@ -5240,14 +5568,12 @@ function updateCarVisuals() {
             const fx = car.x + Math.cos(rad) * 22;
             const fy = car.y + Math.sin(rad) * 22;
 
-            // Iluminación frontal de faros:
-            // DE DÍA: Los faros delanteros están APAGADOS (0 conos).
-            // DE NOCHE o ATARDECER: Faros encendidos con haz amplio que rasga la oscuridad.
-            if (isNight || isSunset) {
+            // Iluminación frontal de faros (Noche, Atardecer o Lluvia FIA):
+            if (isNight || isSunset || isRain) {
                 const cone = 0.38;
-                const dist = isNight ? 160 : 110;
-                const beamAlpha = isNight ? 0.38 : 0.15;
-                const coreAlpha = isNight ? 0.65 : 0.25;
+                const dist = isNight ? 160 : (isRain ? 130 : 110);
+                const beamAlpha = isNight ? 0.38 : (isRain ? 0.22 : 0.15);
+                const coreAlpha = isNight ? 0.65 : (isRain ? 0.40 : 0.25);
 
                 // Haz ambiental exterior
                 car.headlights.fillStyle(0xfff9c4, beamAlpha);
@@ -5267,28 +5593,34 @@ function updateCarVisuals() {
                 car.headlights.closePath();
                 car.headlights.fill();
 
-                // Proyectores ópticos dobles en el morro del GT3
+                // Proyectores ópticos dobles con halo bloom xenón suave
                 const perp = rad + Math.PI / 2;
+                car.headlights.fillStyle(0x38bdf8, 0.35);
+                car.headlights.fillCircle(fx + Math.cos(perp) * 6, fy + Math.sin(perp) * 6, 7.5);
+                car.headlights.fillCircle(fx - Math.cos(perp) * 6, fy - Math.sin(perp) * 6, 7.5);
                 car.headlights.fillStyle(0xffffff, 0.95);
                 car.headlights.fillCircle(fx + Math.cos(perp) * 6, fy + Math.sin(perp) * 6, 2.8);
                 car.headlights.fillCircle(fx - Math.cos(perp) * 6, fy - Math.sin(perp) * 6, 2.8);
             }
 
-            // Luces de posición y freno traseras rojas
+            // Luces de posición y freno traseras rojas con bloom difuso
             const rx = car.x - Math.cos(rad) * 20;
             const ry = car.y - Math.sin(rad) * 20;
             const perp = rad + Math.PI / 2;
 
             if (car.isPlayer && isPlayerBraking) {
-                // Frenada intensa: pilotos traseros de freno al 100% de intensidad
-                car.headlights.fillStyle(0xff1744, 0.85);
-                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 5);
-                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 5);
-                car.headlights.fillStyle(0xffffff, 0.9);
-                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 2);
-                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 2);
-            } else if (isNight || isSunset) {
-                // Luz de posición trasera suave permanente de noche o atardecer
+                // Frenada intensa: halo bloom exterior difuso + LED rojo + centro blanco
+                car.headlights.fillStyle(0xff1744, 0.32);
+                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 12);
+                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 12);
+                car.headlights.fillStyle(0xff1744, 0.90);
+                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 5.5);
+                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 5.5);
+                car.headlights.fillStyle(0xffffff, 0.95);
+                car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 2.2);
+                car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 2.2);
+            } else if (isNight || isSunset || isRain) {
+                // Luz de posición trasera permanente suave
                 car.headlights.fillStyle(0xd50000, 0.45);
                 car.headlights.fillCircle(rx + Math.cos(perp) * 8, ry + Math.sin(perp) * 8, 2.5);
                 car.headlights.fillCircle(rx - Math.cos(perp) * 8, ry - Math.sin(perp) * 8, 2.5);
