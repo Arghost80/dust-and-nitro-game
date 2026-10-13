@@ -112,13 +112,15 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Limitador de peticiones anti-fuerza bruta / anti-bots
+    // Limitador de peticiones anti-fuerza bruta / anti-bots (SOLO PARA ENDPOINTS DE API)
     const clientIp = req.socket.remoteAddress || '127.0.0.1';
-    const rateCheck = checkRateLimit(clientIp);
-    if (!rateCheck.allowed) {
-        res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': String(rateCheck.retryAfter) });
-        res.end(JSON.stringify({ error: 'Too Many Requests', message: 'Tasa de peticiones excedida (protección anti-bots)', retryAfter: rateCheck.retryAfter }));
-        return;
+    if (pathname.startsWith('/api/')) {
+        const rateCheck = checkRateLimit(clientIp, 60);
+        if (!rateCheck.allowed) {
+            res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': String(rateCheck.retryAfter) });
+            res.end(JSON.stringify({ error: 'Too Many Requests', message: 'Tasa de peticiones excedida (protección anti-bots)', retryAfter: rateCheck.retryAfter }));
+            return;
+        }
     }
 
     // ===== RUTAS DE API =====
@@ -392,11 +394,16 @@ const server = http.createServer((req, res) => {
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
+        // Caché optimizado: recursos multimedia e imágenes con caché local (evita peticiones redundantes y 429)
+        const isMedia = ['.jpg', '.jpeg', '.png', '.svg', '.mp3', '.ogg', '.wav'].includes(ext);
+        const cacheHeader = isMedia 
+            ? 'public, max-age=86400, stale-while-revalidate=604800'
+            : 'no-cache, no-store, must-revalidate';
+
         res.writeHead(200, {
             'Content-Type': contentType,
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+            'Cache-Control': cacheHeader,
+            'Pragma': isMedia ? 'public' : 'no-cache'
         });
         fs.createReadStream(filePath).pipe(res);
     });

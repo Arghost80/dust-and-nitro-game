@@ -1039,8 +1039,26 @@ function generateCarSvg(car, width = 240, height = 120) {
         <rect x="0" y="0" width="320" height="160" fill="#080b13"/>
         <ellipse cx="160" cy="140" rx="145" ry="18" fill="url(#${safeId}_glow)"/>
         
-        <!-- Render Fotorrealista de Estudio 8K del Vehículo Real -->
-        <image href="${imagePath}" xlink:href="${imagePath}" x="2" y="2" width="316" height="156" preserveAspectRatio="xMidYMid meet"/>
+        <!-- Silueta Vectorial GT3 de Respaldo Alta Definición (Garantiza cero iconos rotos) -->
+        <g class="fallback-vector-car" opacity="0.95">
+            <!-- Chasis aerodinámico base -->
+            <path d="M 35 120 L 40 102 Q 46 92 68 88 L 105 86 Q 130 68 178 68 L 225 68 Q 252 74 272 88 L 290 100 Q 295 108 290 120 Z" fill="${hex}" opacity="0.9"/>
+            <!-- Cabina y lunas tintadas -->
+            <path d="M 112 85 Q 135 72 178 72 L 222 72 Q 244 76 258 85 Z" fill="#0b1120" stroke="${hex}" stroke-width="1.5" opacity="0.85"/>
+            <!-- Alerón trasero de competición GT3 -->
+            <path d="M 270 82 L 296 78 L 294 85 L 268 88 Z" fill="#0f172a" stroke="${hex}" stroke-width="1"/>
+            <rect x="274" y="86" width="3" height="12" fill="#0f172a"/>
+            <!-- Ruedas y llantas deportivas -->
+            <circle cx="76" cy="120" r="19" fill="#090d16" stroke="#334155" stroke-width="3"/>
+            <circle cx="76" cy="120" r="10" fill="#1e293b" stroke="${hex}" stroke-width="1.5"/>
+            <circle cx="248" cy="120" r="19" fill="#090d16" stroke="#334155" stroke-width="3"/>
+            <circle cx="248" cy="120" r="10" fill="#1e293b" stroke="${hex}" stroke-width="1.5"/>
+            <!-- Óptica y luz frontal -->
+            <polygon points="38,103 26,106 26,112 40,108" fill="${hex}" opacity="0.9"/>
+        </g>
+        
+        <!-- Render Fotorrealista de Estudio 8K del Vehículo Real con protección contra fallos -->
+        <image href="${imagePath}" xlink:href="${imagePath}" x="2" y="2" width="316" height="156" preserveAspectRatio="xMidYMid meet" onerror="this.style.display='none';"/>
 
         <!-- Tinte del NFT sutil sobre la iluminación -->
         <rect x="0" y="0" width="320" height="160" fill="url(#${safeId}_tint)" style="mix-blend-mode: overlay; pointer-events: none;"/>

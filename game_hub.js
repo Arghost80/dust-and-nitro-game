@@ -1070,6 +1070,15 @@ function triggerCrateOpening(crateKey) {
 
     hubAudio.playOpenCrate();
 
+    // Pre-cargar la imagen del coche antes de que finalice la cinemática de apertura
+    if (res.car && typeof getCarArchetype === 'function') {
+        try {
+            const preArch = getCarArchetype(res.car);
+            const preImg = new Image();
+            preImg.src = `assets/cars_side/${preArch}.jpg`;
+        } catch (e) {}
+    }
+
     setTimeout(() => {
         animBox.classList.add('hidden');
         resultBox.classList.remove('hidden');
