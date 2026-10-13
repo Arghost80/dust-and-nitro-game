@@ -3414,39 +3414,6 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         }
     });
 
-    // E) Comisarios de pista animados (Animated Track Marshals con banderas FIA)
-    trackMarshals = [];
-    if (nodes && nodes.length > 4 && scene.textures && scene.textures.exists('dt_marshal_green')) {
-        const step = Math.max(1, Math.floor(nodes.length / 6));
-        for (let m = 0; m < nodes.length; m += step) {
-            const nA = nodes[m];
-            const nB = nodes[(m + 1) % nodes.length];
-            const ang = Math.atan2(nB.y - nA.y, nB.x - nA.x);
-            const perpX = -Math.sin(ang);
-            const perpY = Math.cos(ang);
-            const mx = nA.x + perpX * 145;
-            const my = nA.y + perpY * 145;
-
-            const roadD = getDistanceToRoad(mx, my, scene);
-            if (roadD.dist > 110 && mx > 60 && mx < track.worldWidth - 60 && my > 60 && my < track.worldHeight - 60) {
-                const marshal = scene.add.sprite(mx, my, 'dt_marshal_green')
-                    .setDisplaySize(42, 42)
-                    .setDepth(12);
-
-                scene.tweens.add({
-                    targets: marshal,
-                    angle: { from: -8, to: 8 },
-                    duration: 650 + (m % 3) * 120,
-                    yoyo: true,
-                    repeat: -1,
-                    ease: 'Sine.easeInOut'
-                });
-
-                trackMarshals.push(marshal);
-            }
-        }
-    }
-
     // Helper seguro para verificar si una coordenada toca asfalto o pianos
     const isPointOnRoad = (px, py) => {
         const ti = Math.floor(px / 256);
@@ -3469,6 +3436,54 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         if (isPointOnRoad(px - halfW, py + halfH)) return false;
         return true;
     };
+
+    // E) Comisarios de pista animados (Animated Track Marshals con banderas FIA)
+    // Ubicados EXCLUSIVAMENTE en el césped/escapatoria exterior, NUNCA sobre el asfalto
+    trackMarshals = [];
+    if (nodes && nodes.length > 4 && scene.textures && scene.textures.exists('dt_marshal_green')) {
+        const step = Math.max(1, Math.floor(nodes.length / 5));
+        for (let m = 0; m < nodes.length; m += step) {
+            const nA = nodes[m];
+            const nB = nodes[(m + 1) % nodes.length];
+            const ang = Math.atan2(nB.y - nA.y, nB.x - nA.x);
+            const perpX = -Math.sin(ang);
+            const perpY = Math.cos(ang);
+
+            // Probar múltiples offsets exteriores para garantizar zona 100% fuera de calzada
+            const trialOffsets = [220, -220, 260, -260, 195, -195];
+            let safeX = null, safeY = null;
+
+            for (let off of trialOffsets) {
+                const tx = nA.x + perpX * off;
+                const ty = nA.y + perpY * off;
+                const roadD = getDistanceToRoad(tx, ty, scene);
+
+                // Validación estricta: debe estar a más de 195px de cualquier centro de calzada y libre de asfalto
+                if (roadD.dist >= 195 && isBoxSafeFromRoad(tx, ty, 48, 48)) {
+                    safeX = tx;
+                    safeY = ty;
+                    break;
+                }
+            }
+
+            if (safeX !== null && safeY !== null) {
+                const marshal = scene.add.sprite(safeX, safeY, 'dt_marshal_green')
+                    .setDisplaySize(38, 38)
+                    .setDepth(12);
+
+                scene.tweens.add({
+                    targets: marshal,
+                    angle: { from: -8, to: 8 },
+                    duration: 650 + (m % 3) * 120,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+
+                trackMarshals.push(marshal);
+            }
+        }
+    }
 
     // E) Paneles de Distancia de Frenada FIA (150m, 100m, 50m) ANTES de Curvas Pronunciadas
     // Colocados exclusivamente en la recta de aproximación exterior y FUERA del asfalto/pianos
@@ -4393,8 +4408,10 @@ function updatePlayer(dt, track) {
         racingGrooveLayer.fillCircle(playerCar.x, playerCar.y, 14);
     }
 
-    // Petardeo de escape al soltar el acelerador a alta velocidad (Anti-lag GT3)
-    if (playerCar.wasGas && !gas && Math.abs(playerSpeed) > 160) {
+    // Petardeo de escape sutil al soltar el acelerador a alta velocidad (Micro Anti-lag realista)
+    const nowGas = Date.now();
+    if (playerCar.wasGas && !gas && Math.abs(playerSpeed) > 185 && Math.random() < 0.25 && (!playerCar.lastBackfireTime || nowGas - playerCar.lastBackfireTime > 850)) {
+        playerCar.lastBackfireTime = nowGas;
         dustAudio.playBackfire();
         spawnBackfireFlame(raceScene, playerCar);
     }
@@ -4900,63 +4917,62 @@ function spawnTireSmoke(scene, x, y, angleDeg) {
     });
 }
 
-// Llamarada de escape dual y petardeo (Dual-Core Anti-lag Backfire Flame)
+// Micro-destello de escape realista (Micro Backfire Pop estilo Assetto Corsa / GT3)
 function spawnBackfireFlame(scene, car) {
     if (!scene || !car || !car.active) return;
     const rad = Phaser.Math.DegToRad(car.angle);
-    const rx = car.x - Math.cos(rad) * 23;
-    const ry = car.y - Math.sin(rad) * 23;
+    const rx = car.x - Math.cos(rad) * 22;
+    const ry = car.y - Math.sin(rad) * 22;
     const perp = rad + Math.PI / 2;
 
-    [-6.5, 6.5].forEach(offset => {
-        const fx = rx + Math.cos(perp) * offset;
-        const fy = ry + Math.sin(perp) * offset;
+    // Solo un escape aleatorio en cada micro-petardeo (o ambos rara vez)
+    const offset = (Math.random() < 0.5) ? -6 : 6;
+    const fx = rx + Math.cos(perp) * offset;
+    const fy = ry + Math.sin(perp) * offset;
 
-        // Corona exterior de fuego naranja / incandescente GT3
-        const flameOuter = scene.add.sprite(fx, fy, (scene.textures && scene.textures.exists('dt_backfire_flame')) ? 'dt_backfire_flame' : 'dt_sparkle')
-            .setDisplaySize(20, 20)
-            .setDepth(13)
-            .setTint(0xff6b00);
+    // Micro-llamarada sutil (8px inicial, escala solo a 1.25, dura 60ms)
+    const flameOuter = scene.add.sprite(fx, fy, 'dt_sparkle')
+        .setDisplaySize(8, 8)
+        .setDepth(13)
+        .setTint(0xff7700);
 
-        scene.tweens.add({
-            targets: flameOuter,
-            scale: 2.2,
-            alpha: 0,
-            duration: 130,
-            onComplete: () => flameOuter.destroy()
-        });
+    scene.tweens.add({
+        targets: flameOuter,
+        scale: 1.25,
+        alpha: 0,
+        duration: 60,
+        onComplete: () => flameOuter.destroy()
+    });
 
-        // Núcleo ultra-caliente cian / azul eléctrico de competición
-        const flameCore = scene.add.sprite(fx, fy, 'dt_sparkle')
-            .setDisplaySize(11, 11)
-            .setDepth(13.1)
-            .setTint(0x00f5d4);
+    // Pequeño núcleo azul eléctrico ultrarrápido (45ms)
+    const flameCore = scene.add.sprite(fx, fy, 'dt_sparkle')
+        .setDisplaySize(5, 5)
+        .setDepth(13.1)
+        .setTint(0x00f5d4);
 
-        scene.tweens.add({
-            targets: flameCore,
-            scale: 1.6,
-            alpha: 0,
-            duration: 90,
-            onComplete: () => flameCore.destroy()
-        });
+    scene.tweens.add({
+        targets: flameCore,
+        scale: 1.1,
+        alpha: 0,
+        duration: 45,
+        onComplete: () => flameCore.destroy()
+    });
 
-        // Micro-chispas de escape eyectadas hacia atrás
-        for (let s = 0; s < 2; s++) {
-            const spkAng = rad + Math.PI + (Math.random() - 0.5) * 0.7;
-            const sp = scene.add.sprite(fx, fy, 'dt_sparkle')
-                .setDisplaySize(7, 7)
-                .setDepth(13.2)
-                .setTint(Math.random() > 0.5 ? 0xffd700 : 0xff3d00);
-            scene.tweens.add({
-                targets: sp,
-                x: fx + Math.cos(spkAng) * (18 + Math.random() * 22),
-                y: fy + Math.sin(spkAng) * (18 + Math.random() * 22),
-                scale: 0.1,
-                alpha: 0,
-                duration: 130 + Math.random() * 70,
-                onComplete: () => sp.destroy()
-            });
-        }
+    // 1 sola micro-chispa rápida hacia atrás
+    const spkAng = rad + Math.PI + (Math.random() - 0.5) * 0.35;
+    const sp = scene.add.sprite(fx, fy, 'dt_sparkle')
+        .setDisplaySize(4, 4)
+        .setDepth(13.2)
+        .setTint(0xffea00);
+
+    scene.tweens.add({
+        targets: sp,
+        x: fx + Math.cos(spkAng) * 14,
+        y: fy + Math.sin(spkAng) * 14,
+        scale: 0.1,
+        alpha: 0,
+        duration: 55,
+        onComplete: () => sp.destroy()
     });
 }
 
