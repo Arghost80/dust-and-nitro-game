@@ -34,7 +34,7 @@ const doc = {
         translate: () => {}, rotate: () => {}, scale: () => {},
         createRadialGradient: () => ({ addColorStop: () => {} }),
         createLinearGradient: () => ({ addColorStop: () => {} }),
-        roundRect: () => {}
+        roundRect: () => {}, ellipse: () => {}
       });
     }
     return el;
@@ -65,7 +65,10 @@ const sandbox = {
       DegToRad: (d) => d * Math.PI / 180,
       RadToDeg: (r) => r * 180 / Math.PI,
       Linear: (a,b,t) => a + (b-a)*t,
-      Angle: { WrapDegrees: (d) => (((d + 180) % 360 + 360) % 360) - 180 }
+      Angle: {
+        WrapDegrees: (d) => (((d + 180) % 360 + 360) % 360) - 180,
+        Wrap: (r) => Math.atan2(Math.sin(r), Math.cos(r))
+      }
     },
     Game: function() {
       const mockScene = {
@@ -74,23 +77,23 @@ const sandbox = {
           const car = { active: true, angle: 0, x: 0, y: 0, setDisplaySize: () => car, setAngle: (a) => { car.angle = a || 0; return car; }, setDepth: () => car, setCollideWorldBounds: () => car, setTint: () => car, setVelocity: () => car, setAlpha: () => car };
           return car;
         } } },
-        cameras: { main: { setBounds: () => {}, setBackgroundColor: () => {}, setZoom: () => {}, startFollow: () => {}, stopFollow: () => {}, setScroll: () => {} } },
+        cameras: { main: { scrollX: 0, scrollY: 0, width: 960, height: 540, zoom: 1.1, setBounds: () => {}, setBackgroundColor: () => {}, setZoom: () => {}, startFollow: () => {}, stopFollow: () => {}, setScroll: () => {} } },
         add: {
           graphics: () => {
             const g = { fillStyle: () => g, fill: () => g, fillRect: () => g, fillRoundedRect: () => g, lineStyle: () => g, strokeRoundedRect: () => g, lineBetween: () => g, clear: () => g, setDepth: () => g, setScrollFactor: () => g, fillCircle: () => g, fillEllipse: () => g, beginPath: () => g, moveTo: () => g, lineTo: () => g, strokePath: () => g, closePath: () => g };
             return g;
           },
           tileSprite: () => ({ setDepth: () => ({}) }),
-          sprite: () => {
-            const s = { setDisplaySize: () => s, setAngle: () => s, setDepth: () => s, setTint: () => s, setAlpha: () => s, setScrollFactor: () => s };
+          sprite: (x = 0, y = 0) => {
+            const s = { x, y, active: true, setDisplaySize: () => s, setAngle: () => s, setDepth: () => s, setTint: () => s, setAlpha: () => s, setScrollFactor: () => s };
             return s;
           },
-          rectangle: () => {
-            const r = { setDepth: () => r, setAngle: () => r, setInteractive: () => ({ on: () => {} }) };
+          rectangle: (x = 0, y = 0) => {
+            const r = { x, y, active: true, setDepth: () => r, setAngle: () => r, setInteractive: () => ({ on: () => {} }) };
             return r;
           },
-          ellipse: () => {
-            const el = { setDepth: () => el, setAngle: () => el, setAlpha: () => el };
+          ellipse: (x = 0, y = 0) => {
+            const el = { x, y, active: true, setDepth: () => el, setAngle: () => el, setAlpha: () => el };
             return el;
           },
           circle: () => {
@@ -819,7 +822,45 @@ console.log('Partículas de lluvia generadas en Modo Lluvia:', rainParticlesCoun
 if (rainParticlesCount < 80) {
     throw new Error('El Modo Lluvia debe inicializar partículas densas de lluvia');
 }
-console.log('✓ Modo Lluvia verificado: asfalto húmedo, spray de ruedas y aquaplaning');
+// 9. Parallax 2.5D en Alturas, Césped a Franjas, Barreras de Neumáticos 3D y Marcas de Asfalto (v50)
+console.log('\n--- VERIFICANDO MEJORAS DE ESCENARIOS Y PARALLAX 2.5D (V50) ---');
+vm.runInContext(`
+    startRace(raceScene, 'rookie_ring', 0, 'day');
+`, ctx);
+const parallaxCount = vm.runInContext('parallaxObjects.length', ctx);
+console.log('Objetos con altura 2.5D registrados para Parallax:', parallaxCount);
+if (parallaxCount < 1) {
+    throw new Error('Debe haber objetos registrados en parallaxObjects (árboles, gradas, etc.)');
+}
+
+// Probar proyección de perspectiva dinámica de parallax al mover la cámara
+vm.runInContext(`
+    const firstPObj = parallaxObjects[0];
+    const initialSpriteX = firstPObj.sprite.x;
+    raceScene.cameras.main.scrollX = firstPObj.baseX - 480 + 120;
+    raceScene.cameras.main.scrollY = firstPObj.baseY - 270 + 80;
+    dustUpdate(1000, 16);
+    const shiftedSpriteX = firstPObj.sprite.x;
+    if (Math.abs(shiftedSpriteX - firstPObj.baseX) < 0.001) {
+        throw new Error('El objeto parallax no se ha desplazado en perspectiva respecto al centro óptico de la cámara');
+    }
+`, ctx);
+console.log('✓ Proyección de perspectiva Parallax 2.5D en tiempo real verificada con éxito');
+
+// Verificar texturas de barreras y asfalto
+const texturesList = ['dt_tire_bundle', 'dt_tarmac_crack', 'dt_tarmac_patch', 'dt_oil_stain'];
+texturesList.forEach(key => {
+    const exists = vm.runInContext(`raceScene.textures && raceScene.textures.exists('${key}')`, ctx);
+    if (!exists) throw new Error(`Textura ${key} debe existir`);
+});
+console.log('✓ Texturas FIA de barreras de neumáticos 3D y desgaste de asfalto verificadas');
+
+const barriersCountV50 = vm.runInContext('trackBarriers.length', ctx);
+console.log('Barreras de seguridad físicas activas en pista:', barriersCountV50);
+if (barriersCountV50 < 1) {
+    throw new Error('Deben haberse registrado barreras físicas de protección');
+}
+console.log('✓ Barreras físicas y absorción de impacto verificadas');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

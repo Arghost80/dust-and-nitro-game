@@ -520,6 +520,7 @@ let bestLapTime = null;
 let skidLayer, racingGrooveLayer, radarGraphics;
 let trackBarriers = [];
 let trackMarshals = [];
+let parallaxObjects = [];
 let hudPosText, hudLapText, hudTimeText, hudSpeedText, hudSurfaceText, hudGhostBadge, hudDriftBadge, hudSlipstreamBadge, hudTachoGfx, hudGearText, hudRpmText, lastPlayerGear = 1;
 let playerInSlipstream = false;
 let speedLinesGraphics, weatherGraphics;
@@ -1663,24 +1664,101 @@ function buildProRacingEnvironmentTextures(scene) {
             }
         }
     });
+
+    // 28. Barrera de Neumáticos Enlazados 3D (FIA Tire Bundle con cinchas de seguridad)
+    makeTex('dt_tire_bundle', 96, 32, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(2, 4, w - 4, h - 4);
+        const tR = 11;
+        for (let x = 14; x < w; x += 22) {
+            ctx.fillStyle = '#18181b';
+            ctx.beginPath(); ctx.arc(x, h/2, tR, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#3f3f46';
+            ctx.beginPath(); ctx.arc(x, h/2, tR - 3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#09090b';
+            ctx.beginPath(); ctx.arc(x, h/2, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#27272a'; ctx.lineWidth = 1; ctx.stroke();
+        }
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(4, h/2 - 3, w - 8, 6);
+        ctx.fillStyle = '#f8fafc';
+        for (let sx = 8; sx < w - 8; sx += 18) {
+            ctx.fillRect(sx, h/2 - 3, 9, 6);
+        }
+    });
+
+    // 29. Grietas de asfalto selladas con alquitrán (Tarmac Tar Cracks)
+    makeTex('dt_tarmac_crack', 64, 48, (ctx, w, h) => {
+        ctx.strokeStyle = '#05070a';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(4, 24);
+        ctx.lineTo(18, 20); ctx.lineTo(26, 28); ctx.lineTo(42, 22); ctx.lineTo(60, 26);
+        ctx.stroke();
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(26, 28); ctx.lineTo(32, 40);
+        ctx.moveTo(42, 22); ctx.lineTo(46, 10);
+        ctx.stroke();
+    });
+
+    // 30. Parche de reasfaltado reciente en curva (Tarmac Asphalt Patch)
+    makeTex('dt_tarmac_patch', 72, 38, (ctx, w, h) => {
+        ctx.fillStyle = 'rgba(10, 14, 22, 0.65)';
+        ctx.fillRect(2, 2, w - 4, h - 4);
+        ctx.strokeStyle = '#05070a';
+        ctx.lineWidth = 1.8;
+        ctx.strokeRect(2, 2, w - 4, h - 4);
+    });
+
+    // 31. Mancha de aceite y goma quemada (Oil & Rubber Stain)
+    makeTex('dt_oil_stain', 44, 28, (ctx, w, h) => {
+        const grad = ctx.createRadialGradient(w/2, h/2, 2, w/2, h/2, 14);
+        grad.addColorStop(0, 'rgba(5, 7, 10, 0.75)');
+        grad.addColorStop(0.5, 'rgba(12, 16, 24, 0.45)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        if (typeof ctx.ellipse === 'function') {
+            ctx.beginPath();
+            ctx.ellipse(w/2, h/2, 20, 12, 0, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            ctx.beginPath();
+            ctx.arc(w/2, h/2, 13, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
 }
 
 // Genera texturas HD fotorrealistas de césped y grava de forma instantánea sin bloqueos
 function buildHDEnvironmentTextures(scene) {
-    // 1. Césped HD Fotorrealista (Mowed Lawn)
+    // 1. Césped HD Fotorrealista con franjas de corte de competición (Mowed Lawn Stripes)
     try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
         if (scene.textures.exists('hd_grass_src')) {
             const src = scene.textures.get('hd_grass_src').getSourceImage();
             if (src && src.width) {
-                const canvas = document.createElement('canvas');
-                canvas.width = 512;
-                canvas.height = 512;
-                const ctx = canvas.getContext('2d');
                 ctx.drawImage(src, 0, 0, 512, 512);
-                if (scene.textures.exists('dt_grass')) scene.textures.remove('dt_grass');
-                scene.textures.addCanvas('dt_grass', canvas);
             }
+        } else {
+            ctx.fillStyle = '#2e7d32';
+            ctx.fillRect(0, 0, 512, 512);
         }
+
+        // Franjas alternas de cortacésped profesional estilo Spa / Monza
+        const stripeW = 64;
+        for (let y = 0; y < 512; y += stripeW) {
+            const isDark = (Math.floor(y / stripeW) % 2 === 0);
+            ctx.fillStyle = isDark ? 'rgba(0, 0, 0, 0.09)' : 'rgba(255, 255, 255, 0.06)';
+            ctx.fillRect(0, y, 512, stripeW);
+        }
+
+        if (scene.textures.exists('dt_grass')) scene.textures.remove('dt_grass');
+        scene.textures.addCanvas('dt_grass', canvas);
     } catch(e) { console.warn('hd_grass_src warn:', e); }
 
     // 2. Gravilla / Arena HD de Escapatoria (Gravel Runoff)
@@ -2878,6 +2956,10 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     raceScene = scene;
     window.raceScene = scene;
 
+    trackBarriers = [];
+    trackMarshals = [];
+    parallaxObjects = [];
+
     currentTrackId = trackId;
     selectedTimeOfDay = timeOfDay;
     isCurrentRaceStory = isStory;
@@ -2900,7 +2982,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     scene.cameras.main.setBounds(-2500, -2500, track.worldWidth + 5000, track.worldHeight + 5000);
     const biome = getTrackBiome(track);
     if (biome === 'snow') {
-        scene.cameras.main.setBackgroundColor('#f8fafc');
+        scene.cameras.main.setBackgroundColor('#ffffff');
     } else {
         scene.cameras.main.setBackgroundColor('#0d121d');
     }
@@ -3160,14 +3242,15 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     }[selectedTimeOfDay] || { shadowDx: 12, shadowDy: 14, shadowAlpha: 0.36, tint: null, vignetteAlpha: 0.16 };
 
     // En circuitos alpinos de nieve, mantener la luz diurna blanca y nítida
-    if (biome === 'snow' && lightConfig.tint === 0xd97706) {
-        lightConfig.tint = null;
+    if (biome === 'snow') {
+        if (lightConfig.tint === 0xd97706) lightConfig.tint = null;
+        lightConfig.vignetteAlpha = 0.04;
     }
 
     // 4. OBJETOS DEL ENTORNO OFICIALES Y TEMÁTICOS SEGÚN BIOMA
     track.objects.forEach(obj => {
         if (obj.r === 'tree') {
-            scene.add.ellipse(obj.x + lightConfig.shadowDx, obj.y + lightConfig.shadowDy, 64, 52, 0x000000, lightConfig.shadowAlpha).setDepth(13);
+            const treeShadow = scene.add.ellipse(obj.x + lightConfig.shadowDx, obj.y + lightConfig.shadowDy, 64, 52, 0x000000, lightConfig.shadowAlpha).setDepth(13);
             let treeKey = 'dt_tree';
             let treeSize = 72;
             if (biome === 'snow') {
@@ -3181,6 +3264,15 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
                 treeSize = 80;
             }
             const tree = scene.add.sprite(obj.x, obj.y, treeKey).setDisplaySize(treeSize, treeSize).setDepth(14);
+            parallaxObjects.push({
+                sprite: tree,
+                shadow: treeShadow,
+                baseX: obj.x,
+                baseY: obj.y,
+                shadowDx: lightConfig.shadowDx,
+                shadowDy: lightConfig.shadowDy,
+                heightFactor: (biome === 'desert') ? 0.035 : (biome === 'coast' ? 0.055 : 0.048)
+            });
             scene.tweens.add({
                 targets: tree,
                 angle: (Math.random() - 0.5) * 4,
@@ -3194,14 +3286,24 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             const gsW = isIsolated ? 230 : 160;
             const gsH = isIsolated ? 160 : 130;
 
-            scene.add.rectangle(obj.x + lightConfig.shadowDx, obj.y + lightConfig.shadowDy, gsW - 5, gsH - 5, 0x000000, lightConfig.shadowAlpha)
+            const gsShadow = scene.add.rectangle(obj.x + lightConfig.shadowDx, obj.y + lightConfig.shadowDy, gsW - 5, gsH - 5, 0x000000, lightConfig.shadowAlpha)
                 .setAngle(obj.o)
                 .setDepth(11);
 
-            scene.add.sprite(obj.x, obj.y, 'dt_grandstand')
+            const gsSprite = scene.add.sprite(obj.x, obj.y, 'dt_grandstand')
                 .setDisplaySize(gsW, gsH)
                 .setAngle(obj.o)
                 .setDepth(12);
+
+            parallaxObjects.push({
+                sprite: gsSprite,
+                shadow: gsShadow,
+                baseX: obj.x,
+                baseY: obj.y,
+                shadowDx: lightConfig.shadowDx,
+                shadowDy: lightConfig.shadowDy,
+                heightFactor: 0.026
+            });
 
             // Banderas ondeantes de competición sobre la cubierta de la tribuna
             if (scene.textures && scene.textures.exists('dt_flag_checkered')) {
@@ -3220,6 +3322,16 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         } else if (obj.r === 'tire') {
             scene.add.ellipse(obj.x + 2, obj.y + 3, 26, 26, 0x000000, 0.42).setDepth(5);
             scene.add.sprite(obj.x, obj.y, 'dt_tire').setDisplaySize(28, 28).setAngle(obj.o).setDepth(6);
+            trackBarriers.push({
+                x: obj.x,
+                y: obj.y,
+                width: 28,
+                height: 28,
+                angle: obj.o,
+                halfW: 14,
+                halfH: 14,
+                isLong: false
+            });
         } else if (obj.r === 'rock') {
             scene.add.ellipse(obj.x + 2, obj.y + 3, 28, 24, 0x000000, 0.38).setDepth(5);
             const rock = scene.add.sprite(obj.x, obj.y, 'dt_rock').setDisplaySize(32, 32).setAngle(obj.o).setDepth(6);
@@ -3260,13 +3372,22 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
                 isLong: isLong
             });
         } else if (obj.r === 'dustRacing2DBanner') {
-            scene.add.rectangle(obj.x + 3, obj.y + 4, 115, 26, 0x000000, 0.40)
+            const bShadow = scene.add.rectangle(obj.x + 3, obj.y + 4, 115, 26, 0x000000, 0.40)
                 .setAngle(obj.o)
                 .setDepth(11);
-            scene.add.sprite(obj.x, obj.y, 'dt_billboard_dustrac')
+            const bSprite = scene.add.sprite(obj.x, obj.y, 'dt_billboard_dustrac')
                 .setDisplaySize(115, 28)
                 .setAngle(obj.o)
                 .setDepth(12);
+            parallaxObjects.push({
+                sprite: bSprite,
+                shadow: bShadow,
+                baseX: obj.x,
+                baseY: obj.y,
+                shadowDx: 3,
+                shadowDy: 4,
+                heightFactor: 0.032
+            });
         }
     });
 
@@ -3658,13 +3779,103 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
                     const towerX = n.x + tdx * tOffset;
                     const towerY = n.y + tdy * tOffset;
                     if (isBoxSafeFromRoad(towerX, towerY, 26, 26)) {
-                        scene.add.rectangle(towerX + 4, towerY + 6, 44, 44, 0x000000, 0.65).setDepth(13);
-                        scene.add.sprite(towerX, towerY, 'dt_floodlight_tower').setDisplaySize(44, 44).setDepth(14);
+                        const tShadow = scene.add.rectangle(towerX + 4, towerY + 6, 44, 44, 0x000000, 0.65).setDepth(13);
+                        const tSprite = scene.add.sprite(towerX, towerY, 'dt_floodlight_tower').setDisplaySize(44, 44).setDepth(14);
+                        parallaxObjects.push({
+                            sprite: tSprite,
+                            shadow: tShadow,
+                            baseX: towerX,
+                            baseY: towerY,
+                            shadowDx: 4,
+                            shadowDy: 6,
+                            heightFactor: 0.068
+                        });
                         towerPlaced = true;
                         break;
                     }
                 }
                 if (towerPlaced) break;
+            }
+        }
+    }
+
+    // H) Barreras de Neumáticos Enlazados FIA 3D (Tire Bundles en escapatorias de curvas)
+    if (nodes && nodes.length > 4 && scene.textures && scene.textures.exists('dt_tire_bundle')) {
+        for (let i = 2; i < nodes.length - 1; i += 3) {
+            const prev = nodes[i - 1];
+            const curr = nodes[i];
+            const next = nodes[i + 1];
+            const a1 = Math.atan2(curr.y - prev.y, curr.x - prev.x);
+            const a2 = Math.atan2(next.y - curr.y, next.x - curr.x);
+            const turnDiff = Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1));
+            if (Math.abs(turnDiff) > 0.18) {
+                const turnSign = Math.sign(turnDiff);
+                const perpX = Math.sin(a1) * turnSign;
+                const perpY = -Math.cos(a1) * turnSign;
+                const tbAngleDeg = Phaser.Math.RadToDeg(a1);
+
+                for (let offset = 210; offset <= 270; offset += 30) {
+                    const tbX = curr.x + perpX * offset;
+                    const tbY = curr.y + perpY * offset;
+                    if (isBoxSafeFromRoad(tbX, tbY, 96, 32)) {
+                        const rDist = (typeof getDistanceToRoad === 'function') ? getDistanceToRoad(tbX, tbY, scene).dist : 200;
+                        if (rDist >= 170) {
+                            scene.add.rectangle(tbX + lightConfig.shadowDx * 0.35, tbY + lightConfig.shadowDy * 0.35, 96, 32, 0x000000, lightConfig.shadowAlpha)
+                                .setAngle(tbAngleDeg)
+                                .setDepth(11);
+                            scene.add.sprite(tbX, tbY, 'dt_tire_bundle')
+                                .setDisplaySize(96, 32)
+                                .setAngle(tbAngleDeg)
+                                .setDepth(12);
+
+                            trackBarriers.push({
+                                x: tbX,
+                                y: tbY,
+                                width: 96,
+                                height: 32,
+                                angle: tbAngleDeg,
+                                halfW: 48,
+                                halfH: 16,
+                                isLong: false
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // I) Desgaste del Asfalto y Marcas Viales (Grietas selladas, parches de bitumen y manchas de aceite/goma)
+    if (nodes && nodes.length > 5) {
+        for (let i = 1; i < nodes.length; i += 3) {
+            const n = nodes[i];
+            const nextN = nodes[(i + 1) % nodes.length];
+            const segAngle = Phaser.Math.RadToDeg(Math.atan2(nextN.y - n.y, nextN.x - n.x));
+            const decalRng = ((i * 47) % 100);
+
+            if (decalRng < 35 && scene.textures && scene.textures.exists('dt_tarmac_patch')) {
+                const perp = segAngle * (Math.PI / 180) + Math.PI / 2;
+                const laneOffset = ((i % 2 === 0) ? 28 : -28);
+                scene.add.sprite(n.x + Math.cos(perp) * laneOffset, n.y + Math.sin(perp) * laneOffset, 'dt_tarmac_patch')
+                    .setDisplaySize(72, 38)
+                    .setAngle(segAngle + (decalRng % 16 - 8))
+                    .setAlpha(0.75)
+                    .setDepth(3.22);
+            } else if (decalRng < 68 && scene.textures && scene.textures.exists('dt_oil_stain')) {
+                const perp = segAngle * (Math.PI / 180) + Math.PI / 2;
+                const laneOffset = ((i % 3 === 0) ? -22 : 22);
+                scene.add.sprite(n.x + Math.cos(perp) * laneOffset, n.y + Math.sin(perp) * laneOffset, 'dt_oil_stain')
+                    .setDisplaySize(44, 28)
+                    .setAngle(segAngle)
+                    .setAlpha(0.60)
+                    .setDepth(3.23);
+            } else if (decalRng < 92 && scene.textures && scene.textures.exists('dt_tarmac_crack')) {
+                scene.add.sprite(n.x, n.y, 'dt_tarmac_crack')
+                    .setDisplaySize(64, 48)
+                    .setAngle(segAngle + 90)
+                    .setAlpha(0.68)
+                    .setDepth(3.24);
             }
         }
     }
@@ -4088,6 +4299,36 @@ function dustUpdate(time, delta) {
     if (raceScene && raceScene.cameras && raceScene.cameras.main) {
         const targetZoom = Math.max(0.96, 1.15 - (Math.abs(playerSpeed) / 500) * 0.18);
         raceScene.cameras.main.zoom = Phaser.Math.Linear(raceScene.cameras.main.zoom, targetZoom, 0.04);
+    }
+
+    // Efecto Parallax 2.5D en Alturas (Árboles, Farolas, Gradas, Vallas y Torres de Focos)
+    // Proyección de perspectiva sutil según la distancia angular al centro de la cámara
+    if (parallaxObjects && parallaxObjects.length > 0 && raceScene && raceScene.cameras && raceScene.cameras.main) {
+        const cam = raceScene.cameras.main;
+        const camCenterX = cam.scrollX + cam.width * 0.5;
+        const camCenterY = cam.scrollY + cam.height * 0.5;
+        const maxDistX = (cam.width * 0.5) / (cam.zoom || 1) + 150;
+        const maxDistY = (cam.height * 0.5) / (cam.zoom || 1) + 150;
+
+        for (let i = 0; i < parallaxObjects.length; i++) {
+            const pObj = parallaxObjects[i];
+            if (!pObj.sprite || !pObj.sprite.active) continue;
+
+            const dx = pObj.baseX - camCenterX;
+            const dy = pObj.baseY - camCenterY;
+
+            // Culling de alto rendimiento: solo proyectar objetos dentro o adyacentes a la vista de cámara
+            if (Math.abs(dx) > maxDistX || Math.abs(dy) > maxDistY) continue;
+
+            const hf = pObj.heightFactor || 0.045;
+            pObj.sprite.x = pObj.baseX + dx * hf;
+            pObj.sprite.y = pObj.baseY + dy * hf;
+
+            if (pObj.shadow && pObj.shadow.active) {
+                pObj.shadow.x = pObj.baseX + pObj.shadowDx + dx * (hf * 0.25);
+                pObj.shadow.y = pObj.baseY + pObj.shadowDy + dy * (hf * 0.25);
+            }
+        }
     }
 
     // Actualizar badges de HUD (Modo Fantasma inicial y Derrape/Turbo)
