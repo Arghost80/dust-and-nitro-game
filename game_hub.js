@@ -1473,58 +1473,631 @@ function buyUpgrade(type, cost) {
 }
 
 // -------------------------------------------------------------
-// 5. MODO COMPETICIÓN & MULTIJUGADOR
+// 5. MODO COMPETICIÓN: SALAS DE APUESTAS DE TOKENS (WAGER ARENAS)
 // -------------------------------------------------------------
+
+const WAGER_ROOMS_CONFIG = [
+    {
+        id: 'room_bronze',
+        name: 'SALA AMATEUR',
+        badge: 'BRONCE',
+        icon: '🥉',
+        cardClass: 'wager-card-bronze',
+        badgeColor: '#cd7f32',
+        buyIn: 5,
+        currency: '$CR',
+        maxPlayers: 4,
+        maxRacers: 4,
+        trackId: 'rookie_ring',
+        trackName: 'Rookie Ring Speedway',
+        aiDifficulty: 'Principiante',
+        aiContributionPct: 0.50, // IA aporta 2.5 tokens (50%)
+        btnClass: 'btn-green',
+        description: 'Parrilla de 4 pilotos para aprender y arriesgar poco. Bote de hasta 20 tokens.'
+    },
+    {
+        id: 'room_silver',
+        name: 'SALA SEMI-PRO',
+        badge: 'PLATA',
+        icon: '🥈',
+        cardClass: 'wager-card-silver',
+        badgeColor: '#94a3b8',
+        buyIn: 10,
+        currency: '$CR',
+        maxPlayers: 4,
+        maxRacers: 4,
+        trackId: 'radiator_oval',
+        trackName: 'Radiator Oval Park',
+        aiDifficulty: 'Media GT3',
+        aiContributionPct: 0.50, // IA aporta 5 tokens (50%)
+        btnClass: 'btn-cyan',
+        description: 'Apuestas intermedias en óvalo peraltado rápido. Bote de hasta 40 tokens.'
+    },
+    {
+        id: 'room_gold',
+        name: 'SALA MASTER GP',
+        badge: 'ORO',
+        icon: '🥇',
+        cardClass: 'wager-card-gold',
+        badgeColor: '#facc15',
+        buyIn: 20,
+        currency: '$CR',
+        maxPlayers: 4,
+        maxRacers: 4,
+        trackId: 'monza_speedway',
+        trackName: 'Monza Brianza Grand Prix',
+        aiDifficulty: 'Avanzada FIA',
+        aiContributionPct: 0.50, // IA aporta 10 tokens (50%)
+        btnClass: 'btn-yellow',
+        description: 'Trazada legendaria de alta velocidad para pilotos veteranos. Bote de hasta 80 tokens.'
+    },
+    {
+        id: 'room_elite',
+        name: 'SALA HIGH ROLLER',
+        badge: 'ÉLITE VIP',
+        icon: '👑',
+        cardClass: 'wager-card-elite',
+        badgeColor: '#c084fc',
+        buyIn: 50,
+        currency: '$CR',
+        maxPlayers: 4,
+        maxRacers: 4,
+        trackId: 'tokyo_twister',
+        trackName: 'Neo-Tokyo Harbor Bay (Wangan)',
+        aiDifficulty: 'Élite Le Mans',
+        aiContributionPct: 0.50, // IA aporta 25 tokens (50%)
+        btnClass: 'btn-primary',
+        description: 'La arena definitiva para grandes apostadores. Máximo bote acumulado de hasta 200 tokens.'
+    }
+];
+
+function calculateWagerPot(room, humanCount = 1, aiCount = 3) {
+    const buyIn = room.buyIn;
+    const humanTotal = humanCount * buyIn;
+    const aiContribution = buyIn * (room.aiContributionPct || 0.50);
+    const aiTotal = aiCount * aiContribution;
+    const grossPot = humanTotal + aiTotal;
+
+    // Reparto del 5% del bote total:
+    // 2% para nosotros (Plataforma / Developer Treasury)
+    // 2% para recompensas otra vez (Community Rewards Pool)
+    // 1% para quemarse (Deflationary Token Burn)
+    const devFee = Math.round((grossPot * 0.02) * 100) / 100;
+    const rewardsFee = Math.round((grossPot * 0.02) * 100) / 100;
+    const burnFee = Math.round((grossPot * 0.01) * 100) / 100;
+    const totalFee = devFee + rewardsFee + burnFee;
+    const netPot = Math.round((grossPot - totalFee) * 100) / 100;
+
+    // Reparto del 95% a los 4 pilotos según posición:
+    // 1º Puesto: 70% del bote neto
+    // 2º Puesto: 20% del bote neto
+    // 3º Puesto: 10% del bote neto
+    // 4º Puesto: 0%
+    const p1Prize = Math.round((netPot * 0.70) * 100) / 100;
+    const p2Prize = Math.round((netPot * 0.20) * 100) / 100;
+    const p3Prize = Math.round((netPot * 0.10) * 100) / 100;
+    const p4Prize = 0;
+
+    return {
+        grossPot,
+        totalFee,
+        devFee,
+        rewardsFee,
+        burnFee,
+        netPot,
+        p1Prize,
+        p2Prize,
+        p3Prize,
+        p4Prize,
+        burnedTokens: burnFee,
+        payouts: [p1Prize, p2Prize, p3Prize, p4Prize],
+        humanCount,
+        aiCount,
+        aiContribution
+    };
+}
+
+let currentWagerLobby = null;
+
 function renderCompView() {
     const container = document.getElementById('view-comp');
     if (!container) return;
 
+    const userData = loadNftUserData() || {};
+    const stats = userData.wagerStats || {
+        totalRaces: 0,
+        wins: 0,
+        podiums: 0,
+        totalWon: 0,
+        burnedTokens: 0,
+        devFees: 0,
+        rewardsFees: 0
+    };
+
     container.innerHTML = `
         <div class="view-header-bar">
             <button class="btn-nav-back" onclick="showHubView('main')">${t('btn_back')}</button>
-            <h2 class="view-title">${t('comp_title')}</h2>
+            <div>
+                <h2 class="view-title">🪙 SALAS DE APUESTAS & COMPETICIÓN</h2>
+                <div class="garage-count-tag">4 JUGADORES POR SALA • APUESTAS 5 A 50 TOKENS • REPARTO 95% BOTE NETO</div>
+            </div>
             <div></div>
         </div>
 
-        <div class="weekly-tournament-hero-card" style="margin: 0 24px 20px; padding: 20px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(239, 68, 68, 0.22)); border: 2px solid #fbbf24; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; box-shadow: 0 4px 24px rgba(245, 158, 11, 0.25);" onclick="openWeeklyTournamentModal()">
-            <div>
-                <div style="font-size: 11px; font-weight: 900; color: #fbbf24; letter-spacing: 1px; margin-bottom: 4px;">🏆 EVENTO SEMANAL OFICIAL EN VIVO</div>
-                <h3 style="font-size: 20px; font-weight: 900; color: #ffffff; margin: 0 0 6px;">NEO-TOKYO HARBOR BAY GT GRAND PRIX</h3>
-                <p style="font-size: 12px; color: #cbd5e1; margin: 0;">Bahía Urbana Nocturna • Faros Xenón • Bote Acumulado: <strong style="color: #00f5d4;">750 TON + 500.000 $CR</strong></p>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <span style="font-size: 11px; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; color: #fde047;">⏱️ Finaliza en 2d 14h</span>
-                    <span style="font-size: 11px; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 6px; color: #00f5d4;">🏎️ 1.420 Pilotos en pista</span>
+        <div class="wager-comp-container">
+            <!-- BANNER DE TOKENOMICS EN VIVO -->
+            <div class="wager-stats-banner">
+                <div class="wager-stat-box">
+                    <div class="wager-stat-icon">🔥</div>
+                    <div>
+                        <div class="wager-stat-label">Tokens Quemados (1%)</div>
+                        <div class="wager-stat-value" style="color: #ef4444;">${(stats.burnedTokens || 0).toFixed(2)} $CR</div>
+                    </div>
+                </div>
+                <div class="wager-stat-box">
+                    <div class="wager-stat-icon">🎁</div>
+                    <div>
+                        <div class="wager-stat-label">Bolsa Recompensas (2%)</div>
+                        <div class="wager-stat-value" style="color: #00f5d4;">${(stats.rewardsFees || 0).toFixed(2)} $CR</div>
+                    </div>
+                </div>
+                <div class="wager-stat-box">
+                    <div class="wager-stat-icon">🏛️</div>
+                    <div>
+                        <div class="wager-stat-label">Tesorería Casa (2%)</div>
+                        <div class="wager-stat-value" style="color: #fbbf24;">${(stats.devFees || 0).toFixed(2)} $CR</div>
+                    </div>
+                </div>
+                <div class="wager-stat-box">
+                    <div class="wager-stat-icon">🏆</div>
+                    <div>
+                        <div class="wager-stat-label">Tus Victorias</div>
+                        <div class="wager-stat-value" style="color: #fde047;">${stats.wins || 0} / ${stats.totalRaces || 0}</div>
+                    </div>
                 </div>
             </div>
-            <button class="btn-primary" style="padding: 12px 20px; background: linear-gradient(135deg, #f59e0b, #ef4444); border: none; color: #ffffff; font-weight: 900; font-size: 13px; border-radius: 10px; cursor: pointer; white-space: nowrap;">
-                COMPETIR AHORA ▶
-            </button>
-        </div>
 
-        <div class="comp-modes-grid">
-            <div class="comp-card" onclick="openWeeklyTournamentModal();">
-                <div class="comp-icon">🏆</div>
-                <h3>${t('comp_grand_prix')}</h3>
-                <p>Torneo semanal oficial con cuota en tokens y reparto de bolsa comunitaria.</p>
-                <div class="comp-action-btn">ENTRAR AL TORNEO ▶</div>
+            <!-- REGLAS TRANSPARENTES DE COMPETICIÓN -->
+            <div class="wager-rules-card">
+                <div style="font-size: 13px; font-weight: 900; color: #00f5d4; display: flex; align-items: center; gap: 8px;">
+                    <span>⚖️</span> SISTEMA OFICIAL DE APUESTAS Y TOKENOMICS TRANSPARENTE
+                </div>
+                <div class="wager-rules-grid">
+                    <div class="wager-rule-item">
+                        <strong>👥 4 Corredores por Sala</strong>
+                        Parrilla de 4 coches en circuito cerrado. Matchmaking P2P en tiempo real.
+                    </div>
+                    <div class="wager-rule-item">
+                        <strong>⏱️ Relleno Inteligente con IA</strong>
+                        Si la sala no se llena en unos segundos, la IA ocupa las plazas vacantes para no hacerte esperar.
+                    </div>
+                    <div class="wager-rule-item">
+                        <strong>🤖 Aporte Reducido de IA (50%)</strong>
+                        Si compiten bots IA, aportan el 50% de la apuesta, adaptando el bote de forma justa.
+                    </div>
+                    <div class="wager-rule-item">
+                        <strong>📊 Reparto 5% Fee / 95% Bote</strong>
+                        2% Casa, 2% Recompensas, 1% Quema deflacionaria 🔥. El 95% neto se reparte al podio (1º: 70%, 2º: 20%, 3º: 10%).
+                    </div>
+                </div>
             </div>
 
-            <div class="comp-card" onclick="alert('⚔️ Buscando rival en red Web3... ¡Duelo 1 vs 1 en circuito cerrado!'); launchStoryMode();">
-                <div class="comp-icon">⚔️</div>
-                <h3>${t('comp_ranked')}</h3>
-                <p>Duelo 1 contra 1 en circuito cerrado. Apuesta de tokens $CR al ganador.</p>
-                <div class="comp-action-btn">BUSCAR PARTIDA ▶</div>
+            <!-- LAS 4 SALAS DE APUESTAS (5, 10, 20 y 50 Tokens) -->
+            <div class="wager-rooms-grid">
+                ${WAGER_ROOMS_CONFIG.map(room => {
+                    const previewPot = calculateWagerPot(room, 4, 0); // Bote maximo si 4 humanos
+                    const aiPot = calculateWagerPot(room, 1, 3); // Bote si 1 humano + 3 IA
+                    return `
+                        <div class="wager-room-card ${room.cardClass}">
+                            <div>
+                                <div class="wager-room-header">
+                                    <span class="wager-badge-tag" style="background: ${room.badgeColor}22; color: ${room.badgeColor}; border: 1px solid ${room.badgeColor}66;">
+                                        ${room.badge}
+                                    </span>
+                                    <span class="wager-players-tag">🏎️ 4 PILOTOS EN SALA</span>
+                                </div>
+                                <h3 class="wager-room-title">${room.icon} ${room.name}</h3>
+                                <div class="wager-room-track">🏁 Circuito: <strong style="color:#e2e8f0;">${room.trackName}</strong> • IA: ${room.aiDifficulty}</div>
+                                <p style="font-size: 11.5px; color: #94a3b8; line-height: 1.45; margin-bottom: 14px;">${room.description}</p>
+                                
+                                <div class="wager-metrics-box">
+                                    <div class="wager-metric">
+                                        <div class="wager-metric-label">ENTRADA (BUY-IN)</div>
+                                        <div class="wager-metric-val" style="color: ${room.badgeColor};">${room.buyIn} ${room.currency}</div>
+                                    </div>
+                                    <div class="wager-metric">
+                                        <div class="wager-metric-label">BOTE MÁXIMO (4P)</div>
+                                        <div class="wager-metric-val" style="color: #00f5d4;">${previewPot.grossPot} ${room.currency}</div>
+                                    </div>
+                                    <div class="wager-metric">
+                                        <div class="wager-metric-label">1º PREMIO (NETO)</div>
+                                        <div class="wager-metric-val" style="color: #fde047;">${previewPot.p1Prize} ${room.currency}</div>
+                                    </div>
+                                </div>
+
+                                <div class="wager-payout-row">
+                                    💰 <strong>Bote 1H+3IA:</strong> ${aiPot.grossPot} ${room.currency} (1º: ${aiPot.p1Prize} ${room.currency})<br>
+                                    🔥 <strong>Fee Protocolo (5%):</strong> 2% Casa • 2% Recompensas • 1% Quema
+                                </div>
+                            </div>
+
+                            <button class="btn-enter-wager ${room.btnClass}" onclick="openWagerLobby('${room.id}')">
+                                ENTRAR A LA SALA (${room.buyIn} ${room.currency}) ▶
+                            </button>
+                        </div>
+                    `;
+                }).join('')}
             </div>
 
-            <div class="comp-card" onclick="openLeaderboardModal();">
-                <div class="comp-icon">⏱️</div>
-                <h3>${t('comp_leaderboard')}</h3>
-                <p>Consulta los mejores tiempos mundiales y premios semanales en $TON.</p>
-                <div class="comp-action-btn">VER CLASIFICACIÓN ▶</div>
+            <!-- MODOS ADICIONALES: TORNEO SEMANAL & LEADERBOARD -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="comp-card" onclick="openWeeklyTournamentModal();">
+                    <div class="comp-icon">🏆</div>
+                    <h3>GRAND PRIX SEMANAL GT</h3>
+                    <p>Torneo oficial con bolsa acumulada comunitaria de 750 TON + 500.000 $CR.</p>
+                    <div class="comp-action-btn">VER TORNEO ▶</div>
+                </div>
+                <div class="comp-card" onclick="openLeaderboardModal();">
+                    <div class="comp-icon">⏱️</div>
+                    <h3>CLASIFICACIÓN MUNDIAL</h3>
+                    <p>Consulta los mejores tiempos mundiales y ranking de pilotos.</p>
+                    <div class="comp-action-btn">VER RANKING ▶</div>
+                </div>
             </div>
         </div>
     `;
 }
+
+function openWagerLobby(roomId) {
+    hubAudio.playClick();
+    const room = WAGER_ROOMS_CONFIG.find(r => r.id === roomId);
+    if (!room) return;
+
+    const userData = loadNftUserData();
+    const userCredits = typeof userData.credits === 'number' ? userData.credits : 1000000;
+
+    if (userCredits < room.buyIn) {
+        alert(`❌ Saldo insuficiente en ${room.currency}.\nPara entrar en ${room.name} necesitas ${room.buyIn} ${room.currency}. Tu saldo actual es de ${userCredits} ${room.currency}.\n\nPuedes ganar tokens en el Modo Historia o adquirir créditos en la Tienda.`);
+        return;
+    }
+
+    // Deducir entrada
+    userData.credits -= room.buyIn;
+    saveNftUserData(userData);
+    renderHubHeader();
+
+    const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+    const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
+
+    currentWagerLobby = {
+        room: room,
+        countdown: 5,
+        timer: null,
+        slots: [
+            {
+                id: 'player',
+                name: pilotName,
+                carName: equippedCar ? equippedCar.name : 'Supercar GT',
+                colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
+                archetype: equippedCar ? (equippedCar.archetype || 'ferrari_corsa') : 'ferrari_corsa',
+                isAI: false,
+                isPlayer: true,
+                stake: room.buyIn,
+                roleLabel: '👤 TÚ (JUGADOR REAL)',
+                status: 'LISTO'
+            },
+            null,
+            null,
+            null
+        ]
+    };
+
+    renderWagerLobbyModal(false);
+    startWagerMatchmaking();
+}
+
+function startWagerMatchmaking() {
+    if (!currentWagerLobby) return;
+
+    const potentialPeers = [
+        { name: "Alex_Apex_99", carName: "Valkyrie AMR Pro", archetype: "le_mans_proto", colorHex: "#0284c7" },
+        { name: "TorqueQueen_GT", carName: "Manthey 911 GT3", archetype: "porsche_boxer", colorHex: "#facc15" },
+        { name: "Veloce_Racer", carName: "Hyperion Senna", archetype: "ferrari_corsa", colorHex: "#ec4899" },
+        { name: "Phantom_Turbo", carName: "Chiron Pur Sport", archetype: "bugatti_w16", colorHex: "#10b981" }
+    ];
+
+    const aiBots = [
+        { name: "🤖 Bot_Klaus", carName: "Bavaria ROWE M4", archetype: "dtm_coupe", colorHex: "#15803d" },
+        { name: "🤖 Bot_Matteo", carName: "Scuderia 488 GT3", archetype: "ferrari_corsa", colorHex: "#e53935" },
+        { name: "🤖 Bot_Kenji", carName: "Tokyo Supra Turbo", archetype: "jdm_supra", colorHex: "#a855f7" }
+    ];
+
+    currentWagerLobby.timer = setInterval(() => {
+        if (!currentWagerLobby) return;
+
+        currentWagerLobby.countdown--;
+
+        // A los 3 segundos, probabilidad de conectar un rival humano simulado
+        if (currentWagerLobby.countdown === 3 && !currentWagerLobby.slots[1]) {
+            if (Math.random() < 0.65) {
+                const peer = potentialPeers[Math.floor(Math.random() * potentialPeers.length)];
+                currentWagerLobby.slots[1] = {
+                    id: 'peer_1',
+                    name: peer.name,
+                    carName: peer.carName,
+                    colorHex: peer.colorHex,
+                    archetype: peer.archetype,
+                    isAI: false,
+                    isPlayer: false,
+                    stake: currentWagerLobby.room.buyIn,
+                    roleLabel: '👤 JUGADOR P2P CONECTADO',
+                    status: 'LISTO'
+                };
+            }
+        }
+
+        // Cuando la cuenta atrás llega a 0:
+        if (currentWagerLobby.countdown <= 0) {
+            clearInterval(currentWagerLobby.timer);
+            currentWagerLobby.timer = null;
+
+            // Rellenar cualquier slot vacante con IA oficial (con cuota del 50%)
+            for (let i = 1; i < 4; i++) {
+                if (!currentWagerLobby.slots[i]) {
+                    const botDef = aiBots[i - 1] || aiBots[0];
+                    currentWagerLobby.slots[i] = {
+                        id: 'ai_' + i,
+                        name: botDef.name,
+                        carName: botDef.carName,
+                        colorHex: botDef.colorHex,
+                        archetype: botDef.archetype,
+                        isAI: true,
+                        isPlayer: false,
+                        stake: currentWagerLobby.room.buyIn * currentWagerLobby.room.aiContributionPct,
+                        roleLabel: `🤖 IA (APORTE 50%: ${currentWagerLobby.room.buyIn * currentWagerLobby.room.aiContributionPct} ${currentWagerLobby.room.currency})`,
+                        status: 'AUTO-RELLENO'
+                    };
+                }
+            }
+
+            renderWagerLobbyModal(true);
+            return;
+        }
+
+        renderWagerLobbyModal(false);
+    }, 1000);
+}
+
+function renderWagerLobbyModal(isReady = false) {
+    if (!currentWagerLobby) return;
+    let modal = document.getElementById('wager-lobby-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'wager-lobby-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const room = currentWagerLobby.room;
+    const slots = currentWagerLobby.slots;
+    const humanCount = slots.filter(s => s && !s.isAI).length;
+    const aiCount = slots.filter(s => s && s.isAI).length;
+    const potData = calculateWagerPot(room, humanCount, aiCount);
+
+    modal.innerHTML = `
+        <div class="wager-lobby-dialog">
+            <div class="wager-lobby-header">
+                <div>
+                    <span class="wager-badge-tag" style="background: ${room.badgeColor}22; color: ${room.badgeColor}; border: 1px solid ${room.badgeColor}66;">
+                        ${room.badge} • ${room.buyIn} ${room.currency}
+                    </span>
+                    <h2 style="font-size: 20px; font-weight: 900; margin: 6px 0 2px;">${room.icon} ${room.name}</h2>
+                    <div style="font-size: 11px; color: #94a3b8;">🏁 Circuito: <strong style="color:#00f5d4;">${room.trackName}</strong></div>
+                </div>
+                <button class="settings-close-x" onclick="closeWagerLobby(true)" title="Cancelar y recuperar tokens">✖</button>
+            </div>
+
+            <!-- BARRA DE TIEMPO / ESTADO -->
+            <div class="wager-countdown-bar" style="border-color: ${isReady ? '#00f5d4' : '#fbbf24'}; background: ${isReady ? 'rgba(0, 245, 212, 0.15)' : 'rgba(251, 191, 36, 0.12)'};">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">${isReady ? '🏁' : '⏱️'}</span>
+                    <strong style="color: ${isReady ? '#00f5d4' : '#fde047'}; font-size: 13px;">
+                        ${isReady ? '¡PARRILLA COMPLETA! (4/4 PILOTOS LISTOS)' : `EMPAREJANDO EN RED P2P... (${currentWagerLobby.countdown}s)`}
+                    </strong>
+                </div>
+                <div style="font-size: 11px; color: #cbd5e1;">
+                    ${isReady ? 'Listos para la salida' : 'Relleno automático con IA'}
+                </div>
+            </div>
+
+            <!-- LOS 4 SLOTS DE PILOTOS -->
+            <div class="wager-slots-grid">
+                ${slots.map((slot, idx) => {
+                    if (!slot) {
+                        return `
+                            <div class="wager-slot-card" style="opacity: 0.6; border-style: dashed;">
+                                <div class="wager-slot-avatar" style="border: 1px dashed #64748b;">⏳</div>
+                                <div>
+                                    <div class="wager-slot-name" style="color: #94a3b8;">Buscando piloto #${idx + 1}...</div>
+                                    <div class="wager-slot-role">Esperando en red...</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    const isAi = slot.isAI;
+                    return `
+                        <div class="wager-slot-card ${isAi ? 'slot-ai' : 'slot-ready'}">
+                            <div class="wager-slot-avatar" style="border: 2px solid ${slot.colorHex || '#00f5d4'};">
+                                ${isAi ? '🤖' : (slot.isPlayer ? '👑' : '🏎️')}
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span class="wager-slot-name">${escapeHtml(slot.name)}</span>
+                                    <span style="font-size: 10px; font-weight: 800; color: ${isAi ? '#fbbf24' : '#00f5d4'};">${slot.stake} ${room.currency}</span>
+                                </div>
+                                <div class="wager-slot-role">${slot.roleLabel}</div>
+                                <div style="font-size: 10px; color: #cbd5e1;">Coche: ${slot.carName}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <!-- DESGLOSE CONTABLE DEL BOTE EN VIVO (5% FEE Y REPARTO 95%) -->
+            <div class="wager-pot-accounting-box">
+                <div style="font-size: 12px; font-weight: 900; color: #f8fafc; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>📊 DESGLOSE DEL BOTE EN VIVO (${humanCount} HUMANOS + ${aiCount} IA)</span>
+                    <span style="color: #00f5d4;">BOTE BRUTO: ${potData.grossPot.toFixed(2)} ${room.currency}</span>
+                </div>
+                <div class="wager-accounting-row">
+                    <span>🏛️ Comisión Casa (2%):</span>
+                    <span>-${potData.devFee.toFixed(2)} ${room.currency}</span>
+                </div>
+                <div class="wager-accounting-row">
+                    <span>🎁 Bolsa Recompensas Comunidad (2%):</span>
+                    <span>-${potData.rewardsFee.toFixed(2)} ${room.currency}</span>
+                </div>
+                <div class="wager-accounting-row">
+                    <span>🔥 Quema Deflacionaria de Tokens (1%):</span>
+                    <span style="color: #ef4444;">-${potData.burnFee.toFixed(2)} ${room.currency}</span>
+                </div>
+                <div class="wager-accounting-row highlight">
+                    <span>✨ Bote Neto Repartible (95%):</span>
+                    <span>${potData.netPot.toFixed(2)} ${room.currency}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 8px; color: #fde047; background: rgba(254, 228, 64, 0.08); padding: 6px 10px; border-radius: 6px;">
+                    <span>🥇 1º (70%): <strong>+${potData.p1Prize.toFixed(2)}</strong></span>
+                    <span>🥈 2º (20%): <strong>+${potData.p2Prize.toFixed(2)}</strong></span>
+                    <span>🥉 3º (10%): <strong>+${potData.p3Prize.toFixed(2)}</strong></span>
+                    <span style="color:#94a3b8;">4º: 0</span>
+                </div>
+            </div>
+
+            <!-- BOTONES DE ACCIÓN -->
+            <div style="display: flex; gap: 12px;">
+                <button class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 800; font-size: 13px; border-radius: 10px;" onclick="closeWagerLobby(true)">
+                    CANCELAR Y RECUPERAR TOKENS
+                </button>
+                <button class="btn-primary" style="flex: 1.5; padding: 12px; font-weight: 900; font-size: 14px; border-radius: 10px; background: ${isReady ? 'linear-gradient(135deg, #00f5d4, #00bb99)' : 'linear-gradient(135deg, #f59e0b, #ef4444)'}; color: #080d16;" onclick="launchWagerRace()">
+                    ${isReady ? '¡A LA PISTA AHORA! 🏎️' : 'FORZAR INICIO CON IA ▶'}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function closeWagerLobby(refund = true) {
+    hubAudio.playClick();
+    if (currentWagerLobby && currentWagerLobby.timer) {
+        clearInterval(currentWagerLobby.timer);
+        currentWagerLobby.timer = null;
+    }
+
+    if (currentWagerLobby && refund) {
+        const u = loadNftUserData();
+        u.credits = (u.credits || 0) + currentWagerLobby.room.buyIn;
+        saveNftUserData(u);
+        renderHubHeader();
+    }
+
+    currentWagerLobby = null;
+    const modal = document.getElementById('wager-lobby-modal');
+    if (modal) modal.remove();
+}
+
+function launchWagerRace(overrideRoom = null, overrideSlots = null, overridePot = null) {
+    let room = overrideRoom;
+    let slots = overrideSlots;
+    let potData = overridePot;
+
+    if (!room && currentWagerLobby) {
+        room = currentWagerLobby.room;
+        slots = currentWagerLobby.slots;
+        if (currentWagerLobby.timer) {
+            clearInterval(currentWagerLobby.timer);
+            currentWagerLobby.timer = null;
+        }
+    }
+    if (!room) return;
+    if (!slots) slots = [];
+
+    const aiBots = [
+        { name: "🤖 Bot_Klaus", carName: "Bavaria ROWE M4", archetype: "dtm_coupe", colorHex: "#15803d" },
+        { name: "🤖 Bot_Matteo", carName: "Scuderia 488 GT3", archetype: "ferrari_corsa", colorHex: "#e53935" },
+        { name: "🤖 Bot_Kenji", carName: "Tokyo Supra Turbo", archetype: "jdm_supra", colorHex: "#a855f7" }
+    ];
+
+    // Asegurar que los 4 slots están ocupados
+    for (let i = 1; i < 4; i++) {
+        if (!slots[i]) {
+            const botDef = aiBots[i - 1] || aiBots[0];
+            slots[i] = {
+                id: 'ai_' + i,
+                name: botDef.name,
+                carName: botDef.carName,
+                colorHex: botDef.colorHex,
+                archetype: botDef.archetype,
+                isAI: true,
+                isPlayer: false,
+                stake: room.buyIn * room.aiContributionPct,
+                roleLabel: `🤖 IA (APORTE 50%: ${room.buyIn * room.aiContributionPct} ${room.currency})`,
+                status: 'AUTO-RELLENO'
+            };
+        }
+    }
+
+    if (!potData) {
+        const humanCount = slots.filter(s => s && !s.isAI).length;
+        const aiCount = slots.filter(s => s && s.isAI).length;
+        potData = calculateWagerPot(room, humanCount, aiCount);
+    }
+
+    const wagerConfig = {
+        room: room,
+        finalSlots: slots,
+        potData: potData
+    };
+
+    window.activeWagerConfig = wagerConfig;
+
+    const modal = document.getElementById('wager-lobby-modal');
+    if (modal) modal.remove();
+    currentWagerLobby = null;
+
+    // Iniciar carrera en Phaser
+    const hubRoot = document.getElementById('game-hub-root');
+    if (hubRoot) hubRoot.classList.add('hidden');
+
+    const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+    let carIdx = 0;
+    if (equippedCar && Array.isArray(window.DUST_CARS)) {
+        const idx = window.DUST_CARS.findIndex(c => c.name === equippedCar.name);
+        if (idx !== -1) carIdx = idx;
+    }
+
+    const tryLaunch = () => {
+        const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
+        if (sc && typeof sc.physics === 'object') {
+            startRace(sc, room.trackId, carIdx, 'day', false, wagerConfig);
+        } else {
+            setTimeout(tryLaunch, 100);
+        }
+    };
+    tryLaunch();
+}
+
+window.returnToCompHub = function() {
+    window.activeWagerConfig = null;
+    if (raceScene && raceScene.cameras && raceScene.cameras.main) {
+        raceScene.cameras.main.stopFollow();
+        raceScene.cameras.main.setScroll(0, 0);
+    }
+    const hubRoot = document.getElementById('game-hub-root');
+    if (hubRoot) hubRoot.classList.remove('hidden');
+    if (typeof showHubView === 'function') {
+        showHubView('comp');
+    }
+};
 
 function openLeaderboardModal() {
     hubAudio.playClick();

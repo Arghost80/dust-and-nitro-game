@@ -518,6 +518,18 @@ function loadNftUserData() {
         refreshCarEnergy(c);
     });
 
+    if (!data.wagerStats || typeof data.wagerStats !== 'object') {
+        data.wagerStats = {
+            totalRaces: 0,
+            wins: 0,
+            podiums: 0,
+            totalWon: 0,
+            burnedTokens: 0,
+            devFees: 0,
+            rewardsFees: 0
+        };
+    }
+
     return data;
 }
 

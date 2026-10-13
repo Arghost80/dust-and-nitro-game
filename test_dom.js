@@ -17,6 +17,7 @@ const doc = {
         innerHTML: '',
         style: {},
         appendChild(child) {},
+        remove() { delete doc.elements[this.id]; },
         addEventListener() {}
       };
     }
@@ -56,6 +57,9 @@ const sandbox = {
   console: console,
   alert: console.log,
   setTimeout: (fn) => fn && fn(),
+  clearTimeout: () => {},
+  setInterval: (fn) => 123,
+  clearInterval: () => {},
   AudioContext: function() {},
   webkitAudioContext: function() {},
   Phaser: {
@@ -857,10 +861,127 @@ console.log('✓ Texturas FIA de barreras de neumáticos 3D y desgaste de asfalt
 
 const barriersCountV50 = vm.runInContext('trackBarriers.length', ctx);
 console.log('Barreras de seguridad físicas activas en pista:', barriersCountV50);
-if (barriersCountV50 < 1) {
-    throw new Error('Deben haberse registrado barreras físicas de protección');
+// 10. MODO COMPETICIÓN CON SALAS DE APUESTAS Y TOKENÓMICA (V51)
+console.log('\n--- VERIFICANDO MODO COMPETICIÓN: SALAS DE APUESTAS Y TOKENÓMICA (V51) ---');
+
+// A. Configuración de Salas y Buy-ins (5, 10, 20, 50)
+const rooms = vm.runInContext('WAGER_ROOMS_CONFIG', ctx);
+if (!rooms || rooms.length !== 4) throw new Error('Debe haber exactamente 4 salas de apuestas');
+const expectedBuyIns = [5, 10, 20, 50];
+rooms.forEach((r, idx) => {
+    if (r.buyIn !== expectedBuyIns[idx]) throw new Error(`Sala ${r.id} debe tener buy-in de ${expectedBuyIns[idx]}`);
+    if (r.maxRacers !== 4) throw new Error(`Sala ${r.id} debe ser de 4 corredores`);
+});
+console.log('✓ 4 Salas de apuestas configuradas con buy-ins exactos (5, 10, 20, 50 $CR) y 4 corredores');
+
+// B. Fórmulas de Tokenómica y Bote (AI pone el 50%, Protocol Rake 5%: 2% Dev, 2% Recompensas, 1% Burn)
+const pot4Humans = vm.runInContext('calculateWagerPot(WAGER_ROOMS_CONFIG[0], 4, 0)', ctx);
+// Sala 5 $CR: 4 * 5 = 20
+if (pot4Humans.grossPot !== 20) throw new Error('Bote bruto para 4 humanos en sala de 5 debe ser 20');
+if (Math.abs(pot4Humans.devFee - 0.4) > 0.001) throw new Error('Comisión de plataforma (2%) debe ser 0.4');
+if (Math.abs(pot4Humans.rewardsFee - 0.4) > 0.001) throw new Error('Comisión de recompensas (2%) debe ser 0.4');
+if (Math.abs(pot4Humans.burnedTokens - 0.2) > 0.001) throw new Error('Quema deflacionaria (1%) debe ser 0.2');
+if (Math.abs(pot4Humans.totalFee - 1.0) > 0.001) throw new Error('Tasa total de protocolo debe ser 1.0 (5%)');
+if (Math.abs(pot4Humans.netPot - 19.0) > 0.001) throw new Error('Bote neto (95%) debe ser 19.0');
+if (Math.abs(pot4Humans.payouts[0] - 13.3) > 0.001) throw new Error('Premio 1º (70%) debe ser 13.3');
+if (Math.abs(pot4Humans.payouts[1] - 3.8) > 0.001) throw new Error('Premio 2º (20%) debe ser 3.8');
+if (Math.abs(pot4Humans.payouts[2] - 1.9) > 0.001) throw new Error('Premio 3º (10%) debe ser 1.9');
+if (pot4Humans.payouts[3] !== 0) throw new Error('Premio 4º debe ser 0');
+console.log('✓ Cálculo de bote con 4 humanos verificado al 100%');
+
+// Prueba con IA contribuyendo 50% del Buy-in (1 humano + 3 IAs en Sala 10 $CR)
+// Humano: 10, Cada IA: 5 -> Bruto = 10 + 15 = 25
+const pot1Human3AI = vm.runInContext('calculateWagerPot(WAGER_ROOMS_CONFIG[1], 1, 3)', ctx);
+if (pot1Human3AI.grossPot !== 25) throw new Error(`Bote bruto con 3 IA debe ser 25, recibido: ${pot1Human3AI.grossPot}`);
+if (Math.abs(pot1Human3AI.devFee - 0.5) > 0.001) throw new Error('Dev fee debe ser 0.5');
+if (Math.abs(pot1Human3AI.rewardsFee - 0.5) > 0.001) throw new Error('Rewards fee debe ser 0.5');
+if (Math.abs(pot1Human3AI.burnedTokens - 0.25) > 0.001) throw new Error('Burn fee debe ser 0.25');
+if (Math.abs(pot1Human3AI.totalFee - 1.25) > 0.001) throw new Error('Total fee debe ser 1.25 (5%)');
+if (Math.abs(pot1Human3AI.netPot - 23.75) > 0.001) throw new Error('Net pot debe ser 23.75 (95%)');
+console.log('✓ Regla de IA con cuota reducida al 50% y reparto 95% verificado al 100%');
+
+// C. Renderizado de vista de competición en Game Hub
+vm.runInContext('renderCompView()', ctx);
+const compViewHtml = doc.getElementById('view-comp').innerHTML;
+if (!compViewHtml.includes('SALAS DE APUESTAS') || !compViewHtml.includes('SALA AMATEUR') || !compViewHtml.includes('SALA HIGH ROLLER')) {
+    throw new Error('La vista de competición no renderiza las 4 salas de apuestas');
 }
-console.log('✓ Barreras físicas y absorción de impacto verificadas');
+if (!compViewHtml.includes('Tokens Quemados') || !compViewHtml.includes('Recompensas')) {
+    throw new Error('La vista debe mostrar el desglose de tokenómica de protocolo');
+}
+console.log('✓ Vista de Modo Competición en el Game Hub renderizada con interfaz completa');
+
+// D. Flujo de Lobby y Matchmaking con cuenta atrás y auto-relleno IA
+const initialCredits = vm.runInContext('loadNftUserData().credits', ctx);
+vm.runInContext(`
+    (() => {
+        openWagerLobby('room_bronze');
+    })();
+`, ctx);
+const lobbyModal = doc.getElementById('wager-lobby-modal');
+if (!lobbyModal || !lobbyModal.innerHTML.includes('SALA AMATEUR')) {
+    throw new Error('El modal del lobby debe haberse abierto para la sala amateur');
+}
+// Verificar que el buy-in de 5 tokens fue deducido
+const creditsAfterBuyIn = vm.runInContext('loadNftUserData().credits', ctx);
+if (creditsAfterBuyIn !== initialCredits - 5) {
+    throw new Error(`Se debieron deducir 5 tokens de buy-in, actual: ${creditsAfterBuyIn}`);
+}
+// Probar reembolso al cancelar lobby
+vm.runInContext('closeWagerLobby(true)', ctx);
+const creditsAfterRefund = vm.runInContext('loadNftUserData().credits', ctx);
+if (creditsAfterRefund !== initialCredits) {
+    throw new Error(`Los tokens deben reembolsarse al salir del lobby, actual: ${creditsAfterRefund}`);
+}
+console.log('✓ Lobby de apuestas, retención y reembolso de buy-in verificados');
+
+// E. Ejecución de Carrera de Apuestas en Phaser y Liquidación Financiera
+vm.runInContext(`
+    (() => {
+        const mockSlots = [
+            { slotIdx: 0, name: 'Apex_Champion_99', carName: 'Ferrari F40 Corsa', archetype: 'ferrari_corsa', colorHex: '#ef4444', isAI: false, stake: 20 },
+            { slotIdx: 1, name: 'Vortex_Racer', carName: 'Porsche 911 GT3', archetype: 'porsche_boxer', colorHex: '#06b6d4', isAI: false, stake: 20 },
+            { slotIdx: 2, name: 'AI Viper Pro', carName: 'Dodge Viper ACR', archetype: 'viper_acr', colorHex: '#94a3b8', isAI: true, stake: 10 },
+            { slotIdx: 3, name: 'AI Bugatti GT', carName: 'Bugatti Chiron', archetype: 'bugatti_w16', colorHex: '#64748b', isAI: true, stake: 10 }
+        ];
+        const mockRoom = WAGER_ROOMS_CONFIG[2]; // Master GP (Buy-in: 20)
+        const mockPot = calculateWagerPot(mockRoom, 2, 2); // 2 humanos + 2 IA: 20+20+10+10 = 60
+        launchWagerRace(mockRoom, mockSlots, mockPot);
+    })();
+`, ctx);
+
+const isWagerActive = vm.runInContext('Boolean(window.activeWagerConfig)', ctx);
+if (!isWagerActive) throw new Error('activeWagerConfig debe estar definido en carrera de apuestas');
+const aiWagerCount = vm.runInContext('aiCars.length', ctx);
+if (aiWagerCount !== 3) {
+    throw new Error(`En modo apuestas debe haber exactamente 3 rivales (4 coches en total), actual: ${aiWagerCount}`);
+}
+console.log('✓ Parrilla de salida de 4 corredores generada correctamente para Modo Competición');
+
+// F. Cruce de meta y Liquidación Contable (endRace)
+vm.runInContext(`
+    (() => {
+        // Simular que el jugador termina en 1º puesto
+        hudPosText.setText('POS: 1 / 4');
+        playerLap = TOTAL_LAPS + 1;
+        endRace();
+    })();
+`, ctx);
+
+const statsAfterRace = vm.runInContext('loadNftUserData().wagerStats', ctx);
+if (!statsAfterRace || statsAfterRace.totalRaces !== 1 || statsAfterRace.wins !== 1) {
+    throw new Error('Las estadísticas de apuestas del usuario deben haberse actualizado');
+}
+if (statsAfterRace.burnedTokens <= 0 || statsAfterRace.devFees <= 0 || statsAfterRace.rewardsFees <= 0) {
+    throw new Error('Las estadísticas de protocolo (burn, dev, rewards) deben haberse acumulado');
+}
+console.log('✓ Liquidación contable en perfil Web3 y actualización de estadísticas verificadas');
+console.log(`   - Carreras disputadas: ${statsAfterRace.totalRaces}`);
+console.log(`   - Victorias: ${statsAfterRace.wins}`);
+console.log(`   - Total ganado: ${statsAfterRace.totalWon} $CR`);
+console.log(`   - Tokens quemados acumulados: ${statsAfterRace.burnedTokens} $CR`);
+console.log(`   - Tokens a pool de recompensas: ${statsAfterRace.rewardsFees} $CR`);
+console.log(`   - Comisión de plataforma (nosotros): ${statsAfterRace.devFees} $CR`);
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

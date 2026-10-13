@@ -2939,16 +2939,20 @@ function showMenu(scene) {
 }
 
 // ===== INICIAR CARRERA Y CONSTRUIR MUNDO DUSTRAC OFICIAL =====
-function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = false) {
+function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = false, wagerConfig = undefined) {
     if (!scene || !scene.children || typeof scene.children.removeAll !== 'function') {
         console.warn('Escena no preparada todavía para startRace. Reintentando...');
         setTimeout(() => {
             const sc = window.raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
             if (sc && sc.children && typeof sc.children.removeAll === 'function') {
-                startRace(sc, trackId, carIdx, timeOfDay, isStory);
+                startRace(sc, trackId, carIdx, timeOfDay, isStory, wagerConfig);
             }
         }, 100);
         return;
+    }
+
+    if (wagerConfig !== undefined) {
+        window.activeWagerConfig = wagerConfig;
     }
 
     scene.children.removeAll();
@@ -3970,8 +3974,30 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         if (apx) gridRivals[0] = apx;
     }
 
-    for (let i = 0; i < 5; i++) {
-        const rivalDef = gridRivals[i] || AI_TIER_B[0];
+    const isWager = Boolean(typeof window !== 'undefined' && window.activeWagerConfig);
+    const rivalCount = isWager ? 3 : 5;
+
+    for (let i = 0; i < rivalCount; i++) {
+        let rivalDef;
+        if (isWager && window.activeWagerConfig.finalSlots && window.activeWagerConfig.finalSlots[i + 1]) {
+            const slot = window.activeWagerConfig.finalSlots[i + 1];
+            rivalDef = {
+                name: slot.carName || (slot.isAI ? "GT Challenger AI" : "GT Rival Pro"),
+                driver: slot.name,
+                colorHex: slot.colorHex || (slot.isAI ? "#94a3b8" : "#f59e0b"),
+                texture: "car_blue",
+                archetype: slot.archetype || "ferrari_corsa",
+                speed: slot.speed || (isWager ? (375 + i * 18) : 380),
+                accel: slot.accel || 305,
+                handling: 4.6,
+                laneOffset: (i === 0 ? -18 : (i === 1 ? 18 : 0)),
+                drivingStyle: (i === 0 ? 'apex_hunter' : (i === 1 ? 'sweeper' : 'draft_passer')),
+                isAI: slot.isAI
+            };
+        } else {
+            rivalDef = gridRivals[i] || AI_TIER_B[0];
+        }
+
         const texKey = getOrCreateColoredCarTexture(scene, rivalDef.colorHex, rivalDef.texture, rivalDef.archetype);
         const aiData = {
             id: 'ai_' + i,
@@ -4198,8 +4224,22 @@ function setupHud(scene, track) {
     bar.lineBetween(0, 48, 960, 48);
     hud.add(bar);
 
-    hudPosText = scene.add.text(25, 14, 'POS: 1 / 6', { font: '900 18px Arial', fill: '#00f5d4' });
+    const totalRacers = (typeof window !== 'undefined' && window.activeWagerConfig) ? 4 : (aiCars.length + 1);
+    hudPosText = scene.add.text(25, 14, `POS: 1 / ${totalRacers}`, { font: '900 18px Arial', fill: '#00f5d4' });
     hud.add(hudPosText);
+
+    // Distintivo de Sala de Apuestas en el HUD
+    if (typeof window !== 'undefined' && window.activeWagerConfig && window.activeWagerConfig.room) {
+        const wRoom = window.activeWagerConfig.room;
+        const wPot = window.activeWagerConfig.potData ? window.activeWagerConfig.potData.netPot : (wRoom.buyIn * 4 * 0.95);
+        const wagerHudBadge = scene.add.text(480, 52, `🪙 ${wRoom.name} • BOTE NETO: ${wPot} ${wRoom.currency}`, {
+            font: '900 11px Arial Black',
+            fill: '#fde047',
+            backgroundColor: '#0a0d14ee',
+            padding: { x: 10, y: 3 }
+        }).setOrigin(0.5, 0).setDepth(52);
+        hud.add(wagerHudBadge);
+    }
 
     hudLapText = scene.add.text(180, 14, `VUELTA: 1 / ${TOTAL_LAPS}`, { font: 'bold 16px Arial', fill: '#fee440' });
     hud.add(hudLapText);
@@ -5470,8 +5510,16 @@ function endRace() {
     overlay.fillRect(0, 0, 960, 540);
 
     const posMatch = (hudPosText && typeof hudPosText.text === 'string') ? hudPosText.text.match(/\d+/) : null;
-    const playerRank = posMatch ? parseInt(posMatch[0]) : 1;
+    const isWager = Boolean(typeof window !== 'undefined' && window.activeWagerConfig);
+    const totalRacers = isWager ? 4 : (aiCars ? aiCars.length + 1 : 6);
+    const playerRank = posMatch ? Math.min(parseInt(posMatch[0]), totalRacers) : 1;
     const isPodium = playerRank <= 3;
+
+    // Si estamos en MODO COMPETICIÓN (Salas de Apuestas de Tokens)
+    if (isWager) {
+        handleWagerRaceEnd(raceScene, playerRank);
+        return;
+    }
 
     // Guardar progreso en el Modo Historia
     const progress = loadStoryProgress();
@@ -5646,6 +5694,187 @@ function endRace() {
 
     hubBtn.on('pointerdown', () => {
         if (window.returnToGameHub) window.returnToGameHub();
+    });
+}
+
+// ===== LIQUIDACIÓN FINANCIERA Y PODIO DEL MODO COMPETICIÓN (APUESTAS DE TOKENS) =====
+function handleWagerRaceEnd(scene, playerRank) {
+    const wConfig = window.activeWagerConfig || {};
+    const wRoom = wConfig.room || { id: 'amateur', name: 'Sala Amateur', buyIn: 5, currency: '$CR' };
+    const potData = wConfig.potData || {
+        grossPot: wRoom.buyIn * 4,
+        totalFee: wRoom.buyIn * 4 * 0.05,
+        devFee: wRoom.buyIn * 4 * 0.02,
+        rewardsFee: wRoom.buyIn * 4 * 0.02,
+        burnedTokens: wRoom.buyIn * 4 * 0.01,
+        netPot: wRoom.buyIn * 4 * 0.95,
+        payouts: [wRoom.buyIn * 4 * 0.95 * 0.70, wRoom.buyIn * 4 * 0.95 * 0.20, wRoom.buyIn * 4 * 0.95 * 0.10, 0]
+    };
+
+    const payouts = potData.payouts || [potData.netPot * 0.70, potData.netPot * 0.20, potData.netPot * 0.10, 0];
+    const playerPrize = (playerRank <= 3) ? (payouts[playerRank - 1] || 0) : 0;
+
+    // Liquidación contable en el perfil Web3 del jugador
+    if (typeof loadNftUserData === 'function') {
+        const u = loadNftUserData();
+        u.credits = Math.round(((u.credits || 0) + playerPrize) * 100) / 100;
+
+        if (!u.wagerStats) {
+            u.wagerStats = { totalRaces: 0, wins: 0, podiums: 0, totalWon: 0, burnedTokens: 0, devFees: 0, rewardsFees: 0 };
+        }
+        u.wagerStats.totalRaces = (u.wagerStats.totalRaces || 0) + 1;
+        if (playerRank === 1) u.wagerStats.wins = (u.wagerStats.wins || 0) + 1;
+        if (playerRank <= 3) u.wagerStats.podiums = (u.wagerStats.podiums || 0) + 1;
+        u.wagerStats.totalWon = Math.round(((u.wagerStats.totalWon || 0) + playerPrize) * 100) / 100;
+        u.wagerStats.burnedTokens = Math.round(((u.wagerStats.burnedTokens || 0) + potData.burnedTokens) * 100) / 100;
+        u.wagerStats.devFees = Math.round(((u.wagerStats.devFees || 0) + potData.devFee) * 100) / 100;
+        u.wagerStats.rewardsFees = Math.round(((u.wagerStats.rewardsFees || 0) + potData.rewardsFee) * 100) / 100;
+
+        // Botín de taller adicional por competir
+        const partsWonCount = playerRank === 1 ? 4 : (playerRank === 2 ? 3 : (playerRank === 3 ? 2 : 1));
+        if (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && partsWonCount > 0) {
+            if (!u.partsInventory) u.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
+            const catalogKeys = Object.keys(WORKSHOP_PIECES_CATALOG);
+            for (let i = 0; i < partsWonCount; i++) {
+                const pKey = catalogKeys[Math.floor(Math.random() * catalogKeys.length)];
+                u.partsInventory[pKey] = (u.partsInventory[pKey] || 0) + 1;
+            }
+        }
+
+        saveNftUserData(u);
+    }
+
+    // Experiencia para el vehículo
+    const xpReward = playerRank === 1 ? 300 : (playerRank === 2 ? 200 : (playerRank === 3 ? 150 : 80));
+    if (typeof addXpToEquippedCar === 'function') {
+        addXpToEquippedCar(xpReward);
+    }
+
+    const curPilot = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO';
+
+    // Títulos de cabecera
+    scene.add.text(480, 44, '🪙 MODO COMPETICIÓN • LIQUIDACIÓN DE APUESTAS 🪙', {
+        font: '900 20px Arial Black', fill: '#00f5d4', stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    scene.add.text(480, 72, `${wRoom.name.toUpperCase()} (Buy-in: ${wRoom.buyIn} ${wRoom.currency}) • PILOTO: ${curPilot.toUpperCase()}`, {
+        font: 'bold 13px Arial', fill: '#94a3b8'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    // Medalla y clasificación
+    const medalEmoji = playerRank === 1 ? '🥇 ¡CAMPEÓN DE LA SALA! 1º PUESTO' :
+                       (playerRank === 2 ? '🥈 2º PUESTO (SUBCAMPEÓN)' :
+                       (playerRank === 3 ? '🥉 3º PUESTO (PODIO)' : '❌ 4º PUESTO (FUERA DE PREMIOS)'));
+    const medalColor = playerRank === 1 ? '#fde047' :
+                       (playerRank === 2 ? '#e2e8f0' :
+                       (playerRank === 3 ? '#f97316' : '#ef4444'));
+
+    scene.add.text(480, 110, medalEmoji, {
+        font: '900 26px Arial', fill: medalColor, stroke: '#000000', strokeThickness: 6
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    const prizeText = playerRank <= 3 
+        ? `PREMIO DEL BOTE: +${playerPrize} ${wRoom.currency}  (+${xpReward} XP)`
+        : `SIN PREMIO DE FONDOS (0 ${wRoom.currency})  (+${xpReward} XP)`;
+    const prizeTextColor = playerRank <= 3 ? '#22c55e' : '#94a3b8';
+
+    scene.add.text(480, 146, prizeText, {
+        font: '900 16px Arial Black', fill: prizeTextColor
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    // Tiempos
+    const bestSec = bestLapTime ? (bestLapTime / 1000).toFixed(2) + 's' : '--';
+    const totalRaceSec = raceStartTime ? ((Date.now() - raceStartTime) / 1000).toFixed(1) : ((Date.now() - lapStartTime) / 1000).toFixed(1);
+    scene.add.text(480, 172, `⏱️ Mejor Vuelta: ${bestSec} • Tiempo Total: ${totalRaceSec}s`, {
+        font: 'bold 12px Arial', fill: '#64748b'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+    // Caja de liquidación financiera
+    const box = scene.add.graphics().setScrollFactor(0).setDepth(201);
+    box.fillStyle(0x0e1422, 0.95);
+    box.fillRoundedRect(140, 196, 680, 218, 10);
+    box.lineStyle(1.5, 0x00f5d4, 0.8);
+    box.strokeRoundedRect(140, 196, 680, 218, 10);
+
+    // Título caja
+    scene.add.text(480, 214, 'DETALLE FINANCIERO Y TOKENÓMICA DE LA SALA (4 CORREDORES)', {
+        font: '900 12px Arial Black', fill: '#facc15'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+
+    // Bote y deducción
+    scene.add.text(170, 238, `💰 Bote Bruto Recaudado: ${potData.grossPot} ${wRoom.currency}`, {
+        font: 'bold 13px Arial', fill: '#ffffff'
+    }).setScrollFactor(0).setDepth(202);
+
+    scene.add.text(520, 238, `⚡ Bote Neto Repartido (95%): ${potData.netPot} ${wRoom.currency}`, {
+        font: 'bold 13px Arial', fill: '#38bdf8'
+    }).setScrollFactor(0).setDepth(202);
+
+    // Desglose de Rake (5%)
+    scene.add.text(170, 264, '📉 Desglose de Rake del Protocolo (5% Total):', {
+        font: 'bold 12px Arial', fill: '#94a3b8'
+    }).setScrollFactor(0).setDepth(202);
+
+    const feeDetails = `• Plataforma (2%): ${potData.devFee} $CR   • Recompensas (2%): ${potData.rewardsFee} $CR   • Quema 🔥 (1%): ${potData.burnedTokens} $CR`;
+    scene.add.text(170, 284, feeDetails, {
+        font: '900 11px monospace', fill: '#f59e0b'
+    }).setScrollFactor(0).setDepth(202);
+
+    // Reparto del Podio
+    scene.add.text(170, 314, '🏆 Reparto Oficial del Podio:', {
+        font: 'bold 12px Arial', fill: '#94a3b8'
+    }).setScrollFactor(0).setDepth(202);
+
+    const podiumDetails = `🥇 1º (70%): ${payouts[0]} $CR    🥈 2º (20%): ${payouts[1]} $CR    🥉 3º (10%): ${payouts[2]} $CR    4º: 0 $CR`;
+    scene.add.text(170, 334, podiumDetails, {
+        font: '900 12px Arial', fill: '#22c55e'
+    }).setScrollFactor(0).setDepth(202);
+
+    // Balance neto del jugador
+    const netProfit = playerPrize - wRoom.buyIn;
+    const netProfitStr = (netProfit >= 0 ? `+${netProfit.toFixed(1)}` : `${netProfit.toFixed(1)}`) + ` ${wRoom.currency}`;
+    const netProfitColor = netProfit >= 0 ? '#4ade80' : '#f87171';
+    scene.add.text(480, 386, `Tu Balance en la Carrera (Premio - Buy-in): ${netProfitStr}`, {
+        font: '900 13px Arial', fill: netProfitColor
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202);
+
+    // Botones de acción
+    // 1. Revancha en esta sala
+    const rematchBtn = scene.add.text(300, 455, '🔄 REVANCHA EN SALA', {
+        font: '900 13px Arial Black', fill: '#0a0d14', backgroundColor: '#00f5d4', padding: { x: 16, y: 10 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ useHandCursor: true });
+
+    rematchBtn.on('pointerdown', () => {
+        window.activeWagerConfig = null;
+        const hubRoot = document.getElementById('game-hub-root');
+        if (hubRoot) hubRoot.classList.remove('hidden');
+        if (typeof showHubView === 'function') showHubView('comp');
+        if (typeof window.openWagerLobby === 'function') {
+            window.openWagerLobby(wRoom.id);
+        }
+    });
+
+    // 2. Volver a Salas de Competición
+    const compBtn = scene.add.text(530, 455, '🏆 SALAS DE COMPETICIÓN', {
+        font: '900 13px Arial Black', fill: '#ffffff', backgroundColor: '#3b82f6', padding: { x: 16, y: 10 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ useHandCursor: true });
+
+    compBtn.on('pointerdown', () => {
+        if (window.returnToCompHub) {
+            window.returnToCompHub();
+        }
+    });
+
+    // 3. Volver al Menú Principal / Garaje
+    const hubBtn = scene.add.text(760, 455, '🏠 GARAJE / HUB', {
+        font: '900 13px Arial Black', fill: '#fee440', backgroundColor: '#1e293b', padding: { x: 16, y: 10 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(202).setInteractive({ useHandCursor: true });
+
+    hubBtn.on('pointerdown', () => {
+        window.activeWagerConfig = null;
+        if (window.returnToGameHub) {
+            window.returnToGameHub();
+        }
     });
 }
 
@@ -5934,5 +6163,6 @@ function updateStandings(track) {
     });
 
     const rank = list.findIndex(c => c.isPlayer) + 1;
-    if (hudPosText) hudPosText.setText(`POS: ${rank} / 6`);
+    const totalRacers = (typeof window !== 'undefined' && window.activeWagerConfig) ? 4 : (aiCars.length + 1);
+    if (hudPosText) hudPosText.setText(`POS: ${rank} / ${totalRacers}`);
 }
