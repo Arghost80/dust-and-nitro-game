@@ -180,10 +180,11 @@ body, html {
 }
 
 .btn-steer {
-    width: 76px;
-    height: 76px;
-    font-size: 26px;
+    width: 90px;
+    height: 90px;
+    font-size: 34px;
     color: #00f5d4;
+    border-width: 3px;
 }
 
 .btn-touch:active {
@@ -197,7 +198,64 @@ body, html {
     font-size: 11px;
     line-height: 1.15;
     text-align: center;
-    padding: 6px;
+    padding: 4px;
+}
+
+.btn-nitro {
+    width: 74px;
+    height: 74px;
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.95), rgba(99, 102, 241, 0.95));
+    border-color: #38bdf8;
+    color: #fff;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+    position: relative;
+    padding: 3px;
+    gap: 1px;
+}
+.btn-nitro:active {
+    background: linear-gradient(135deg, #00f5d4, #3b82f6);
+    box-shadow: 0 0 25px rgba(0, 245, 212, 0.9);
+    transform: scale(0.92);
+}
+.btn-nitro.active-nitro {
+    animation: nitroPulse 0.35s infinite alternate;
+    border-color: #00f5d4;
+    box-shadow: 0 0 24px #00f5d4, inset 0 0 12px #ffffff;
+}
+@keyframes nitroPulse {
+    from { transform: scale(1.0); }
+    to { transform: scale(1.08); filter: brightness(1.3); }
+}
+
+.nitro-icon {
+    font-size: 21px;
+    line-height: 1;
+    display: block;
+}
+.nitro-label {
+    font-size: 8.5px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    color: #e0f2fe;
+    line-height: 1;
+}
+.nitro-badge {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1.5px solid #38bdf8;
+    color: #fde047;
+    font-weight: 900;
+    font-size: 11px;
+    border-radius: 9px;
+    padding: 0 6px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 14px;
+    margin-top: 1px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.btn-nitro-empty {
+    opacity: 0.50 !important;
+    filter: grayscale(0.7);
 }
 
 .btn-green {
@@ -242,35 +300,50 @@ body, html {
 /* Soporte ergonómico y adaptable cuando la pantalla está en horizontal (Landscape) */
 @media (orientation: landscape) {
     .touch-controls {
-        bottom: 10px;
+        bottom: 8px;
         padding: 0 16px;
     }
     .touch-mode-toggle {
-        bottom: 120px;
+        bottom: 112px;
         left: 16px;
-        padding: 5px 12px;
+        padding: 4px 10px;
         font-size: 10px;
     }
     .virtual-joystick-container {
+        width: 122px;
+        height: 122px;
+    }
+    .joystick-base {
         width: 116px;
         height: 116px;
     }
-    .joystick-base {
-        width: 110px;
-        height: 110px;
-    }
     .btn-steer {
-        width: 62px;
-        height: 62px;
+        width: 82px;
+        height: 82px;
+        font-size: 32px;
+        border-width: 3px;
     }
-    .btn-action {
+    .btn-green {
+        width: 72px;
+        height: 72px;
+        font-size: 12.5px;
+    }
+    .btn-yellow {
+        width: 66px;
+        height: 66px;
+        font-size: 11px;
+    }
+    .btn-cyan {
         width: 64px;
         height: 64px;
-        font-size: 10.5px;
+        font-size: 10px;
     }
-    .btn-handbrake {
-        width: 62px;
-        height: 62px;
+    .btn-nitro {
+        width: 68px;
+        height: 68px;
+    }
+    .control-group {
+        gap: 8px;
     }
 }
 

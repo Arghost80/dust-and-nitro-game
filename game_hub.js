@@ -233,6 +233,10 @@ function renderHubHeader() {
                 <span class="curr-icon">⚡</span>
                 <span class="curr-amount" id="curr-energy">${carEnergy}/${carMaxEnergy}</span>
             </div>
+            <div class="currency-pill nitro-pill" onclick="openNitroRefillModal()" title="Cápsulas de Nitro N₂O (Click para conseguir más con anuncio o $CR)" style="cursor: pointer; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.25)); border: 1px solid #38bdf8;">
+                <span class="curr-icon">🧪</span>
+                <span class="curr-amount" id="curr-nitros" style="color: #38bdf8; font-weight: 800;">${(typeof userData.nitros === 'number') ? userData.nitros : 2} NITRO</span>
+            </div>
             <div class="currency-pill credits-pill">
                 <span class="curr-icon">💰</span>
                 <span class="curr-amount" id="curr-credits">${credits.toLocaleString()} $CR</span>
@@ -1400,6 +1404,176 @@ function closeRewardedAdModal() {
         modal.style.display = 'none';
     }
 }
+
+// Modal de Depósito y Recarga de Nitro N2O (1 Anuncio = 1 Nitro, o con Tokens $CR)
+function openNitroRefillModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('nitro-refill-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'nitro-refill-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const userData = loadNftUserData() || {};
+    const currentNitros = (typeof userData.nitros === 'number') ? userData.nitros : 2;
+    const credits = (typeof userData.credits === 'number') ? userData.credits : 1000000;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+
+    modal.innerHTML = `
+        <div class="ad-modal-card nitro-refill-card" style="border: 2px solid #38bdf8; box-shadow: 0 0 35px rgba(56, 189, 248, 0.45); max-width: 440px;">
+            <div class="ad-header-row">
+                <span class="ad-badge" style="background: linear-gradient(135deg, #0284c7, #6366f1); color: #fff; font-weight: 800;">🧪 DEPÓSITO DE NITRO N₂O</span>
+                <button class="modal-close-btn" onclick="closeNitroRefillModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 2px 6px;">✕</button>
+            </div>
+            <div class="nitro-modal-body" style="padding: 14px 4px; text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 8px;">🧪</div>
+                <h3 style="color: #38bdf8; font-size: 18px; margin-bottom: 6px; font-weight: 900; letter-spacing: 0.5px;">CÁPSULAS DE ÓXIDO NITROSO</h3>
+                <p style="color: #94a3b8; font-size: 12px; line-height: 1.45; margin-bottom: 14px;">
+                    Inyecta <strong>2.0 segundos</strong> de velocidad y aceleración extra en carrera. Máximo <strong>2 por carrera</strong>. Consíguelos viendo anuncios o con tokens.
+                </p>
+                <div style="background: rgba(15, 23, 42, 0.85); border: 1.5px solid #0284c7; border-radius: 12px; padding: 10px; margin-bottom: 16px; display: flex; justify-content: space-around; align-items: center;">
+                    <div>
+                        <div style="color: #64748b; font-size: 10.5px; font-weight: bold;">EN TU INVENTARIO</div>
+                        <div style="color: #38bdf8; font-size: 22px; font-weight: 900;" id="nitro-stock-display">${currentNitros} Cápsulas</div>
+                    </div>
+                    <div>
+                        <div style="color: #64748b; font-size: 10.5px; font-weight: bold;">TUS TOKENS $CR</div>
+                        <div style="color: #fde047; font-size: 19px; font-weight: 900;">${credits.toLocaleString()} $CR</div>
+                    </div>
+                </div>
+
+                <div class="nitro-options-grid" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Opción 1: Ver Anuncio -->
+                    <button class="btn-nitro-option btn-nitro-ad" onclick="startRewardedAdForNitro()" style="background: linear-gradient(135deg, #10b981, #059669); border: 1.5px solid #34d399; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.35);">
+                        <span>📺 VER 1 ANUNCIO (5s)</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #6ee7b7; font-size: 11px;">+1 NITRO GRATIS</span>
+                    </button>
+
+                    <!-- Opción 2: Comprar 1 con Tokens -->
+                    <button class="btn-nitro-option btn-nitro-buy-1" onclick="handleBuyNitro(1)" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: 1.5px solid #60a5fa; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);">
+                        <span>🪙 COMPRAR 1 CÁPSULA</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">10 $CR</span>
+                    </button>
+
+                    <!-- Opción 3: Pack 5 con Descuento -->
+                    <button class="btn-nitro-option btn-nitro-buy-5" onclick="handleBuyNitro(5)" style="background: linear-gradient(135deg, #8b5cf6, #d946ef); border: 1.5px solid #c084fc; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(217, 70, 239, 0.35);">
+                        <span>🔥 PACK 5 CÁPSULAS (-20%)</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">40 $CR</span>
+                    </button>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 10px;">
+                <button class="btn-cancel-ad" onclick="closeNitroRefillModal()" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #94a3b8; padding: 7px 22px; border-radius: 10px; cursor: pointer; font-size: 11.5px;">CERRAR</button>
+            </div>
+        </div>
+    `;
+}
+window.openNitroRefillModal = openNitroRefillModal;
+
+function closeNitroRefillModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('nitro-refill-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+}
+window.closeNitroRefillModal = closeNitroRefillModal;
+
+function handleBuyNitro(amount = 1) {
+    hubAudio.playClick();
+    if (typeof buyNitrosWithTokens !== 'function') return;
+    const res = buyNitrosWithTokens(amount);
+    if (res.success) {
+        hubAudio.playOpenCrate();
+        renderHubHeader();
+        const display = document.getElementById('nitro-stock-display');
+        if (display) display.textContent = `${res.newNitros} Cápsulas`;
+        alert(`🧪 ¡Compraste +${amount} Cápsula(s) de Nitro por ${res.cost} $CR! Tienes ${res.newNitros} en tu inventario.`);
+    } else {
+        alert('🪙 Saldo insuficiente de tokens $CR.');
+    }
+}
+window.handleBuyNitro = handleBuyNitro;
+
+function startRewardedAdForNitro() {
+    hubAudio.playClick();
+    closeNitroRefillModal();
+
+    let modal = document.getElementById('ad-reward-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ad-reward-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+
+    let secondsLeft = 5;
+    modal.innerHTML = `
+        <div class="ad-modal-card">
+            <div class="ad-header-row">
+                <span class="ad-badge">📺 ANUNCIO PATROCINADO: NITRO N₂O</span>
+                <span class="ad-timer" id="ad-timer-countdown">⏳ ${secondsLeft}s</span>
+            </div>
+            <div class="ad-sponsor-screen">
+                <div class="ad-sponsor-logo">🧪 NOS TURBO NITRO • WEB3 MOTORSPORT</div>
+                <div class="ad-sponsor-body">
+                    <h3>¡POTENCIA N₂O DE ALTA COMPETICIÓN!</h3>
+                    <p>Desbloquea 2.0 segundos de sobreaceleración supersónica con cada cápsula de óxido nitroso en la pista.</p>
+                    <div class="ad-progress-track">
+                        <div class="ad-progress-bar" id="ad-progress-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="ad-footer-actions">
+                <button id="btn-claim-ad-reward" class="btn-claim-ad disabled" disabled>
+                    ⏳ ESPERA ${secondsLeft}s PARA RECLAMAR
+                </button>
+                <button class="btn-cancel-ad" onclick="closeRewardedAdModal()">CERRAR</button>
+            </div>
+        </div>
+    `;
+
+    const timerInterval = setInterval(() => {
+        secondsLeft--;
+        const timerElem = document.getElementById('ad-timer-countdown');
+        const barElem = document.getElementById('ad-progress-bar');
+        const btnElem = document.getElementById('btn-claim-ad-reward');
+
+        if (timerElem) timerElem.textContent = `⏳ ${Math.max(0, secondsLeft)}s`;
+        if (barElem) barElem.style.width = `${Math.round(((5 - secondsLeft) / 5) * 100)}%`;
+
+        if (secondsLeft <= 0) {
+            clearInterval(timerInterval);
+            if (btnElem) {
+                btnElem.disabled = false;
+                btnElem.classList.remove('disabled');
+                btnElem.classList.add('ready');
+                btnElem.innerHTML = `🎉 ¡RECLAMAR +1 CÁPSULA DE NITRO!`;
+                btnElem.onclick = () => {
+                    if (typeof addNitroWithAd === 'function') {
+                        const res = addNitroWithAd();
+                        if (res.success) {
+                            hubAudio.playOpenCrate();
+                            closeRewardedAdModal();
+                            renderHubHeader();
+                            alert(`🧪 ¡Anuncio completado! Ganaste +1 Cápsula de Nitro N₂O. Tienes ${res.newNitros} en tu inventario.`);
+                        }
+                    }
+                };
+            }
+        }
+    }, 1000);
+
+    modal._timerInterval = timerInterval;
+}
+window.startRewardedAdForNitro = startRewardedAdForNitro;
 
 function showEnergyDepletedModal(car) {
     hubAudio.playClick();

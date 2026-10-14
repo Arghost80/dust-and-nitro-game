@@ -448,6 +448,7 @@ function loadNftUserData() {
     if (typeof data.gems !== 'number' || data.gems < 10000) data.gems = 50000;
     if (!Array.isArray(data.garage) || data.garage.length === 0) data.garage = [starterCar];
     if (!data.equippedInstanceId && data.garage[0]) data.equippedInstanceId = data.garage[0].instanceId;
+    if (typeof data.nitros !== 'number') data.nitros = 2;
 
     // Nombre de piloto personalizado del usuario
     if (!data.pilotName || typeof data.pilotName !== 'string' || !data.pilotName.trim()) {
@@ -686,6 +687,61 @@ function rechargeEnergyWithAd(instanceId = null) {
         car: car,
         newEnergy: car.energy
     };
+}
+
+// Obtener total de cápsulas de Nitro N2O en inventario
+function getAvailableNitros() {
+    const userData = loadNftUserData();
+    if (typeof userData.nitros !== 'number') {
+        userData.nitros = 2;
+        saveNftUserData(userData);
+    }
+    return userData.nitros;
+}
+
+// Reclamar +1 Nitro al ver un anuncio (1 Anuncio = 1 Nitro)
+function addNitroWithAd() {
+    const userData = loadNftUserData();
+    if (typeof userData.nitros !== 'number') userData.nitros = 2;
+    userData.nitros += 1;
+    saveNftUserData(userData);
+    return {
+        success: true,
+        newNitros: userData.nitros
+    };
+}
+
+// Comprar cápsulas de Nitro con tokens ($CR)
+function buyNitrosWithTokens(amount = 1) {
+    const userData = loadNftUserData();
+    if (typeof userData.nitros !== 'number') userData.nitros = 2;
+    const costPerUnit = 10;
+    const cost = amount === 5 ? 40 : amount * costPerUnit;
+    if (userData.credits < cost) {
+        return { success: false, reason: "credits_insufficient", cost: cost };
+    }
+    userData.credits -= cost;
+    userData.nitros += amount;
+    saveNftUserData(userData);
+    return {
+        success: true,
+        amount: amount,
+        cost: cost,
+        newNitros: userData.nitros,
+        remainingCredits: userData.credits
+    };
+}
+
+// Consumir 1 Nitro en carrera
+function consumeNitroFromInventory() {
+    const userData = loadNftUserData();
+    if (typeof userData.nitros !== 'number') userData.nitros = 2;
+    if (userData.nitros > 0) {
+        userData.nitros -= 1;
+        saveNftUserData(userData);
+        return true;
+    }
+    return false;
 }
 
 // Acuñar (Mint) un coche NFT con sus 10 estadísticas y ranuras de piezas
@@ -1406,3 +1462,11 @@ function updateSponsorshipProgress(raceData) {
     saveNftUserData(userData);
     return completedNow;
 }
+
+if (typeof window !== 'undefined') {
+    window.getAvailableNitros = getAvailableNitros;
+    window.addNitroWithAd = addNitroWithAd;
+    window.buyNitrosWithTokens = buyNitrosWithTokens;
+    window.consumeNitroFromInventory = consumeNitroFromInventory;
+}
+

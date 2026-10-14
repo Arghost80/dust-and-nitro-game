@@ -343,9 +343,39 @@ class DustAudio {
         gain.gain.setValueAtTime(0.16, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
         osc.start(now);
         osc.stop(now + 0.25);
+    }
+
+    playNitro() {
+        if (!this.ctx || typeof this.ctx.createOscillator !== 'function') return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(1180, now + 0.45);
+        osc.frequency.setValueAtTime(1080, now + 1.55);
+        osc.frequency.exponentialRampToValueAtTime(320, now + 2.0);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.setValueAtTime(0.24, now + 1.5);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 2.05);
+
+        if (typeof this.ctx.createBiquadFilter === 'function') {
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(750, now);
+            filter.frequency.exponentialRampToValueAtTime(2400, now + 0.6);
+            filter.frequency.exponentialRampToValueAtTime(650, now + 2.0);
+            osc.connect(filter);
+            filter.connect(gain);
+        } else {
+            osc.connect(gain);
+        }
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 2.05);
     }
 }
 const dustAudio = new DustAudio();
@@ -545,6 +575,8 @@ let currentTouchControlMode = 'joystick';
 let raceStartTime = 0;
 let driftCharge = 0;
 let driftBoostTimer = 0;
+let raceNitrosRemaining = 2; // Máximo 2 por carrera
+let nitroBoostTimer = 0; // Duración 2.0s de extra velocidad N2O
 
 // ===== PRELOAD: CARGA DE ASSETS ORIGINALES DE DUSTRACING2D =====
 function dustPreload() {
@@ -2421,7 +2453,8 @@ function dustCreate() {
                 a: Phaser.Input.Keyboard.KeyCodes.A,
                 d: Phaser.Input.Keyboard.KeyCodes.D,
                 space: Phaser.Input.Keyboard.KeyCodes.SPACE,
-                shift: Phaser.Input.Keyboard.KeyCodes.SHIFT
+                shift: Phaser.Input.Keyboard.KeyCodes.SHIFT,
+                n: Phaser.Input.Keyboard.KeyCodes.N
             }) || {};
         } catch(e) {
             keys = {};
@@ -2602,10 +2635,116 @@ function setupTouchControls() {
     bindTouch('btn-accel', () => touchGas = true, () => touchGas = false);
     bindTouch('btn-brake', () => touchBrake = true, () => touchBrake = false);
     bindTouch('btn-handbrake', () => touchHandbrake = true, () => touchHandbrake = false);
+    bindTouch('btn-nitro', () => { activateNitroBoost(); }, () => {});
 
     initVirtualJoystick();
     applyTouchControlMode();
+    updateNitroButtonBadge();
 }
+
+function updateNitroButtonBadge() {
+    const badge = document.getElementById('nitro-badge-count');
+    const btn = document.getElementById('btn-nitro');
+    if (badge) {
+        badge.textContent = `${raceNitrosRemaining}`;
+    }
+    if (btn) {
+        if (raceNitrosRemaining > 0) {
+            btn.classList.remove('btn-nitro-empty');
+            btn.style.opacity = '1';
+        } else {
+            btn.classList.add('btn-nitro-empty');
+            btn.style.opacity = '0.50';
+        }
+    }
+}
+window.updateNitroButtonBadge = updateNitroButtonBadge;
+
+function activateNitroBoost() {
+    if (gameState !== 'RACE') return;
+    if (nitroBoostTimer > 0) return;
+    if (raceNitrosRemaining <= 0) {
+        try { if (dustAudio && typeof dustAudio.playKerb === 'function') dustAudio.playKerb(); } catch(e) {}
+        if (hudDriftBadge) {
+            hudDriftBadge.setText('⚠️ ¡SIN NITROS EN ESTA CARRERA! (0/2)').setFill('#f87171').setVisible(true);
+            setTimeout(() => { if (hudDriftBadge && nitroBoostTimer <= 0) hudDriftBadge.setVisible(false); }, 1800);
+        }
+        return;
+    }
+
+    raceNitrosRemaining--;
+    if (typeof consumeNitroFromInventory === 'function') {
+        consumeNitroFromInventory();
+    }
+    updateNitroButtonBadge();
+
+    nitroBoostTimer = 2.0; // 2.0s de inyección N2O
+    try {
+        dustAudio.init();
+        if (typeof dustAudio.playNitro === 'function') {
+            dustAudio.playNitro();
+        } else if (typeof dustAudio.playBoost === 'function') {
+            dustAudio.playBoost();
+        }
+    } catch(e) {}
+
+    // Acelerón y empuje supersónico inmediato
+    if (playerCar) {
+        const top = typeof topSpeed === 'number' ? topSpeed : 450;
+        playerSpeed = Math.min(top * 1.35, playerSpeed + 115);
+    }
+
+    if (hudDriftBadge) {
+        hudDriftBadge.setText('🔥 ¡NITRO N₂O ACTIVADO! (2.0s)').setFill('#00f5d4').setVisible(true);
+    }
+
+    if (raceScene && playerCar) {
+        spawnNitroJetFlames(raceScene, playerCar, 6);
+    }
+}
+window.activateNitroBoost = activateNitroBoost;
+
+function spawnNitroJetFlames(scene, car, count = 4) {
+    if (!scene || !car || !car.active) return;
+    const rad = Phaser.Math.DegToRad(car.angle);
+    const rx = car.x - Math.cos(rad) * 23;
+    const ry = car.y - Math.sin(rad) * 23;
+    const perp = rad + Math.PI / 2;
+
+    [-7, 7].forEach(offset => {
+        const fx = rx + Math.cos(perp) * offset;
+        const fy = ry + Math.sin(perp) * offset;
+
+        // Llamarada externa azul cian neón
+        const flameOuter = scene.add.sprite(fx, fy, 'dt_sparkle')
+            .setDisplaySize(13, 13)
+            .setDepth(14)
+            .setTint(0x00f5d4);
+
+        scene.tweens.add({
+            targets: flameOuter,
+            scale: 1.4,
+            alpha: 0,
+            duration: 120,
+            onComplete: () => flameOuter.destroy()
+        });
+
+        // Núcleo blanco brillante
+        const flameCore = scene.add.sprite(fx, fy, 'dt_sparkle')
+            .setDisplaySize(7, 7)
+            .setDepth(14.1)
+            .setTint(0xffffff);
+
+        scene.tweens.add({
+            targets: flameCore,
+            scale: 1.2,
+            alpha: 0,
+            duration: 90,
+            onComplete: () => flameCore.destroy()
+        });
+    });
+}
+window.spawnNitroJetFlames = spawnNitroJetFlames;
 
 function adaptCameraZoom(targetScene) {
     const sc = targetScene || raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
@@ -3203,6 +3342,12 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             }
         }
     } catch(e) {}
+
+    // Cargar cápsulas de Nitro para la carrera (máx 2 por carrera)
+    const userNitros = (typeof getAvailableNitros === 'function') ? getAvailableNitros() : 2;
+    raceNitrosRemaining = Math.min(2, Math.max(0, userNitros));
+    nitroBoostTimer = 0;
+    updateNitroButtonBadge();
 
     raceScene = scene;
     window.raceScene = scene;
@@ -4633,11 +4778,13 @@ function dustUpdate(time, delta) {
     }
 
     if (hudDriftBadge) {
-        if (driftBoostTimer > 0) {
+        if (nitroBoostTimer > 0) {
+            hudDriftBadge.setText(`🔥 ¡NITRO N₂O! ${nitroBoostTimer.toFixed(1)}s (VELOCIDAD +35%)`).setFill('#00f5d4').setVisible(true);
+        } else if (driftBoostTimer > 0) {
             hudDriftBadge.setText(`🚀 ¡BOOST DE DERRAPE ACTIVO!`).setFill('#00f5d4').setVisible(true);
         } else if (driftCharge >= 0.35) {
             hudDriftBadge.setText(`⚡ DERRAPE CARGADO • ¡SUELTA PARA TURBO!`).setFill('#fee440').setVisible(true);
-        } else if (touchHandbrake || (keys && ((keys.space && keys.space.isDown) || (keys.shift && keys.shift.isDown)))) {
+        } else if (touchHandbrake || (keys && keys.space && keys.space.isDown)) {
             hudDriftBadge.setText(`💨 DERRAPANDO...`).setFill('#ffffff').setVisible(true);
         } else {
             hudDriftBadge.setVisible(false);
@@ -4843,7 +4990,12 @@ function updatePlayer(dt, track) {
     const right = Boolean((keys && keys.right && keys.right.isDown) || (keys && keys.d && keys.d.isDown) || touchRight);
     const gas = Boolean((keys && keys.up && keys.up.isDown) || (keys && keys.w && keys.w.isDown) || touchGas || touchJoyGas);
     const brake = Boolean((keys && keys.down && keys.down.isDown) || (keys && keys.s && keys.s.isDown) || touchBrake || touchJoyBrake);
-    const handbrake = Boolean((keys && keys.space && keys.space.isDown) || (keys && keys.shift && keys.shift.isDown) || touchHandbrake);
+    const handbrake = Boolean((keys && keys.space && keys.space.isDown) || touchHandbrake);
+
+    // Activación de Nitro N2O con tecla N o tecla Shift en PC
+    if (keys && ((keys.n && Phaser.Input.Keyboard.JustDown(keys.n)) || (keys.shift && Phaser.Input.Keyboard.JustDown(keys.shift)))) {
+        activateNitroBoost();
+    }
 
     // Detección de distancia a la carretera más cercana (Límites de pista y Anti-Atajos)
     const roadInfo = getDistanceToRoad(playerCar.x, playerCar.y, raceScene);
@@ -5015,6 +5167,25 @@ function updatePlayer(dt, track) {
             if (driftBoostTimer > 0) {
                 driftBoostTimer = Math.max(0, driftBoostTimer - dt);
                 spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', 0x00f5d4);
+            }
+
+            // Gestión activa del Nitro N2O (2.0 segundos de velocidad punta extra y aceleración de competición)
+            if (nitroBoostTimer > 0) {
+                nitroBoostTimer = Math.max(0, nitroBoostTimer - dt);
+                const nitroTopSpeed = topSpeed * 1.35;
+                playerSpeed = Math.min(nitroTopSpeed, playerSpeed + accelRate * 2.5 * dt);
+                if (Math.random() < 0.85) {
+                    spawnNitroJetFlames(raceScene, playerCar, 3);
+                }
+                const nitroBtn = document.getElementById('btn-nitro');
+                if (nitroBtn && !nitroBtn.classList.contains('active-nitro')) {
+                    nitroBtn.classList.add('active-nitro');
+                }
+            } else {
+                const nitroBtn = document.getElementById('btn-nitro');
+                if (nitroBtn && nitroBtn.classList.contains('active-nitro')) {
+                    nitroBtn.classList.remove('active-nitro');
+                }
             }
 
             if (gas) {

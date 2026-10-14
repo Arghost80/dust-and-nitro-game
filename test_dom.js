@@ -1062,9 +1062,81 @@ if (tcDisplayReturn !== 'none') {
 }
 console.log('✓ Retorno al Hub oculta correctamente los controles táctiles');
 
+// E. Verificar Sistema de Nitro N2O (2 usos por carrera, compra con tokens y anuncios) (V58)
+console.log('\n--- VERIFICANDO SISTEMA DE NITRO N2O (2 USOS/CARRERA, ANUNCIOS Y TOKENS) (V58) ---');
+const nitroBtn = vm.runInContext('document.getElementById("btn-nitro")', ctx);
+if (!nitroBtn) throw new Error('El botón #btn-nitro debe existir en el DOM');
+const nitroBadge = vm.runInContext('document.getElementById("nitro-badge-count")', ctx);
+if (!nitroBadge) throw new Error('El badge #nitro-badge-count debe existir en el DOM');
+console.log('✓ Botón de cápsula de Nitro y badge numérico presentes en el DOM');
+
+// Comprobar obtención de Nitro con Anuncio (1 anuncio = 1 nitro)
+const initNitros = vm.runInContext('getAvailableNitros()', ctx);
+const nitroAdRes = vm.runInContext('addNitroWithAd()', ctx);
+if (!nitroAdRes.success || nitroAdRes.newNitros !== initNitros + 1) {
+    throw new Error('addNitroWithAd debe sumar exactamente +1 cápsula de Nitro');
+}
+console.log(`✓ Recompensa de anuncio verificada: +1 Nitro (Total: ${nitroAdRes.newNitros})`);
+
+// Comprobar compra de Nitros con Tokens $CR
+const nitroBuyRes = vm.runInContext('buyNitrosWithTokens(1)', ctx);
+if (!nitroBuyRes.success || nitroBuyRes.amount !== 1 || nitroBuyRes.cost !== 10) {
+    throw new Error('buyNitrosWithTokens debe descontar 10 $CR y añadir 1 Nitro');
+}
+console.log(`✓ Compra de Nitro con tokens verificada (Coste: ${nitroBuyRes.cost} $CR | Nuevo total: ${nitroBuyRes.newNitros})`);
+
+// Iniciar carrera y comprobar tope de 2 Nitros por carrera
+vm.runInContext(`
+    startRace(window.raceScene, 'rookie_ring', 0, 'day', false);
+    gameState = 'RACE';
+`, ctx);
+const raceNitros = vm.runInContext('raceNitrosRemaining', ctx);
+if (raceNitros !== 2) {
+    throw new Error(`Se deben permitir máximo 2 Nitros por carrera (actual: ${raceNitros})`);
+}
+const badgeTextInit = vm.runInContext('document.getElementById("nitro-badge-count").textContent', ctx);
+if (badgeTextInit !== '2') {
+    throw new Error(`El badge de Nitro debe mostrar 2 al inicio de la carrera (actual: ${badgeTextInit})`);
+}
+console.log('✓ Límite de 2 cápsulas por carrera y badge numérico "2" verificados');
+
+// Activar 1er Nitro
+vm.runInContext('activateNitroBoost()', ctx);
+const timer1 = vm.runInContext('nitroBoostTimer', ctx);
+const rem1 = vm.runInContext('raceNitrosRemaining', ctx);
+const badge1 = vm.runInContext('document.getElementById("nitro-badge-count").textContent', ctx);
+if (timer1 <= 0 || rem1 !== 1 || badge1 !== '1') {
+    throw new Error(`Primer nitro falló: timer=${timer1}, remaining=${rem1}, badge=${badge1}`);
+}
+console.log('✓ 1er Nitro activado con éxito: 2.0s de impulso, resta a 1 cápsula y badge "1"');
+
+// Simular paso de 2.1 segundos para que termine el boost
+vm.runInContext(`
+    nitroBoostTimer = 0;
+    activateNitroBoost();
+`, ctx);
+const rem2 = vm.runInContext('raceNitrosRemaining', ctx);
+const badge2 = vm.runInContext('document.getElementById("nitro-badge-count").textContent', ctx);
+if (rem2 !== 0 || badge2 !== '0') {
+    throw new Error(`Segundo nitro falló: remaining=${rem2}, badge=${badge2}`);
+}
+console.log('✓ 2º Nitro activado con éxito: resta a 0 cápsulas y badge "0"');
+
+// Intentar activar un 3er Nitro (debe ser bloqueado)
+vm.runInContext(`
+    nitroBoostTimer = 0;
+    activateNitroBoost();
+`, ctx);
+const timer3 = vm.runInContext('nitroBoostTimer', ctx);
+if (timer3 > 0) {
+    throw new Error('No se debe permitir activar un 3er nitro en la misma carrera');
+}
+console.log('✓ Límite estricto respetado: 3er intento de Nitro bloqueado con éxito');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
+
 
 
 
