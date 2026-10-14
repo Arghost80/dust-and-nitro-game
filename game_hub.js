@@ -510,6 +510,8 @@ function launchRaceDirectly(trackId = 'rookie_ring', timeOfDay = 'day') {
         if (sc && sc.children && typeof window.startRace === 'function') {
             const hubRoot = document.getElementById('game-hub-root');
             if (hubRoot) hubRoot.classList.add('hidden');
+            const tc = document.getElementById('touch-controls');
+            if (tc) { tc.style.display = 'flex'; tc.classList.remove('hidden'); }
             window.startRace(sc, trackId, 0, timeOfDay, true);
         } else if (attempts < 25) {
             setTimeout(tryLaunch, 100);
@@ -525,6 +527,15 @@ function launchRaceDirectly(trackId = 'rookie_ring', timeOfDay = 'day') {
 window.returnToGameHub = function() {
     const hubRoot = document.getElementById('game-hub-root');
     if (hubRoot) hubRoot.classList.remove('hidden');
+    const tc = document.getElementById('touch-controls');
+    if (tc) { tc.style.display = 'none'; tc.classList.add('hidden'); }
+    const rp = document.getElementById('rotate-prompt');
+    if (rp) { rp.style.display = 'none'; rp.classList.add('hidden'); }
+    try {
+        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.unlockOrientation === 'function') {
+            window.Telegram.WebApp.unlockOrientation();
+        }
+    } catch(e) {}
     showHubView('main');
 };
 

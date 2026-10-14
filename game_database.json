@@ -1,5 +1,21 @@
 {
-  "users": {},
+  "users": {
+    "1329367593": {
+      "id": 1329367593,
+      "username": "Arghostt",
+      "coins": 200,
+      "selectedCar": "v8_interceptor",
+      "unlockedCars": [
+        "v8_interceptor"
+      ],
+      "stats": {
+        "races": 0,
+        "wins": 0,
+        "bestTime": null
+      },
+      "createdAt": "2026-10-14T07:35:50.659Z"
+    }
+  },
   "leaderboard": [
     {
       "username": "Piloto Retro",

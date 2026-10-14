@@ -3006,3 +3006,9 @@
         font-size: 14px;
     }
 }
+
+/* Ocultar siempre controles táctiles (joystick y pedales) cuando el Hub esté visible */
+#game-hub-root:not(.hidden) ~ #touch-controls,
+#game-hub-root:not(.hidden) ~ #rotate-prompt {
+    display: none !important;
+}

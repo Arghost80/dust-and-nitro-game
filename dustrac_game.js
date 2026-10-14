@@ -5,8 +5,19 @@
 // marcas de goma permanentes, iluminación de faros dinámicos, minimapa radar e IA de 6 coches.
 
 if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
+    try {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+        if (typeof window.Telegram.WebApp.requestFullscreen === 'function') {
+            window.Telegram.WebApp.requestFullscreen();
+        }
+        if (typeof window.Telegram.WebApp.setHeaderColor === 'function') {
+            window.Telegram.WebApp.setHeaderColor('#060911');
+        }
+        if (typeof window.Telegram.WebApp.setBackgroundColor === 'function') {
+            window.Telegram.WebApp.setBackgroundColor('#060911');
+        }
+    } catch(e) {}
 }
 
 // ===== SINTETIZADOR DE AUDIO GT3 MULTI-CAPA MODERNO =====
@@ -2596,6 +2607,46 @@ function setupTouchControls() {
     applyTouchControlMode();
 }
 
+let rotatePromptDismissed = false;
+function checkOrientationAndPrompt() {
+    const rp = document.getElementById('rotate-prompt');
+    if (!rp) return;
+    if (gameState === 'RACE' || gameState === 'COUNTDOWN') {
+        const isPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+        if (isPortrait && !rotatePromptDismissed) {
+            rp.style.display = 'flex';
+            rp.classList.remove('hidden');
+        } else {
+            rp.style.display = 'none';
+            rp.classList.add('hidden');
+        }
+    } else {
+        rp.style.display = 'none';
+        rp.classList.add('hidden');
+    }
+}
+window.dismissRotatePrompt = function() {
+    rotatePromptDismissed = true;
+    const rp = document.getElementById('rotate-prompt');
+    if (rp) { rp.style.display = 'none'; rp.classList.add('hidden'); }
+};
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', () => {
+        checkOrientationAndPrompt();
+        if (window.phaserGame && window.phaserGame.scale) {
+            window.phaserGame.scale.refresh();
+        }
+    });
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            checkOrientationAndPrompt();
+            if (window.phaserGame && window.phaserGame.scale) {
+                window.phaserGame.scale.refresh();
+            }
+        }, 200);
+    });
+}
+
 // ===== MENÚ PRINCIPAL: MODO HISTORIA Y CARRERA LIBRE =====
 function showMenu(scene) {
     if (!scene || !scene.children || typeof scene.children.removeAll !== 'function') {
@@ -2609,6 +2660,17 @@ function showMenu(scene) {
     }
     gameState = 'MENU';
     scene.children.removeAll();
+
+    // Ocultar controles táctiles y prompt de rotación en menús
+    const tc = document.getElementById('touch-controls');
+    if (tc) { tc.style.display = 'none'; tc.classList.add('hidden'); }
+    const rp = document.getElementById('rotate-prompt');
+    if (rp) { rp.style.display = 'none'; rp.classList.add('hidden'); }
+    try {
+        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.unlockOrientation === 'function') {
+            window.Telegram.WebApp.unlockOrientation();
+        }
+    } catch(e) {}
 
     // 1. Resetear completamente la cámara al origen de pantalla (0, 0), zoom 1:1 y desvincularla del coche
     if (scene.cameras && scene.cameras.main) {
@@ -3113,6 +3175,29 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     }
 
     scene.children.removeAll();
+
+    // Mostrar controles táctiles y activar pantalla completa / orientación horizontal para la carrera
+    const tc = document.getElementById('touch-controls');
+    if (tc) {
+        tc.style.display = 'flex';
+        tc.classList.remove('hidden');
+    }
+    try {
+        if (window.Telegram && window.Telegram.WebApp) {
+            if (typeof window.Telegram.WebApp.expand === 'function') {
+                window.Telegram.WebApp.expand();
+            }
+            if (typeof window.Telegram.WebApp.requestFullscreen === 'function') {
+                window.Telegram.WebApp.requestFullscreen();
+            }
+            if (typeof window.Telegram.WebApp.lockOrientation === 'function') {
+                window.Telegram.WebApp.lockOrientation('landscape');
+            }
+        }
+    } catch(e) {}
+    if (typeof checkOrientationAndPrompt === 'function') {
+        checkOrientationAndPrompt();
+    }
 
     raceScene = scene;
     window.raceScene = scene;
@@ -5662,6 +5747,12 @@ function endRace() {
     gameState = 'FINISHED';
     playerSpeed = 0;
     playerCar.setVelocity(0, 0);
+
+    // Ocultar controles táctiles para dejar limpia la pantalla de victoria/resultados
+    const tc = document.getElementById('touch-controls');
+    if (tc) { tc.style.display = 'none'; tc.classList.add('hidden'); }
+    const rp = document.getElementById('rotate-prompt');
+    if (rp) { rp.style.display = 'none'; rp.classList.add('hidden'); }
 
     const overlay = raceScene.add.graphics().setScrollFactor(0).setDepth(200);
     overlay.fillStyle(0x080a10, 0.90);

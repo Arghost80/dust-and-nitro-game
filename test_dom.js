@@ -1032,6 +1032,36 @@ if (toggledMode !== 'buttons') {
 vm.runInContext('toggleTouchControlMode()', ctx);
 console.log('✓ Alternancia fluida entre Joystick Táctil y Botones Grandes verificada con éxito');
 
+// D. Verificar que los controles táctiles y prompt se ocultan en menús y se muestran sólo en carrera
+console.log('\n--- VERIFICANDO VISIBILIDAD DE CONTROLES: OCULTOS EN HUB, ACTIVOS EN CARRERA (V56) ---');
+vm.runInContext(`
+    window.returnToGameHub();
+`, ctx);
+const tcDisplayHub = vm.runInContext('document.getElementById("touch-controls").style.display', ctx);
+const rpDisplayHub = vm.runInContext('document.getElementById("rotate-prompt").style.display', ctx);
+if (tcDisplayHub !== 'none' || rpDisplayHub !== 'none') {
+    throw new Error('Los controles táctiles y el rotate-prompt deben estar ocultos en el Hub');
+}
+console.log('✓ Controles táctiles y rotate-prompt ocultos en Hub / Menú Principal');
+
+vm.runInContext(`
+    startRace(window.raceScene, 'rookie_ring', 0, 'day', false);
+`, ctx);
+const tcDisplayRace = vm.runInContext('document.getElementById("touch-controls").style.display', ctx);
+if (tcDisplayRace !== 'flex') {
+    throw new Error('Los controles táctiles deben activarse (display: flex) al arrancar la carrera');
+}
+console.log('✓ Controles táctiles activados (display: flex) durante la carrera');
+
+vm.runInContext(`
+    window.returnToGameHub();
+`, ctx);
+const tcDisplayReturn = vm.runInContext('document.getElementById("touch-controls").style.display', ctx);
+if (tcDisplayReturn !== 'none') {
+    throw new Error('Los controles táctiles deben volver a ocultarse al regresar al Hub');
+}
+console.log('✓ Retorno al Hub oculta correctamente los controles táctiles');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
