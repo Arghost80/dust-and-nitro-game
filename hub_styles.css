@@ -2888,16 +2888,121 @@
 }
 
 @media (max-width: 768px) {
+    .hub-view-container {
+        padding: 12px 10px;
+    }
+    .hub-header {
+        flex-wrap: wrap;
+        padding: 8px 10px;
+        gap: 8px;
+    }
+    .hub-header-center {
+        order: 3;
+        width: 100%;
+        overflow-x: auto;
+        padding: 4px 2px;
+        gap: 8px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .hub-header-center::-webkit-scrollbar {
+        display: none;
+    }
+    .currency-pill {
+        padding: 4px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .hero-center-box {
+        margin: 6px 0 14px 0;
+    }
+    .game-logo-glow {
+        font-size: 26px;
+        letter-spacing: 1.5px;
+    }
+    .game-subtitle-tag {
+        font-size: 9.5px;
+        letter-spacing: 0.5px;
+    }
+    .hero-cta-row {
+        flex-direction: column;
+        width: 100%;
+        gap: 8px;
+        margin-top: 10px !important;
+    }
+    .btn-hero-launch-direct {
+        width: 100%;
+        font-size: 12.5px;
+        padding: 11px 14px;
+        text-align: center;
+    }
+    .zones-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        width: 100%;
+    }
+    .zone-card {
+        padding: 14px 10px;
+        min-height: 115px;
+        border-radius: 14px;
+    }
+    .zone-icon {
+        font-size: 36px;
+        margin-bottom: 6px;
+    }
+    .zone-title {
+        font-size: 13px;
+        line-height: 1.2;
+        margin-bottom: 4px;
+    }
+    .zone-action-btn, .zone-badge {
+        margin-top: 6px;
+        font-size: 9.5px;
+        padding: 4px 10px;
+    }
+    .card-shop {
+        grid-column: span 2;
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 14px;
+        min-height: 52px;
+        padding: 10px 16px;
+    }
+    .card-shop .zone-icon {
+        margin-bottom: 0;
+        font-size: 26px;
+    }
+    .card-shop .zone-body {
+        flex: none;
+    }
+    .card-shop .zone-title {
+        margin-bottom: 0;
+        font-size: 13.5px;
+    }
+    .card-shop .zone-badge {
+        margin-top: 0;
+    }
     .wager-stats-banner {
         grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
     }
     .wager-rooms-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
     .wager-rules-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
+        gap: 8px;
     }
     .wager-slots-grid {
         grid-template-columns: 1fr;
+    }
+    .wager-metrics-box {
+        padding: 8px;
+    }
+    .wager-metric-val {
+        font-size: 14px;
     }
 }

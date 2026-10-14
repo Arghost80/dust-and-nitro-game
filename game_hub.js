@@ -312,9 +312,8 @@ function renderMainHubView() {
                 <div class="zone-icon">🏆</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_story')}</h3>
-                    <p class="zone-desc">${t('zone_story_desc')}</p>
                 </div>
-                <div class="zone-action-btn">▶ ${t('btn_play')}</div>
+                <div class="zone-action-btn">${t('btn_play')}</div>
             </div>
 
             <!-- Zona 2: Garaje NFT -->
@@ -322,17 +321,15 @@ function renderMainHubView() {
                 <div class="zone-icon">🏎️</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_garage')}</h3>
-                    <p class="zone-desc">${t('zone_garage_desc')}</p>
                 </div>
                 <div class="zone-badge">75+ COCHES</div>
             </div>
 
-            <!-- Zona 3: Cajas Misteriosas NFT -->
+            <!-- Zona 3: Cajas NFT -->
             <div class="zone-card card-crates" onclick="showHubView('crates')">
                 <div class="zone-icon">🎁</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_crates')}</h3>
-                    <p class="zone-desc">${t('zone_crates_desc')}</p>
                 </div>
                 <div class="zone-badge highlight-pulse">WEB3 GACHA</div>
             </div>
@@ -342,7 +339,6 @@ function renderMainHubView() {
                 <div class="zone-icon">🌐</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_comp')}</h3>
-                    <p class="zone-desc">${t('zone_comp_desc')}</p>
                 </div>
                 <div class="zone-badge">MULTIJUGADOR</div>
             </div>
@@ -352,7 +348,6 @@ function renderMainHubView() {
                 <div class="zone-icon">💎</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_shop')}</h3>
-                    <p class="zone-desc">${t('zone_shop_desc')}</p>
                 </div>
                 <div class="zone-badge">UPGRADES</div>
             </div>
@@ -1701,10 +1696,10 @@ function renderCompView() {
                     </div>
                 </div>
                 <div class="wager-stat-box">
-                    <div class="wager-stat-icon">🏛️</div>
+                    <div class="wager-stat-icon">💰</div>
                     <div>
-                        <div class="wager-stat-label">Tesorería Casa (2%)</div>
-                        <div class="wager-stat-value" style="color: #fbbf24;">${(stats.devFees || 0).toFixed(2)} $CR</div>
+                        <div class="wager-stat-label">Total Ganado en Botes</div>
+                        <div class="wager-stat-value" style="color: #fbbf24;">${(stats.totalWon || 0).toFixed(2)} $CR</div>
                     </div>
                 </div>
                 <div class="wager-stat-box">
@@ -1735,8 +1730,8 @@ function renderCompView() {
                         Si compiten bots IA, aportan el 50% de la apuesta, adaptando el bote de forma justa.
                     </div>
                     <div class="wager-rule-item">
-                        <strong>📊 Reparto 5% Fee / 95% Bote</strong>
-                        2% Casa, 2% Recompensas, 1% Quema deflacionaria 🔥. El 95% neto se reparte al podio (1º: 70%, 2º: 20%, 3º: 10%).
+                        <strong>📊 Reparto 95% Bote al Podio</strong>
+                        El 95% del bote neto se reparte íntegramente al podio (1º: 70%, 2º: 20%, 3º: 10%), con un 5% destinado a fondo de recompensas comunitarias y quema de tokens 🔥.
                     </div>
                 </div>
             </div>
@@ -1776,7 +1771,7 @@ function renderCompView() {
 
                                 <div class="wager-payout-row">
                                     💰 <strong>Bote 1H+3IA:</strong> ${aiPot.grossPot} ${room.currency} (1º: ${aiPot.p1Prize} ${room.currency})<br>
-                                    🔥 <strong>Fee Protocolo (5%):</strong> 2% Casa • 2% Recompensas • 1% Quema
+                                    🏆 <strong>Premios Podio (95%):</strong> 🥇 70% • 🥈 20% • 🥉 10% (5% Fondo & Quema 🔥)
                                 </div>
                             </div>
 
@@ -2018,7 +2013,7 @@ function renderWagerLobbyModal(isReady = false) {
                     <span style="color: #00f5d4;">BOTE BRUTO: ${potData.grossPot.toFixed(2)} ${room.currency}</span>
                 </div>
                 <div class="wager-accounting-row">
-                    <span>🏛️ Comisión Casa (2%):</span>
+                    <span>🛡️ Protocolo y Mantenimiento Web3 (2%):</span>
                     <span>-${potData.devFee.toFixed(2)} ${room.currency}</span>
                 </div>
                 <div class="wager-accounting-row">
