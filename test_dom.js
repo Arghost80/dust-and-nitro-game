@@ -1133,9 +1133,41 @@ if (timer3 > 0) {
 }
 console.log('✓ Límite estricto respetado: 3er intento de Nitro bloqueado con éxito');
 
+console.log('\n--- VERIFICANDO BOTONERA RADIAL ESTILO RPG / ACCIÓN (V59) ---');
+const indexHtmlContent = fs.readFileSync('index.html', 'utf8');
+const styleCssContent = fs.readFileSync('style.css', 'utf8');
+
+if (!indexHtmlContent.includes('right-group rpg-cluster')) {
+    throw new Error('index.html debe incluir la clase rpg-cluster en el contenedor right-group');
+}
+if (!indexHtmlContent.includes('id="btn-nitro"') || !indexHtmlContent.includes('id="btn-accel"') ||
+    !indexHtmlContent.includes('id="btn-brake"') || !indexHtmlContent.includes('id="btn-handbrake"')) {
+    throw new Error('index.html debe contener los 4 botones: nitro, accel, brake y handbrake');
+}
+if (!styleCssContent.includes('.right-group.rpg-cluster')) {
+    throw new Error('style.css debe definir el layout radial .right-group.rpg-cluster');
+}
+// Verificar que Nitro está situado verticalmente arriba del acelerador
+if (!styleCssContent.includes('#btn-nitro') || !styleCssContent.includes('bottom: 94px')) {
+    throw new Error('style.css debe posicionar el Nitro justo arriba del acelerador');
+}
+// Verificar que el acelerador está en la esquina inferior derecha
+if (!styleCssContent.includes('#btn-accel') || !styleCssContent.includes('bottom: 0px') || !styleCssContent.includes('right: 0px')) {
+    throw new Error('style.css debe anclar el acelerador en la esquina inferior derecha');
+}
+// Verificar que Freno y Derrape forman el arco semicircular a la izquierda
+if (!styleCssContent.includes('#btn-brake') || !styleCssContent.includes('right: 90px')) {
+    throw new Error('style.css debe colocar el freno en el arco semicircular superior izquierdo');
+}
+if (!styleCssContent.includes('#btn-handbrake') || !styleCssContent.includes('right: 98px')) {
+    throw new Error('style.css debe colocar el freno de mano en el arco semicircular izquierdo');
+}
+console.log('✓ Botonera semicircular RPG (GAS pivot en esquina, Nitro justo arriba, Freno y Derrape en abanico) verificada al 100%');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
+
 
 
 

@@ -194,30 +194,68 @@ body, html {
 }
 
 .btn-action {
-    border-radius: 18px;
+    border-radius: 50%;
     font-size: 11px;
     line-height: 1.15;
     text-align: center;
-    padding: 4px;
+    padding: 3px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
-.btn-nitro {
-    width: 74px;
-    height: 74px;
-    background: linear-gradient(135deg, rgba(6, 182, 212, 0.95), rgba(99, 102, 241, 0.95));
-    border-color: #38bdf8;
-    color: #fff;
-    box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+/* Grupo Derecho: Botonera Radial / Semicírculo Estilo Juegos de Rol y Acción */
+.right-group.rpg-cluster {
     position: relative;
-    padding: 3px;
-    gap: 1px;
+    width: 195px;
+    height: 185px;
+    pointer-events: none;
+    margin-right: 0;
+    margin-bottom: 0;
 }
-.btn-nitro:active {
+
+.right-group.rpg-cluster .btn-touch {
+    position: absolute;
+    pointer-events: auto;
+}
+
+/* 1. Botón Principal: GAS (Acelerador) - Anclado en la esquina inferior derecha, tamaño mayor */
+#btn-accel {
+    right: 0px;
+    bottom: 0px;
+    width: 84px;
+    height: 84px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.96) 0%, rgba(5, 150, 105, 0.98) 85%);
+    border: 3px solid #34d399;
+    font-size: 13.5px;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.55), inset 0 0 10px rgba(255, 255, 255, 0.25);
+    z-index: 5;
+}
+#btn-accel:active {
+    background: #059669;
+    box-shadow: 0 0 28px rgba(52, 211, 153, 0.95);
+    transform: scale(0.93);
+}
+
+/* 2. Botón de Nitro: Justo arriba del acelerador */
+#btn-nitro {
+    right: 6px;
+    bottom: 94px;
+    width: 70px;
+    height: 70px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.95) 0%, rgba(99, 102, 241, 0.98) 85%);
+    border: 2.5px solid #38bdf8;
+    color: #fff;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.2);
+    z-index: 6;
+}
+#btn-nitro:active {
     background: linear-gradient(135deg, #00f5d4, #3b82f6);
     box-shadow: 0 0 25px rgba(0, 245, 212, 0.9);
     transform: scale(0.92);
 }
-.btn-nitro.active-nitro {
+#btn-nitro.active-nitro {
     animation: nitroPulse 0.35s infinite alternate;
     border-color: #00f5d4;
     box-shadow: 0 0 24px #00f5d4, inset 0 0 12px #ffffff;
@@ -258,43 +296,40 @@ body, html {
     filter: grayscale(0.7);
 }
 
-.btn-green {
-    width: 76px;
-    height: 76px;
-    background: rgba(16, 185, 129, 0.92);
-    border-color: #34d399;
-    font-size: 13px;
-    box-shadow: 0 0 16px rgba(16, 185, 129, 0.5);
-}
-.btn-green:active {
-    background: #059669;
-    box-shadow: 0 0 25px rgba(52, 211, 153, 0.9);
-}
-
-.btn-yellow {
-    width: 68px;
-    height: 68px;
-    background: rgba(234, 88, 12, 0.92);
-    border-color: #fb923c;
-    font-size: 11.5px;
-    box-shadow: 0 0 14px rgba(234, 88, 12, 0.45);
-}
-.btn-yellow:active {
-    background: #c2410c;
-    box-shadow: 0 0 22px rgba(251, 146, 60, 0.9);
-}
-
-.btn-cyan {
-    width: 68px;
-    height: 68px;
-    background: rgba(6, 182, 212, 0.92);
-    border-color: #22d3ee;
+/* 3. Botón de Freno (FRENO): En el arco, arriba a la izquierda del acelerador */
+#btn-brake {
+    right: 90px;
+    bottom: 66px;
+    width: 66px;
+    height: 66px;
+    background: radial-gradient(circle, rgba(234, 88, 12, 0.95) 0%, rgba(194, 65, 12, 0.98) 85%);
+    border: 2.5px solid #fb923c;
     font-size: 11px;
-    box-shadow: 0 0 14px rgba(6, 182, 212, 0.45);
+    box-shadow: 0 0 16px rgba(234, 88, 12, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.2);
+    z-index: 4;
 }
-.btn-cyan:active {
+#btn-brake:active {
+    background: #c2410c;
+    box-shadow: 0 0 24px rgba(251, 146, 60, 0.9);
+    transform: scale(0.92);
+}
+
+/* 4. Botón de Derrape / Freno de Mano (DERRAPE): En el arco, a la izquierda del acelerador */
+#btn-handbrake {
+    right: 98px;
+    bottom: 0px;
+    width: 66px;
+    height: 66px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.95) 0%, rgba(8, 145, 178, 0.98) 85%);
+    border: 2.5px solid #22d3ee;
+    font-size: 10px;
+    box-shadow: 0 0 16px rgba(6, 182, 212, 0.45), inset 0 0 10px rgba(255, 255, 255, 0.2);
+    z-index: 4;
+}
+#btn-handbrake:active {
     background: #0891b2;
-    box-shadow: 0 0 22px rgba(34, 211, 238, 0.9);
+    box-shadow: 0 0 24px rgba(34, 211, 238, 0.9);
+    transform: scale(0.92);
 }
 
 /* Soporte ergonómico y adaptable cuando la pantalla está en horizontal (Landscape) */
@@ -323,27 +358,51 @@ body, html {
         font-size: 32px;
         border-width: 3px;
     }
-    .btn-green {
-        width: 72px;
-        height: 72px;
+    .control-group.left-group {
+        gap: 8px;
+    }
+
+    /* Botonera radial en horizontal adaptada a la altura de pantalla */
+    .right-group.rpg-cluster {
+        width: 175px;
+        height: 165px;
+    }
+    #btn-accel {
+        right: 0px;
+        bottom: 0px;
+        width: 76px;
+        height: 76px;
         font-size: 12.5px;
     }
-    .btn-yellow {
-        width: 66px;
-        height: 66px;
-        font-size: 11px;
+    #btn-nitro {
+        right: 4px;
+        bottom: 84px;
+        width: 60px;
+        height: 60px;
     }
-    .btn-cyan {
-        width: 64px;
-        height: 64px;
+    .btn-nitro .nitro-icon {
+        font-size: 18px;
+    }
+    .btn-nitro .nitro-label {
+        font-size: 7.5px;
+    }
+    .btn-nitro .nitro-badge {
+        font-size: 10px;
+        padding: 0 5px;
+    }
+    #btn-brake {
+        right: 80px;
+        bottom: 58px;
+        width: 58px;
+        height: 58px;
         font-size: 10px;
     }
-    .btn-nitro {
-        width: 68px;
-        height: 68px;
-    }
-    .control-group {
-        gap: 8px;
+    #btn-handbrake {
+        right: 88px;
+        bottom: 0px;
+        width: 58px;
+        height: 58px;
+        font-size: 9.5px;
     }
 }
 
