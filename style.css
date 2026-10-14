@@ -239,77 +239,43 @@ body, html {
     box-shadow: 0 0 22px rgba(34, 211, 238, 0.9);
 }
 
-/* Prompt sugerido de rotación de pantalla a horizontal */
+/* Soporte ergonómico y adaptable cuando la pantalla está en horizontal (Landscape) */
+@media (orientation: landscape) {
+    .touch-controls {
+        bottom: 10px;
+        padding: 0 16px;
+    }
+    .touch-mode-toggle {
+        bottom: 120px;
+        left: 16px;
+        padding: 5px 12px;
+        font-size: 10px;
+    }
+    .virtual-joystick-container {
+        width: 116px;
+        height: 116px;
+    }
+    .joystick-base {
+        width: 110px;
+        height: 110px;
+    }
+    .btn-steer {
+        width: 62px;
+        height: 62px;
+    }
+    .btn-action {
+        width: 64px;
+        height: 64px;
+        font-size: 10.5px;
+    }
+    .btn-handbrake {
+        width: 62px;
+        height: 62px;
+    }
+}
+
 .rotate-prompt {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(6, 9, 17, 0.92);
-    z-index: 99999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    backdrop-filter: blur(10px);
-    text-align: center;
-    box-sizing: border-box;
-}
-
-.rotate-prompt-box {
-    background: rgba(15, 23, 42, 0.95);
-    border: 2px solid #00f5d4;
-    box-shadow: 0 0 35px rgba(0, 245, 212, 0.4);
-    border-radius: 20px;
-    padding: 26px 20px;
-    max-width: 320px;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.rotate-icon {
-    font-size: 46px;
-    margin-bottom: 12px;
-    animation: rotatePhoneAnim 2.2s infinite ease-in-out;
-}
-
-@keyframes rotatePhoneAnim {
-    0%, 20% { transform: rotate(0deg); }
-    50%, 70% { transform: rotate(90deg); }
-    90%, 100% { transform: rotate(0deg); }
-}
-
-.rotate-prompt-box h3 {
-    font-size: 15px;
-    font-weight: 900;
-    color: #fde047;
-    margin-bottom: 6px;
-    letter-spacing: 0.5px;
-}
-
-.rotate-prompt-box p {
-    font-size: 11.5px;
-    color: #94a3b8;
-    line-height: 1.4;
-    margin-bottom: 14px;
-}
-
-.btn-rotate-dismiss {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    color: #cbd5e1;
-    font-size: 10.5px;
-    font-weight: 800;
-    padding: 8px 14px;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.btn-rotate-dismiss:hover {
-    background: rgba(255, 255, 255, 0.18);
-    color: #fff;
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
 }

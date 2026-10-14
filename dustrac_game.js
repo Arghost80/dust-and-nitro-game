@@ -2607,43 +2607,45 @@ function setupTouchControls() {
     applyTouchControlMode();
 }
 
-let rotatePromptDismissed = false;
-function checkOrientationAndPrompt() {
-    const rp = document.getElementById('rotate-prompt');
-    if (!rp) return;
-    if (gameState === 'RACE' || gameState === 'COUNTDOWN') {
-        const isPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
-        if (isPortrait && !rotatePromptDismissed) {
-            rp.style.display = 'flex';
-            rp.classList.remove('hidden');
-        } else {
-            rp.style.display = 'none';
-            rp.classList.add('hidden');
-        }
-    } else {
-        rp.style.display = 'none';
-        rp.classList.add('hidden');
-    }
+function adaptCameraZoom(targetScene) {
+    const sc = targetScene || raceScene || (window.phaserGame && window.phaserGame.scene && window.phaserGame.scene.scenes && window.phaserGame.scene.scenes[0]);
+    if (!sc || !sc.cameras || !sc.cameras.main) return;
+    if (gameState === 'MENU') return;
+    const isPortrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+    const targetZoom = isPortrait ? 1.45 : 1.15;
+    sc.cameras.main.setZoom(targetZoom);
 }
-window.dismissRotatePrompt = function() {
-    rotatePromptDismissed = true;
-    const rp = document.getElementById('rotate-prompt');
-    if (rp) { rp.style.display = 'none'; rp.classList.add('hidden'); }
-};
+window.adaptCameraZoom = adaptCameraZoom;
+
+function checkOrientationAndPrompt() {
+    adaptCameraZoom();
+}
+window.dismissRotatePrompt = function() {};
+
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('resize', () => {
-        checkOrientationAndPrompt();
+        try {
+            if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.unlockOrientation === 'function') {
+                window.Telegram.WebApp.unlockOrientation();
+            }
+        } catch(e) {}
+        adaptCameraZoom();
         if (window.phaserGame && window.phaserGame.scale) {
             window.phaserGame.scale.refresh();
         }
     });
     window.addEventListener('orientationchange', () => {
         setTimeout(() => {
-            checkOrientationAndPrompt();
+            try {
+                if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.unlockOrientation === 'function') {
+                    window.Telegram.WebApp.unlockOrientation();
+                }
+            } catch(e) {}
+            adaptCameraZoom();
             if (window.phaserGame && window.phaserGame.scale) {
                 window.phaserGame.scale.refresh();
             }
-        }, 200);
+        }, 150);
     });
 }
 
@@ -3176,7 +3178,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
 
     scene.children.removeAll();
 
-    // Mostrar controles táctiles y activar pantalla completa / orientación horizontal para la carrera
+    // Mostrar controles táctiles y activar pantalla completa sin bloqueo de orientación
     const tc = document.getElementById('touch-controls');
     if (tc) {
         tc.style.display = 'flex';
@@ -3184,20 +3186,23 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     }
     try {
         if (window.Telegram && window.Telegram.WebApp) {
+            if (typeof window.Telegram.WebApp.ready === 'function') {
+                window.Telegram.WebApp.ready();
+            }
             if (typeof window.Telegram.WebApp.expand === 'function') {
                 window.Telegram.WebApp.expand();
+            }
+            if (typeof window.Telegram.WebApp.disableVerticalSwipes === 'function') {
+                window.Telegram.WebApp.disableVerticalSwipes();
+            }
+            if (typeof window.Telegram.WebApp.unlockOrientation === 'function') {
+                window.Telegram.WebApp.unlockOrientation();
             }
             if (typeof window.Telegram.WebApp.requestFullscreen === 'function') {
                 window.Telegram.WebApp.requestFullscreen();
             }
-            if (typeof window.Telegram.WebApp.lockOrientation === 'function') {
-                window.Telegram.WebApp.lockOrientation('landscape');
-            }
         }
     } catch(e) {}
-    if (typeof checkOrientationAndPrompt === 'function') {
-        checkOrientationAndPrompt();
-    }
 
     raceScene = scene;
     window.raceScene = scene;
@@ -3232,7 +3237,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     } else {
         scene.cameras.main.setBackgroundColor('#0d121d');
     }
-    scene.cameras.main.setZoom(1.1);
+    adaptCameraZoom(scene);
 
     // 1. TERRENO BASE Y BIOMA AMBIENTAL (Nieve, Desierto, Ciudad, Montaña, Costa, Río y Puente de Piedra)
     let baseGroundKey = 'dt_grass';
@@ -4304,7 +4309,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     if (typeof scene.cameras.main.setFollowOffset === 'function') {
         scene.cameras.main.setFollowOffset(0, 0);
     }
-    scene.cameras.main.setZoom(1.1);
+    adaptCameraZoom(scene);
 
     // Crear Telemetría e Interfaz HUD
     setupHud(scene, track);

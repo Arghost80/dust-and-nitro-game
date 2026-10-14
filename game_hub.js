@@ -477,6 +477,21 @@ function launchRaceDirectly(trackId = 'rookie_ring', timeOfDay = 'day') {
     hubAudio.playClick();
     closeTrackSelectModal();
 
+    // Activar pantalla completa y desbloquear rotación libre en Telegram
+    try {
+        if (window.Telegram && window.Telegram.WebApp) {
+            if (typeof window.Telegram.WebApp.ready === 'function') window.Telegram.WebApp.ready();
+            if (typeof window.Telegram.WebApp.expand === 'function') window.Telegram.WebApp.expand();
+            if (typeof window.Telegram.WebApp.disableVerticalSwipes === 'function') window.Telegram.WebApp.disableVerticalSwipes();
+            if (typeof window.Telegram.WebApp.unlockOrientation === 'function') window.Telegram.WebApp.unlockOrientation();
+            if (typeof window.Telegram.WebApp.requestFullscreen === 'function') window.Telegram.WebApp.requestFullscreen();
+        }
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen && !document.fullscreenElement) {
+            docEl.requestFullscreen().catch(() => {});
+        }
+    } catch(e) {}
+
     // 1. Verificación y consumo de Energía del Coche NFT equipado
     if (typeof getEquippedNftCar === 'function') {
         const equipped = getEquippedNftCar();
