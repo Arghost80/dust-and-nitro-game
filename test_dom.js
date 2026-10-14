@@ -1016,6 +1016,22 @@ if (!activeRoom.currentTrackId || !activeRoom.currentTrackName) {
 }
 console.log(`✓ Circuito sorteado dinámicamente en el lobby: ${activeRoom.currentTrackName}`);
 
+// C. Verificar Sistema de Control Táctil (Joystick Virtual 360° y Botones Grandes)
+console.log('\n--- VERIFICANDO JOYSTICK VIRTUAL 360° Y CONTROLES TÁCTILES MÓVILES (V55) ---');
+const joyMode = vm.runInContext('currentTouchControlMode', ctx);
+console.log('Modo de control táctil inicial:', joyMode);
+if (joyMode !== 'joystick') {
+    throw new Error('El modo de control inicial por defecto debe ser joystick');
+}
+vm.runInContext('toggleTouchControlMode()', ctx);
+const toggledMode = vm.runInContext('currentTouchControlMode', ctx);
+console.log('Modo de control táctil tras toggle:', toggledMode);
+if (toggledMode !== 'buttons') {
+    throw new Error('toggleTouchControlMode debe cambiar a buttons');
+}
+vm.runInContext('toggleTouchControlMode()', ctx);
+console.log('✓ Alternancia fluida entre Joystick Táctil y Botones Grandes verificada con éxito');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

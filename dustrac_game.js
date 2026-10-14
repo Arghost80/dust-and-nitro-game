@@ -529,6 +529,8 @@ let weatherParticles = [];
 // Controles táctiles, freno de mano (derrape) y teclado
 let keys = {};
 let touchLeft = false, touchRight = false, touchGas = false, touchBrake = false, touchHandbrake = false;
+let touchJoyGas = false, touchJoyBrake = false, touchSteerAmount = 1.0;
+let currentTouchControlMode = 'joystick';
 let raceStartTime = 0;
 let driftCharge = 0;
 let driftBoostTimer = 0;
@@ -2421,7 +2423,159 @@ function dustCreate() {
     showMenu(this);
 }
 
-// Configurar botones táctiles en móviles
+// Configurar controles táctiles en móviles (Joystick 360° analógico y Botones grandes)
+function toggleTouchControlMode() {
+    currentTouchControlMode = currentTouchControlMode === 'joystick' ? 'buttons' : 'joystick';
+    try { localStorage.setItem('dust_touch_mode', currentTouchControlMode); } catch (e) {}
+    applyTouchControlMode();
+}
+window.toggleTouchControlMode = toggleTouchControlMode;
+
+function applyTouchControlMode() {
+    const joyContainer = document.getElementById('virtual-joystick-container');
+    const btnGroup = document.getElementById('touch-buttons-group');
+    const label = document.getElementById('touch-mode-label');
+
+    try {
+        const saved = localStorage.getItem('dust_touch_mode');
+        if (saved) currentTouchControlMode = saved;
+    } catch(e) {}
+
+    if (currentTouchControlMode === 'joystick') {
+        if (joyContainer) { joyContainer.style.display = 'flex'; joyContainer.classList.remove('hidden'); }
+        if (btnGroup) { btnGroup.style.display = 'none'; btnGroup.classList.add('hidden'); }
+        if (label) label.innerText = '🕹️ JOYSTICK (TAP)';
+    } else {
+        if (joyContainer) { joyContainer.style.display = 'none'; joyContainer.classList.add('hidden'); }
+        if (btnGroup) { btnGroup.style.display = 'flex'; btnGroup.classList.remove('hidden'); }
+        if (label) label.innerText = '🔘 BOTONES (TAP)';
+    }
+}
+window.applyTouchControlMode = applyTouchControlMode;
+
+function initVirtualJoystick() {
+    const base = document.getElementById('joystick-base');
+    const stick = document.getElementById('joystick-stick');
+    const zone = document.getElementById('virtual-joystick-container');
+    if (!base || !stick || !zone) return;
+
+    let activeTouchId = null;
+    const maxRadius = 42;
+
+    function handleStart(clientX, clientY, id) {
+        activeTouchId = id;
+        try { dustAudio.init(); } catch (e) {}
+        handleMove(clientX, clientY);
+    }
+
+    function handleMove(clientX, clientY) {
+        const rect = base.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let dx = clientX - centerX;
+        let dy = clientY - centerY;
+        let dist = Math.hypot(dx, dy);
+
+        if (dist > maxRadius) {
+            dx = (dx / dist) * maxRadius;
+            dy = (dy / dist) * maxRadius;
+            dist = maxRadius;
+        }
+
+        stick.style.transform = `translate(${dx}px, ${dy}px)`;
+
+        const normX = dx / maxRadius; // -1.0 a +1.0
+        const normY = dy / maxRadius; // -1.0 a +1.0
+
+        // Giro analógico proporcional suave
+        if (normX < -0.15) {
+            touchLeft = true;
+            touchRight = false;
+            touchSteerAmount = Math.min(1.0, Math.abs(normX) * 1.25);
+        } else if (normX > 0.15) {
+            touchRight = true;
+            touchLeft = false;
+            touchSteerAmount = Math.min(1.0, Math.abs(normX) * 1.25);
+        } else {
+            touchLeft = false;
+            touchRight = false;
+            touchSteerAmount = 0;
+        }
+
+        // Asistencia de aceleración empujando hacia arriba y freno hacia abajo
+        if (normY < -0.45) {
+            touchJoyGas = true;
+        } else {
+            touchJoyGas = false;
+        }
+        if (normY > 0.50) {
+            touchJoyBrake = true;
+        } else {
+            touchJoyBrake = false;
+        }
+    }
+
+    function handleEnd() {
+        activeTouchId = null;
+        stick.style.transform = 'translate(0px, 0px)';
+        touchLeft = false;
+        touchRight = false;
+        touchJoyGas = false;
+        touchJoyBrake = false;
+        touchSteerAmount = 1.0;
+    }
+
+    zone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (activeTouchId === null) {
+            const t = e.changedTouches[0];
+            handleStart(t.clientX, t.clientY, t.identifier);
+        }
+    }, { passive: false });
+
+    zone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const t = e.changedTouches[i];
+            if (t.identifier === activeTouchId) {
+                handleMove(t.clientX, t.clientY);
+                break;
+            }
+        }
+    }, { passive: false });
+
+    zone.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === activeTouchId) {
+                handleEnd();
+                break;
+            }
+        }
+    }, { passive: false });
+
+    zone.addEventListener('touchcancel', (e) => {
+        handleEnd();
+    }, { passive: false });
+
+    // Compatibilidad con ratón para pruebas en navegador / PC
+    let isMouseDown = false;
+    zone.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        handleStart(e.clientX, e.clientY, 'mouse');
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (isMouseDown) handleMove(e.clientX, e.clientY);
+    });
+    window.addEventListener('mouseup', () => {
+        if (isMouseDown) {
+            isMouseDown = false;
+            handleEnd();
+        }
+    });
+}
+
 function setupTouchControls() {
     const bindTouch = (id, onDown, onUp) => {
         const btn = document.getElementById(id);
@@ -2432,11 +2586,14 @@ function setupTouchControls() {
         btn.addEventListener('mouseup', (e) => { e.preventDefault(); onUp(); });
     };
 
-    bindTouch('btn-left', () => touchLeft = true, () => touchLeft = false);
-    bindTouch('btn-right', () => touchRight = true, () => touchRight = false);
+    bindTouch('btn-left', () => { touchLeft = true; touchSteerAmount = 1.0; }, () => { touchLeft = false; });
+    bindTouch('btn-right', () => { touchRight = true; touchSteerAmount = 1.0; }, () => { touchRight = false; });
     bindTouch('btn-accel', () => touchGas = true, () => touchGas = false);
     bindTouch('btn-brake', () => touchBrake = true, () => touchBrake = false);
     bindTouch('btn-handbrake', () => touchHandbrake = true, () => touchHandbrake = false);
+
+    initVirtualJoystick();
+    applyTouchControlMode();
 }
 
 // ===== MENÚ PRINCIPAL: MODO HISTORIA Y CARRERA LIBRE =====
@@ -4594,8 +4751,8 @@ function updatePlayer(dt, track) {
     const biome = getTrackBiome(track);
     const left = Boolean((keys && keys.left && keys.left.isDown) || (keys && keys.a && keys.a.isDown) || touchLeft);
     const right = Boolean((keys && keys.right && keys.right.isDown) || (keys && keys.d && keys.d.isDown) || touchRight);
-    const gas = Boolean((keys && keys.up && keys.up.isDown) || (keys && keys.w && keys.w.isDown) || touchGas);
-    const brake = Boolean((keys && keys.down && keys.down.isDown) || (keys && keys.s && keys.s.isDown) || touchBrake);
+    const gas = Boolean((keys && keys.up && keys.up.isDown) || (keys && keys.w && keys.w.isDown) || touchGas || touchJoyGas);
+    const brake = Boolean((keys && keys.down && keys.down.isDown) || (keys && keys.s && keys.s.isDown) || touchBrake || touchJoyBrake);
     const handbrake = Boolean((keys && keys.space && keys.space.isDown) || (keys && keys.shift && keys.shift.isDown) || touchHandbrake);
 
     // Detección de distancia a la carretera más cercana (Límites de pista y Anti-Atajos)
@@ -4796,7 +4953,7 @@ function updatePlayer(dt, track) {
 
         // Giro: el freno de mano multiplica la capacidad de giro (yaw) para clavar horquillas
         const yawMultiplier = handbrake ? 1.85 : 1.0;
-        const steer = cData.handling * yawMultiplier * (playerSpeed > 40 ? 1 : playerSpeed / 40);
+        const steer = cData.handling * yawMultiplier * (playerSpeed > 40 ? 1 : playerSpeed / 40) * (typeof touchSteerAmount === 'number' && touchSteerAmount > 0 ? touchSteerAmount : 1.0);
         if (left) playerCar.angle -= steer;
         if (right) playerCar.angle += steer;
     } else {
