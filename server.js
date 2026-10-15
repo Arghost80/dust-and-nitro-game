@@ -124,6 +124,15 @@ const server = http.createServer((req, res) => {
     }
 
     // ===== RUTAS DE API =====
+    // Callback oficial para Adsgram Server-to-Server Reward Webhook
+    if (pathname === '/api/ad-reward') {
+        const userId = parsedUrl.searchParams.get('userid') || 'unknown';
+        console.log(`💰 Adsgram Reward Webhook verificado para userId: ${userId}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, status: 'reward_granted', userId, timestamp: new Date().toISOString() }));
+        return;
+    }
+
     // Auditoría de Seguridad y Estado de Defensas en Vivo
     if (pathname === '/api/security/audit') {
         const auditStatus = {
