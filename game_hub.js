@@ -268,7 +268,7 @@ function showHubView(viewName) {
     hubAudio.playClick();
     currentHubView = viewName;
 
-    const views = ['main', 'garage', 'crates', 'shop', 'comp'];
+    const views = ['main', 'garage', 'crates', 'shop', 'comp', 'inventory'];
     views.forEach(v => {
         const el = document.getElementById(`view-${v}`);
         if (el) el.classList.toggle('active', v === viewName);
@@ -280,6 +280,8 @@ function showHubView(viewName) {
         renderMainHubView();
     } else if (viewName === 'garage') {
         renderGarageView();
+    } else if (viewName === 'inventory') {
+        renderInventoryView();
     } else if (viewName === 'crates') {
         renderCratesView();
     } else if (viewName === 'shop') {
@@ -290,7 +292,7 @@ function showHubView(viewName) {
 }
 
 // -------------------------------------------------------------
-// 1. PANTALLA PRINCIPAL (HERO / HUB)
+// 1. PANTALLA PRINCIPAL (HERO / HUB CON 6 ZONAS EQUILIBRADAS)
 // -------------------------------------------------------------
 function renderMainHubView() {
     const container = document.getElementById('view-main');
@@ -300,14 +302,6 @@ function renderMainHubView() {
         <div class="hero-center-box">
             <div class="game-logo-glow">${t('game_title')}</div>
             <div class="game-subtitle-tag">${t('game_subtitle')}</div>
-            <div class="hero-cta-row" style="margin-top: 14px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                <button class="btn-hero-launch-direct" onclick="launchRaceDirectly('rookie_ring')">
-                    ⚡ ¡ENTRAR DIRECTO A LA PISTA / CORRER YA! ▶
-                </button>
-                <button class="btn-hero-launch-direct btn-hero-tournament" style="background: linear-gradient(135deg, #f59e0b, #ef4444); border-color: #fbbf24; box-shadow: 0 0 16px rgba(245, 158, 11, 0.45);" onclick="openWeeklyTournamentModal()">
-                    🏆 GRAND PRIX SEMANAL (750 TON) ▶
-                </button>
-            </div>
         </div>
 
         <div class="zones-grid">
@@ -326,28 +320,37 @@ function renderMainHubView() {
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_garage')}</h3>
                 </div>
-                <div class="zone-badge">75+ COCHES</div>
+                <div class="zone-badge">ENERGÍA & TUNING</div>
             </div>
 
-            <!-- Zona 3: Cajas NFT -->
-            <div class="zone-card card-crates" onclick="showHubView('crates')">
-                <div class="zone-icon">🎁</div>
+            <!-- Zona 3: Inventario de Piezas Mecánicas -->
+            <div class="zone-card card-inventory" onclick="showHubView('inventory')">
+                <div class="zone-icon">🎒</div>
                 <div class="zone-body">
-                    <h3 class="zone-title">${t('zone_crates')}</h3>
+                    <h3 class="zone-title">${t('zone_inventory') || 'INVENTARIO'}</h3>
                 </div>
-                <div class="zone-badge highlight-pulse">WEB3 GACHA</div>
+                <div class="zone-badge highlight-pulse">PIEZAS TALLER</div>
             </div>
 
-            <!-- Zona 4: Modo Competición -->
+            <!-- Zona 4: Modo Competición (Apuestas & Torneo Semanal) -->
             <div class="zone-card card-comp" onclick="showHubView('comp')">
                 <div class="zone-icon">🌐</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_comp')}</h3>
                 </div>
-                <div class="zone-badge">MULTIJUGADOR</div>
+                <div class="zone-badge">APUESTAS & GRAND PRIX</div>
             </div>
 
-            <!-- Zona 5: Tienda Oficial -->
+            <!-- Zona 5: Cajas NFT -->
+            <div class="zone-card card-crates" onclick="showHubView('crates')">
+                <div class="zone-icon">🎁</div>
+                <div class="zone-body">
+                    <h3 class="zone-title">${t('zone_crates')}</h3>
+                </div>
+                <div class="zone-badge">WEB3 GACHA</div>
+            </div>
+
+            <!-- Zona 6: Tienda Oficial -->
             <div class="zone-card card-shop" onclick="showHubView('shop')">
                 <div class="zone-icon">💎</div>
                 <div class="zone-body">
@@ -629,7 +632,8 @@ function renderGarageView() {
                                     ? `<span class="mint-chip" style="background:#334155;color:#cbd5e1;padding:1px 6px;border-radius:4px;font-weight:900;">NO-NFT</span>`
                                     : `<span class="mint-chip">#${car.mintNumber}</span>`}
                                 <span class="level-chip">⭐ NIV. ${lvl}</span>
-                                <span class="points-chip">⚡ ${perf.totalPoints} PTS</span>
+                                <span class="energy-chip ${carEnergy <= 1 ? 'low' : ''}">⚡ ${carEnergy}/${carMaxEnergy}</span>
+                                <span class="points-chip">🏆 ${perf.totalPoints} PTS</span>
                             </div>
                         </div>
 
@@ -1948,6 +1952,18 @@ function renderCompView() {
         </div>
 
         <div class="wager-comp-container">
+            <!-- TORNEO OFICIAL SEMANAL GRAND PRIX ASÍNCRONO -->
+            <div class="weekly-tournament-hero-banner" onclick="openWeeklyTournamentModal()" style="cursor: pointer;">
+                <div class="wt-badge">🏆 EVENTO ESPECIAL SEMANAL • PREMIOS EN TON REALES 🏆</div>
+                <div class="wt-title-row">
+                    <div>
+                        <h3 class="wt-title">NEO-TOKYO HARBOR BAY GT GRAND PRIX</h3>
+                        <p class="wt-sub">Compite por el podio mundial • Bote acumulado: <strong style="color: #fee440;">750 TON</strong> + <strong style="color: #00f5d4;">500.000 $CR</strong></p>
+                    </div>
+                    <button class="btn-enter-tournament" onclick="event.stopPropagation(); openWeeklyTournamentModal();">ENTRAR AL GRAND PRIX ▶</button>
+                </div>
+            </div>
+
             <!-- BANNER DE TOKENOMICS EN VIVO -->
             <div class="wager-stats-banner">
                 <div class="wager-stat-box">
@@ -3239,6 +3255,96 @@ function closePartsMarketplaceModal() {
         modal.style.display = 'none';
         modal.classList.add('hidden');
     }
+}
+
+// -------------------------------------------------------------
+// 10. VISTA INVENTARIO DE PIEZAS & TALLER (WORKSHOP INVENTORY)
+// -------------------------------------------------------------
+let inventoryActiveCategory = 'all';
+
+function renderInventoryView() {
+    const container = document.getElementById('view-inventory');
+    if (!container) return;
+
+    const userData = loadNftUserData() || {};
+    const inv = userData.partsInventory || {};
+    const catalog = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined') ? WORKSHOP_PIECES_CATALOG : {};
+
+    // Calcular total de piezas físicas en el inventario del jugador
+    const totalPiecesCount = Object.values(inv).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0);
+
+    const categories = [
+        { id: 'all', name: 'TODAS LAS PIEZAS', icon: '🎒' },
+        { id: 'speed_power', name: 'MOTOR & VELOCIDAD', icon: '⚡' },
+        { id: 'braking', name: 'FRENOS', icon: '🛑' },
+        { id: 'handling_grip', name: 'AGARRE & SUSPENSIÓN', icon: '🏎️' },
+        { id: 'accel_traction', name: 'TRANSMISIÓN & TRACCIÓN', icon: '🚀' },
+        { id: 'aero_lightness', name: 'AERODINÁMICA', icon: '🪽' }
+    ];
+
+    const piecesList = Object.entries(catalog).filter(([key, def]) => {
+        if (inventoryActiveCategory === 'all') return true;
+        return def.category === inventoryActiveCategory;
+    });
+
+    container.innerHTML = `
+        <div class="view-header-bar">
+            <button class="btn-nav-back" onclick="showHubView('main')">${t('btn_back')}</button>
+            <div>
+                <h2 class="view-title">🎒 ALMACÉN & INVENTARIO DE PIEZAS</h2>
+                <div class="garage-count-tag">${totalPiecesCount} PIEZAS MECÁNICAS DISPONIBLES EN TU STOCK</div>
+            </div>
+            <div></div>
+        </div>
+
+        <div class="inventory-container">
+            <div class="inventory-tabs">
+                ${categories.map(cat => `
+                    <button class="inv-tab-btn ${inventoryActiveCategory === cat.id ? 'active' : ''}" onclick="setInventoryCategory('${cat.id}')">
+                        ${cat.icon} ${cat.name}
+                    </button>
+                `).join('')}
+            </div>
+
+            <div class="inventory-parts-grid">
+                ${piecesList.map(([key, def]) => {
+                    const count = inv[key] || 0;
+                    const hasStock = count > 0;
+                    return `
+                        <div class="inv-part-card ${hasStock ? 'owned' : 'empty'}">
+                            <div class="inv-part-top">
+                                <span class="inv-part-icon">${def.icon}</span>
+                                <span class="inv-part-qty ${hasStock ? 'has-stock' : ''}">${hasStock ? `x${count} EN STOCK` : '0 EN STOCK'}</span>
+                            </div>
+                            <div class="inv-part-cat">${def.category.replace('_', ' ').toUpperCase()}</div>
+                            <h4 class="inv-part-name">${def.name}</h4>
+                            <p class="inv-part-desc">${def.desc || ''}</p>
+                            <div class="inv-part-actions">
+                                <button class="btn-inv-use" onclick="showHubView('garage')" title="Instalar en tu coche equipado">🔧 INSTALAR EN GARAJE</button>
+                                <button class="btn-inv-market" onclick="openPartsMarketplaceModal('buy')" title="Comprar / Vender en mercado comunitario">🤝 P2P</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <div class="inventory-bottom-bar">
+                <button class="btn-inv-cta" onclick="showHubView('garage')">🏎️ IR AL GARAJE A TUNEAR TU COCHE</button>
+                <button class="btn-inv-cta" onclick="showHubView('shop')">🛒 COMPRAR PACKS EN LA TIENDA</button>
+                <button class="btn-inv-cta" onclick="openPartsMarketplaceModal('buy')">🤝 MERCADO P2P DE JUGADORES</button>
+            </div>
+        </div>
+    `;
+}
+
+function setInventoryCategory(catId) {
+    hubAudio.playClick();
+    inventoryActiveCategory = catId;
+    renderInventoryView();
+}
+if (typeof window !== 'undefined') {
+    window.renderInventoryView = renderInventoryView;
+    window.setInventoryCategory = setInventoryCategory;
 }
 
 // Secuencia de Salida FIA y Animación de Carga de Competición

@@ -6,8 +6,8 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(180deg, rgba(8, 11, 20, 0.88) 0%, rgba(8, 11, 20, 0.65) 45%, rgba(8, 11, 20, 0.95) 100%),
-                url('assets/game_cover_art.jpg') center/cover no-repeat;
+    background: linear-gradient(180deg, rgba(5, 8, 17, 0.90) 0%, rgba(5, 8, 17, 0.68) 42%, rgba(5, 8, 17, 0.96) 100%),
+                url('assets/racing_splash_cover.jpg') center/cover no-repeat;
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -332,9 +332,9 @@
 
 .zones-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
-    max-width: 1200px;
+    max-width: 980px;
     margin: 0 auto;
     width: 100%;
     flex: 1;
@@ -1481,6 +1481,21 @@
     font-weight: 900;
     padding: 2px 6px;
     border-radius: 5px;
+}
+
+.energy-chip {
+    background: #059669;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 5px;
+    box-shadow: 0 0 6px rgba(5, 150, 105, 0.4);
+}
+
+.energy-chip.low {
+    background: #dc2626;
+    box-shadow: 0 0 6px rgba(220, 38, 38, 0.5);
 }
 
 .car-xp-box {
@@ -3248,4 +3263,234 @@
     font-weight: 600;
     min-height: 20px;
     transition: opacity 0.2s ease;
+}
+
+/* Tarjeta de Inventario en el Hub */
+.card-inventory:hover {
+    border-color: #38bdf8;
+    box-shadow: 0 12px 30px rgba(56, 189, 248, 0.25);
+}
+
+/* Banner del Torneo Semanal dentro de Competición */
+.weekly-tournament-hero-banner {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(239, 68, 68, 0.25));
+    border: 1.5px solid #fbbf24;
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.weekly-tournament-hero-banner:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 32px rgba(245, 158, 11, 0.55);
+}
+.wt-badge {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #fde047;
+}
+.wt-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.wt-title {
+    font-size: 18px;
+    font-weight: 900;
+    font-style: italic;
+    color: #ffffff;
+    margin: 0;
+}
+.wt-sub {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin: 4px 0 0 0;
+}
+.btn-enter-tournament {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: #ffffff;
+    border: none;
+    font-weight: 900;
+    font-size: 12px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+}
+
+/* =============================================================
+   6. VISTA INVENTARIO DE PIEZAS Y RECAMBIOS (WORKSHOP INVENTORY)
+   ============================================================= */
+.inventory-container {
+    padding: 20px 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    height: calc(100% - 64px);
+}
+
+.inventory-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.inv-tab-btn {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.inv-tab-btn.active {
+    background: linear-gradient(135deg, #0284c7, #06b6d4);
+    color: #ffffff;
+    border-color: #38bdf8;
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+}
+
+.inventory-parts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+}
+
+.inv-part-card {
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.inv-part-card.owned {
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+.inv-part-card.empty {
+    opacity: 0.55;
+}
+
+.inv-part-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.inv-part-icon {
+    font-size: 28px;
+}
+
+.inv-part-qty {
+    font-size: 13px;
+    font-weight: 900;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: #1e293b;
+    color: #94a3b8;
+}
+
+.inv-part-qty.has-stock {
+    background: rgba(16, 185, 129, 0.25);
+    color: #34d399;
+    border: 1px solid #10b981;
+}
+
+.inv-part-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0;
+}
+
+.inv-part-cat {
+    font-size: 10px;
+    font-weight: 800;
+    color: #38bdf8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.inv-part-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.3;
+}
+
+.inv-part-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: auto;
+}
+
+.btn-inv-use {
+    flex: 1;
+    background: #0284c7;
+    color: #ffffff;
+    border: none;
+    font-weight: 800;
+    font-size: 11px;
+    padding: 7px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-inv-market {
+    background: #1e293b;
+    color: #facc15;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    font-weight: 800;
+    font-size: 11px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.inventory-bottom-bar {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 12px 0;
+}
+
+.btn-inv-cta {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-inv-cta:hover {
+    border-color: #00f5d4;
+    color: #00f5d4;
 }

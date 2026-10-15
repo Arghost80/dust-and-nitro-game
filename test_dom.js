@@ -43,7 +43,7 @@ const doc = {
   addEventListener() {}
 };
 
-['game-hub-root', 'hub-header', 'view-main', 'view-garage', 'view-crates', 'view-shop', 'view-comp', 'settings-modal', 'game-container', 'btn-left', 'btn-right', 'btn-accel', 'btn-brake', 'btn-handbrake'].forEach(id => doc.getElementById(id));
+['game-hub-root', 'hub-header', 'view-main', 'view-garage', 'view-inventory', 'view-crates', 'view-shop', 'view-comp', 'settings-modal', 'game-container', 'btn-left', 'btn-right', 'btn-accel', 'btn-brake', 'btn-handbrake'].forEach(id => doc.getElementById(id));
 
 const sandbox = {
   window: {},
@@ -305,24 +305,24 @@ console.log(`¡Las 12 siluetas vectoriales están activas y con SVGs válidos!`)
 console.log('\n--- VERIFICANDO SISTEMA DE ENERGÍA DE CARRERA & MONETIZACIÓN ---');
 const userForEnergy = vm.runInContext('loadNftUserData()', ctx);
 const carTest = userForEnergy.garage[0];
-console.log('Energía del coche tras 6 carreras disputadas (10 - 6 = 4):', carTest.energy, '/', carTest.maxEnergy);
-if (typeof carTest.energy !== 'number' || carTest.energy !== 4) {
-    throw new Error('El coche debe tener 4 puntos de energía tras disputar 6 carreras');
+console.log('Energía del coche tras 6 carreras disputadas (Starter máx: 5, mínimo 1):', carTest.energy, '/', carTest.maxEnergy);
+if (typeof carTest.energy !== 'number' || carTest.energy !== 1) {
+    throw new Error(`El coche starter debe tener 1 punto de energía tras disputar 6 carreras, tiene: ${carTest.energy}`);
 }
 
 // Simular gasto de energía y regeneración horaria (+1⚡ cada 1h)
 const regeneratedEnergy = vm.runInContext(`
     const u = loadNftUserData();
     const c = u.garage[0];
-    c.energy = 6;
+    c.energy = 2;
     c.lastEnergyUpdate = Date.now() - (2.5 * 3600 * 1000);
     refreshCarEnergy(c);
     saveNftUserData(u);
     c.energy;
 `, ctx);
 console.log('Energía tras 2.5h transcurridas (+2⚡ esperados):', regeneratedEnergy);
-if (regeneratedEnergy !== 8) {
-    throw new Error(`Regeneración horaria incorrecta: esperada 8, obtenida ${regeneratedEnergy}`);
+if (regeneratedEnergy !== 4) {
+    throw new Error(`Regeneración horaria incorrecta: esperada 4, obtenida ${regeneratedEnergy}`);
 }
 
 // Probar recarga mediante Anuncio (+1⚡)
@@ -335,11 +335,11 @@ if (!adRes.success || adRes.newEnergy !== preAdEnergy + 1) {
 
 // Probar compra de Pack de Batería en Tienda con Token $CR
 const preShopCr = vm.runInContext('loadNftUserData().credits', ctx);
-carTest.energy = 4;
+carTest.energy = 3;
 vm.runInContext(`saveNftUserData(${JSON.stringify(userForEnergy)})`, ctx);
 const buyEnergyRes = vm.runInContext(`buyEnergyPack('pack_energy_boost', '${carTest.instanceId}')`, ctx);
 console.log('Resultado de compra de Batería en Tienda:', buyEnergyRes.success, 'Nueva energía:', buyEnergyRes.newEnergy);
-if (!buyEnergyRes.success || buyEnergyRes.newEnergy !== 6) {
+if (!buyEnergyRes.success || buyEnergyRes.newEnergy !== 5) {
     throw new Error('Fallo al comprar batería de energía en la tienda con tokens $CR');
 }
 
@@ -1241,6 +1241,62 @@ if (preloaderFn !== 'function') {
     throw new Error('runRacingPreloaderSequence debe estar definida en window');
 }
 console.log('✓ Pantalla de carga cinematográfica hiperrealista GT3 con semáforo FIA 5 luces y tacómetro verificada al 100%');
+
+console.log('\n--- VERIFICANDO REORGANIZACIÓN DEL HUB, INVENTARIO, ENERGÍA POR COCHE Y TORNEO (V67) ---');
+
+// 1. Verificar las 6 zonas simétricas del Hub Principal (view-main)
+vm.runInContext('renderMainHubView()', ctx);
+const mainHtml = doc.getElementById('view-main').innerHTML;
+const requiredZones = ['card-story', 'card-garage', 'card-inventory', 'card-comp', 'card-crates', 'card-shop'];
+requiredZones.forEach(zone => {
+    if (!mainHtml.includes(zone)) throw new Error(`view-main debe contener la tarjeta ${zone}`);
+});
+if (mainHtml.includes('btn-compete-now') || mainHtml.includes('btn-comp-banner-cta')) {
+    throw new Error('view-main no debe incluir botones redundantes de competir ya');
+}
+console.log('✓ Hub Principal contiene las 6 zonas simétricas (Historia, Garaje, Inventario, Competición, Cajas, Tienda) sin botones redundantes');
+
+// 2. Verificar que el Torneo Semanal está en view-comp
+vm.runInContext('renderCompView()', ctx);
+const compHtml = doc.getElementById('view-comp').innerHTML;
+if (!compHtml.includes('weekly-tournament-hero-banner') || !compHtml.includes('GRAND PRIX') || !compHtml.includes('SEMANAL')) {
+    throw new Error('view-comp debe contener el banner destacado del Grand Prix Semanal');
+}
+console.log('✓ Torneo Semanal 750 TON integrado en la cabecera de la sección de Competición');
+
+// 3. Verificar la nueva vista de Inventario (view-inventory)
+vm.runInContext('renderInventoryView()', ctx);
+const invHtml = doc.getElementById('view-inventory').innerHTML;
+if (!invHtml.includes('inventory-container') || !invHtml.includes('inventory-tabs') || !invHtml.includes('inventory-parts-grid')) {
+    throw new Error('view-inventory debe contener contenedor, pestañas y cuadrícula de piezas');
+}
+// Verificar filtrado por categoría
+vm.runInContext('setInventoryCategory("speed_power")', ctx);
+const filteredInvHtml = doc.getElementById('view-inventory').innerHTML;
+if (!filteredInvHtml.includes('Bujía') && !filteredInvHtml.includes('Pistón')) {
+    throw new Error('El filtro de motor en inventario debe mostrar piezas de motor');
+}
+console.log('✓ Apartado de Inventario renderiza las 16 piezas mecánicas y soporta navegación por categorías');
+
+// 4. Verificar escalado de energía por coche según rareza (5, 6, 7, 8, 10)
+const starterMax = vm.runInContext('getMaxEnergyForCar({ rarity: "starter" })', ctx);
+const commonMax = vm.runInContext('getMaxEnergyForCar({ rarity: "common" })', ctx);
+const uncommonMax = vm.runInContext('getMaxEnergyForCar({ rarity: "uncommon" })', ctx);
+const rareMax = vm.runInContext('getMaxEnergyForCar({ rarity: "rare" })', ctx);
+const legMax = vm.runInContext('getMaxEnergyForCar({ rarity: "legendary" })', ctx);
+
+if (starterMax !== 5 || commonMax !== 6 || uncommonMax !== 7 || rareMax !== 8 || legMax !== 10) {
+    throw new Error(`Capacidades de energía incorrectas: starter=${starterMax}, common=${commonMax}, uncommon=${uncommonMax}, rare=${rareMax}, leg=${legMax}`);
+}
+console.log(`✓ Capacidades de batería por rareza verificadas: Starter=5, Común=6, Poco Común=7, Raro=8, Legendario=10`);
+
+// 5. Verificar chips de energía individual en el Garaje
+vm.runInContext('renderGarageView()', ctx);
+const garageV67Html = doc.getElementById('view-garage').innerHTML;
+if (!garageV67Html.includes('energy-chip') || !garageV67Html.includes('⚡')) {
+    throw new Error('Las tarjetas del garaje deben incluir el chip individual de energía');
+}
+console.log('✓ Tarjetas de coche en el garaje reflejan visualmente la energía individual');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

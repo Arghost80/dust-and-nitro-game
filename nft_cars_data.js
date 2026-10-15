@@ -427,6 +427,9 @@ function loadNftUserData() {
         level: 1,
         xp: 0,
         xpNeeded: 150,
+        energy: 5,
+        maxEnergy: 5,
+        lastEnergyUpdate: Date.now(),
         parts: { ecu: 0, tires: 0, brakes: 0, turbo: 0, chassis: 0 },
         colorName: starterColor.name,
         colorHex: starterColor.hex,
@@ -515,9 +518,13 @@ function loadNftUserData() {
         if (typeof c.xp !== 'number') c.xp = 0;
         if (!c.xpNeeded) c.xpNeeded = c.level * 250;
 
-        // Inicialización y regeneración pasiva horaria de energía (+1⚡ cada 1 hora)
-        if (typeof c.maxEnergy === 'undefined') c.maxEnergy = 10;
+        // Inicialización y regeneración pasiva horaria de energía según rareza del vehículo
+        const correctMax = getMaxEnergyForCar(c);
+        if (typeof c.maxEnergy === 'undefined' || (c.maxEnergy === 10 && c.rarity !== 'legendary')) {
+            c.maxEnergy = correctMax;
+        }
         if (typeof c.energy === 'undefined') c.energy = c.maxEnergy;
+        if (c.energy > c.maxEnergy) c.energy = c.maxEnergy;
         if (!c.lastEnergyUpdate) c.lastEnergyUpdate = Date.now();
         refreshCarEnergy(c);
     });
@@ -537,11 +544,28 @@ function loadNftUserData() {
     return data;
 }
 
-// Regenerar pasivamente 1 punto de energía cada 1 hora (3600 segundos)
+// Capacidad máxima de energía individual según el tipo y rareza del vehículo
+function getMaxEnergyForCar(car) {
+    if (!car) return 6;
+    const rarity = car.rarity || 'common';
+    if (rarity === 'starter') return 5;
+    if (rarity === 'common') return 6;
+    if (rarity === 'uncommon') return 7;
+    if (rarity === 'rare') return 8;
+    if (rarity === 'legendary') return 10;
+    return 6;
+}
+if (typeof window !== 'undefined') window.getMaxEnergyForCar = getMaxEnergyForCar;
+
+// Regenerar pasivamente 1 punto de energía cada 1 hora (3600 segundos) para el coche específico
 function refreshCarEnergy(car) {
     if (!car) return;
-    if (typeof car.maxEnergy === 'undefined') car.maxEnergy = 10;
+    const maxE = getMaxEnergyForCar(car);
+    if (typeof car.maxEnergy === 'undefined' || (car.maxEnergy === 10 && car.rarity !== 'legendary')) {
+        car.maxEnergy = maxE;
+    }
     if (typeof car.energy === 'undefined') car.energy = car.maxEnergy;
+    if (car.energy > car.maxEnergy) car.energy = car.maxEnergy;
     if (!car.lastEnergyUpdate) car.lastEnergyUpdate = Date.now();
 
     const now = Date.now();
@@ -765,8 +789,8 @@ function mintProceduralNftCar(modelDef, forcedColor = null) {
         level: 1,
         xp: 0,
         xpNeeded: 250,
-        energy: 10,
-        maxEnergy: 10,
+        energy: getMaxEnergyForCar(modelDef),
+        maxEnergy: getMaxEnergyForCar(modelDef),
         lastEnergyUpdate: Date.now(),
         parts: { speed_power: 0, braking: 0, handling_grip: 0, accel_traction: 0, aero_lightness: 0 },
         colorName: chosenColor.name,
