@@ -1,4 +1,4 @@
-﻿// ===== DUST & NITRO - BOT DE TELEGRAM NATIVO (SIN DEPENDENCIAS) =====
+// ===== DUST & NITRO - BOT DE TELEGRAM NATIVO (SIN DEPENDENCIAS) =====
 // Utiliza Node.js https con long-polling para no requerir túneles HTTPS en desarrollo local.
 
 const https = require('https');
@@ -6,7 +6,7 @@ const db = require('./database');
 const { CircuitsCatalog } = require('./track_generator');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
-const WEBAPP_URL = process.env.WEBAPP_URL || 'http://localhost:3000';
+const WEBAPP_URL = process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
 
 if (!BOT_TOKEN) {
     console.log('================================================================');
@@ -187,6 +187,20 @@ async function sendTracks(chatId) {
 let lastUpdateId = 0;
 async function startPolling() {
     console.log(`🤖 Bot de Telegram escuchando eventos con Polling...`);
+    if (WEBAPP_URL && WEBAPP_URL.startsWith('https://')) {
+        try {
+            await telegramRequest('setChatMenuButton', {
+                menu_button: {
+                    type: 'web_app',
+                    text: 'JUGAR DUST & NITRO',
+                    web_app: { url: WEBAPP_URL }
+                }
+            });
+            console.log(`✅ Botón de menú de Telegram sincronizado automáticamente con: ${WEBAPP_URL}`);
+        } catch (menuErr) {
+            console.warn('Aviso: no se pudo sincronizar el botón de menú:', menuErr.message);
+        }
+    }
     while (true) {
         try {
             const res = await telegramRequest('getUpdates', {

@@ -411,8 +411,17 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
-    console.log(`🏁 DUST & NITRO - Servidor y Bot Telegram listo`);
+    console.log(`🏁 DUST & NITRO - Servidor Web & Game Hub listo`);
     console.log(`📡 URL Local: http://localhost:${PORT}`);
     console.log(`📡 URL IPv4:  http://127.0.0.1:${PORT}`);
     console.log(`=======================================================`);
+
+    if (process.env.BOT_TOKEN) {
+        console.log(`🤖 BOT_TOKEN detectado. Iniciando Bot de Telegram en el mismo proceso...`);
+        try {
+            require('./bot');
+        } catch (botErr) {
+            console.error('Error arrancando bot.js:', botErr);
+        }
+    }
 });
