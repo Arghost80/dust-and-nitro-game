@@ -299,12 +299,15 @@ function renderMainHubView() {
     if (!container) return;
 
     container.innerHTML = `
-        <div class="hero-center-box">
+        <div class="hero-top-branding hero-center-box">
             <div class="game-logo-glow">${t('game_title')}</div>
             <div class="game-subtitle-tag">${t('game_subtitle')}</div>
         </div>
 
-        <div class="zones-grid">
+        <!-- Ventana central 100% libre y despejada para admirar los coches de carreras GT3 -->
+        <div class="hero-cars-stage-window"></div>
+
+        <div class="zones-grid hub-dock-grid">
             <!-- Zona 1: Modo Historia -->
             <div class="zone-card card-story" onclick="launchStoryMode()">
                 <div class="zone-icon">🏆</div>
@@ -352,11 +355,11 @@ function renderMainHubView() {
 
             <!-- Zona 6: Tienda Oficial -->
             <div class="zone-card card-shop" onclick="showHubView('shop')">
-                <div class="zone-icon">💎</div>
+                <div class="zone-icon">🛒</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_shop')}</h3>
                 </div>
-                <div class="zone-badge">UPGRADES</div>
+                <div class="zone-badge">PACKS & TOKENS</div>
             </div>
         </div>
     `;

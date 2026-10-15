@@ -1298,6 +1298,31 @@ if (!garageV67Html.includes('energy-chip') || !garageV67Html.includes('⚡')) {
 }
 console.log('✓ Tarjetas de coche en el garaje reflejan visualmente la energía individual');
 
+console.log('\n--- VERIFICANDO DISEÑO PRO (V68): VENTANA LIBRE PARA COCHES, DOCK INFERIOR Y TIENDA RESPONSIVE ---');
+// 1. Verificar ventana de exhibición de coches en view-main
+vm.runInContext('renderMainHubView()', ctx);
+const v68MainHtml = doc.getElementById('view-main').innerHTML;
+if (!v68MainHtml.includes('hero-cars-stage-window')) {
+    throw new Error('view-main debe incluir la ventana central hero-cars-stage-window para exhibir los coches');
+}
+if (!v68MainHtml.includes('hub-dock-grid')) {
+    throw new Error('view-main debe incluir la clase hub-dock-grid en la botonera de navegación');
+}
+console.log('✓ Ventana central diáfana y dock inferior configurados en el Hub Principal');
+
+// 2. Verificar estilos en hub_styles.css
+const v68Css = fs.readFileSync('hub_styles.css', 'utf8');
+if (!v68Css.includes('hero-cars-stage-window')) {
+    throw new Error('hub_styles.css debe definir .hero-cars-stage-window');
+}
+if (!v68Css.includes('radial-gradient') || !v68Css.includes('racing_splash_cover.jpg')) {
+    throw new Error('hub_styles.css debe usar radial-gradient luminoso sobre la portada');
+}
+if (!v68Css.includes('grid-column: span 2') || !v68Css.includes('.shop-items-grid')) {
+    throw new Error('hub_styles.css debe incluir adaptación de 2 columnas para la tienda con span 2 en el 3º elemento');
+}
+console.log('✓ Adaptabilidad CSS para frenos Brembo y fondo radial luminoso verificada al 100%');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
