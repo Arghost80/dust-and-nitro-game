@@ -237,44 +237,92 @@ if (!shopHtml.includes('PACKS DE PIEZAS DEL TALLER') || !shopHtml.includes('Pack
     throw new Error('La tienda no contiene los packs de piezas mecánicas');
 }
 
-// Test de fin de carrera y otorgamiento de botín de piezas: SOLO 1º y 2º puesto ganan piezas
-console.log('\n--- PROBANDO BOTÍN DE PIEZAS AL COMPLETAR CARRERA (endRace) ---');
+// Test de fin de carrera y sistema de drops Web3 por circuitos y rarezas
+console.log('\n--- PROBANDO SISTEMA DE DROPS NFT POR CIRCUITOS Y CLASIFICACIÓN (calculateRacePartsDrop) ---');
 
-// Caso 1: 1º Puesto (debe ganar exactamente 4 piezas)
+// 1. Verificación de mapeo de circuitos a rarezas (Capítulos 1 a 5)
+const rCap1 = vm.runInContext(`getDropRarityForTrack('rookie_ring')`, ctx);
+const rCap2 = vm.runInContext(`getDropRarityForTrack('red_rock_junction')`, ctx);
+const rCap3 = vm.runInContext(`getDropRarityForTrack('desert_canyon')`, ctx);
+const rCap4 = vm.runInContext(`getDropRarityForTrack('brianza_speedway')`, ctx);
+const rCap5 = vm.runInContext(`getDropRarityForTrack('sarthe_endurance')`, ctx);
+
+console.log(`Rarezas por capítulo mapeadas: Cap1=${rCap1}, Cap2=${rCap2}, Cap3=${rCap3}, Cap4=${rCap4}, Cap5=${rCap5}`);
+if (rCap1 !== 'common' || rCap2 !== 'uncommon' || rCap3 !== 'rare' || rCap4 !== 'epic' || rCap5 !== 'legendary') {
+    throw new Error('Fallo en el mapeo de circuitos a rarezas de piezas');
+}
+
+// 2. Comprobación de drops forzados y tipos de piezas
+const drop1 = vm.runInContext(`calculateRacePartsDrop('rookie_ring', 1, true)`, ctx);
+const drop2 = vm.runInContext(`calculateRacePartsDrop('red_rock_junction', 1, true)`, ctx);
+const drop3 = vm.runInContext(`calculateRacePartsDrop('desert_canyon', 1, true)`, ctx);
+const drop4 = vm.runInContext(`calculateRacePartsDrop('brianza_speedway', 1, true)`, ctx);
+const drop5 = vm.runInContext(`calculateRacePartsDrop('sarthe_endurance', 1, true)`, ctx);
+
+if (!drop1 || drop1.rarity !== 'common' || !drop1.nftSerial) throw new Error('Drop de Cap 1 debe ser Común con número de serie NFT');
+if (!drop2 || drop2.rarity !== 'uncommon') throw new Error('Drop de Cap 2 debe ser Infrecuente');
+if (!drop3 || drop3.rarity !== 'rare') throw new Error('Drop de Cap 3 debe ser Raro');
+if (!drop4 || drop4.rarity !== 'epic') throw new Error('Drop de Cap 4 debe ser Épico');
+if (!drop5 || drop5.rarity !== 'legendary') throw new Error('Drop de Cap 5 debe ser Legendario');
+console.log('✅ Drops de piezas verificados: todas las categorías y números de serie NFT correctos');
+
+// 3. Comprobación de 4º puesto sin forzar (probabilidad 0% / sin drop)
+const dropRank4 = vm.runInContext(`calculateRacePartsDrop('rookie_ring', 4, false)`, ctx);
+if (dropRank4 !== null) throw new Error('El 4º puesto debe tener 0% de drop');
+console.log('✅ 4º puesto verificado con 0% de drop');
+
+// 4. Test de endRace con drop forzado
+vm.runInContext(`window.__TEST_FORCE_RACE_DROP = true`, ctx);
+vm.runInContext(`currentTrackId = 'rookie_ring'`, ctx);
 vm.runInContext(`hudPosText.text = 'POS: 1 / 6'`, ctx);
-const prePartsRank1 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+const preParts = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
 vm.runInContext(`endRace()`, ctx);
-const postPartsRank1 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-const diffRank1 = postPartsRank1 - prePartsRank1;
-console.log(`Piezas ganadas en 1º Puesto: ${diffRank1} (esperadas: 4)`);
-if (diffRank1 !== 4) throw new Error(`El 1º puesto debe otorgar 4 piezas, otorgó: ${diffRank1}`);
+const postParts = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
+if (postParts !== preParts + 1) throw new Error(`endRace con drop activado debe sumar 1 pieza NFT, sumó: ${postParts - preParts}`);
+console.log('✅ endRace otorgó correctamente el drop NFT a la billetera');
+vm.runInContext(`window.__TEST_FORCE_RACE_DROP = false`, ctx);
 
-// Caso 2: 2º Puesto (debe ganar 3 piezas)
-vm.runInContext(`hudPosText.text = 'POS: 2 / 6'`, ctx);
-const prePartsRank2 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-vm.runInContext(`endRace()`, ctx);
-const postPartsRank2 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-const diffRank2 = postPartsRank2 - prePartsRank2;
-console.log(`Piezas ganadas en 2º Puesto: ${diffRank2} (esperadas: 3)`);
-if (diffRank2 !== 3) throw new Error(`El 2º puesto debe otorgar 3 piezas, otorgó: ${diffRank2}`);
+// 5. Test de Mercado P2P con Comisión de Royalty del 7.5%
+console.log('\n--- PROBANDO COMISIÓN DE ROYALTY 7.5% EN MERCADO P2P ---');
+const sellFeeRes = vm.runInContext(`sellPartToMarketplace('spark_plugs', 1000)`, ctx);
+console.log('Resultado de venta en marketplace:', sellFeeRes);
+if (!sellFeeRes.success || sellFeeRes.royaltyFee !== 75 || sellFeeRes.earnedCr !== 925) {
+    throw new Error(`Comisión de royalty incorrecta. Esperada 75 fee y 925 neto, recibido: ${JSON.stringify(sellFeeRes)}`);
+}
+const treasuryFees = vm.runInContext(`loadNftUserData().platformTreasuryFees`, ctx);
+if (treasuryFees < 75) throw new Error('Las comisiones de la tesorería de la plataforma no se acumularon');
+console.log(`✅ Royalty del 7.5% comprobado: Venta 1000 $CR -> Royalty ${sellFeeRes.royaltyFee} $CR, Piloto neto +${sellFeeRes.earnedCr} $CR`);
 
-// Caso 3: 3º Puesto (debe ganar 2 piezas)
-vm.runInContext(`hudPosText.text = 'POS: 3 / 6'`, ctx);
-const prePartsRank3 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-vm.runInContext(`endRace()`, ctx);
-const postPartsRank3 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-const diffRank3 = postPartsRank3 - prePartsRank3;
-console.log(`Piezas ganadas en 3º Puesto: ${diffRank3} (esperadas: 2)`);
-if (diffRank3 !== 2) throw new Error(`El 3º puesto debe otorgar 2 piezas, otorgó: ${diffRank3}`);
+// 6. Test de Billetera TON Connect y Retiros Anti-Drenaje
+console.log('\n--- PROBANDO BILLETERA WEB3 & TON CONNECT ---');
+const connectRes = vm.runInContext(`connectTonWallet('telegram_wallet')`, ctx);
+if (!connectRes.success || !connectRes.address.startsWith('EQB')) {
+    throw new Error('Fallo al conectar billetera TON');
+}
+console.log('✅ Billetera TON conectada:', connectRes.address);
 
-// Caso 4: 4º Puesto (debe ganar 1 pieza de consolación)
-vm.runInContext(`hudPosText.text = 'POS: 4 / 6'`, ctx);
-const prePartsRank4 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-vm.runInContext(`endRace()`, ctx);
-const postPartsRank4 = vm.runInContext(`Object.values(loadNftUserData().partsInventory).reduce((a, b) => a + b, 0)`, ctx);
-const diffRank4 = postPartsRank4 - prePartsRank4;
-console.log(`Piezas ganadas en 4º Puesto: ${diffRank4} (esperadas: 1)`);
-if (diffRank4 !== 1) throw new Error(`El 4º puesto debe otorgar 1 pieza de consolación, otorgó: ${diffRank4}`);
+// Swap TON a $CR
+vm.runInContext(`(() => { const u = loadNftUserData(); u.gems = 10; saveNftUserData(u); })();`, ctx);
+const swapRes = vm.runInContext(`buyCrWithTon(1.0)`, ctx);
+if (!swapRes.success || swapRes.crGained !== 12500) {
+    throw new Error(`Swap TON a $CR fallido: ${JSON.stringify(swapRes)}`);
+}
+console.log('✅ Swap TON a $CR completado: 1 TON -> +12,500 $CR');
+
+// Retiro Anti-Drenaje de $CR a TON
+const withdrawRes = vm.runInContext(`withdrawCrToTon(1000)`, ctx);
+if (!withdrawRes.success || withdrawRes.tonGained !== 0.08) {
+    throw new Error(`Retiro a TON fallido: ${JSON.stringify(withdrawRes)}`);
+}
+console.log('✅ Retiro seguro completado: 1000 $CR -> 0.08 TON transferidos a la wallet');
+
+// Renderizado del Modal de Billetera
+vm.runInContext(`openWeb3WalletModal()`, ctx);
+const walletModalHtml = doc.getElementById('wallet-modal').innerHTML;
+if (!walletModalHtml.includes('BILLETERA WEB3 &amp; TON CONNECT') && !walletModalHtml.includes('BILLETERA WEB3 & TON CONNECT')) {
+    throw new Error('El modal de la billetera no se renderizó correctamente');
+}
+console.log('✅ Modal de Billetera Web3 renderizado con éxito');
 
 // ===== VERIFICACIÓN DE LAS 12 SILUETAS VECTORIALES DE COCHES =====
 console.log('\n--- VERIFICANDO LAS 12 SILUETAS ARQUITECTÓNICAS DE COCHES ---');

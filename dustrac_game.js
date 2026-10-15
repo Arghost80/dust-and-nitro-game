@@ -504,6 +504,95 @@ const ALL_TRACK_IDS = [
 window.STORY_CHAPTERS = STORY_CHAPTERS;
 window.ALL_TRACK_IDS = ALL_TRACK_IDS;
 
+// Mapeo de Circuitos a Categorías / Rareza de Piezas (Capítulos 1 a 5)
+function getDropRarityForTrack(trackId) {
+    if (!trackId) return 'common';
+    // Capítulo 1: Rookie -> Piezas Comunes (Stage 1)
+    const cap1 = ['rookie_ring', 'radiator_oval', 'tri_apex_coliseum', 'twister_chicanes'];
+    if (cap1.includes(trackId)) return 'common';
+
+    // Capítulo 2: Clubman -> Piezas Infrecuentes (Stage 2)
+    const cap2 = ['red_rock_junction', 'curvastone_park', 'schwarzwald_sprint', 'overpass_figure8'];
+    if (cap2.includes(trackId)) return 'uncommon';
+
+    // Capítulo 3: Desierto -> Piezas Raras (Stage 3)
+    const cap3 = ['desert_canyon', 'sandstorm_dunes', 'badlands_endurance', 'infinity_loops'];
+    if (cap3.includes(trackId)) return 'rare';
+
+    // Capítulo 4: Pro -> Piezas Épicas (Stage 4)
+    const cap4 = ['brianza_speedway', 'sakura_ring', 'diamond_apex', 'super_dragway'];
+    if (cap4.includes(trackId)) return 'epic';
+
+    // Capítulo 5: Leyendas -> Piezas Legendarias (Stage 5)
+    const cap5 = ['riviera_coast', 'nordkette_pass', 'silverstone_airfield', 'neo_tokyo_bay', 'inter_laguna', 'sarthe_endurance'];
+    if (cap5.includes(trackId)) return 'legendary';
+
+    return 'common';
+}
+
+// Probabilidades de Drop de Piezas NFT por Puesto y Rareza de Circuito
+// 1º Puesto: Común (15%), Infrecuente (10%), Rara (6%), Épica (3%), Legendaria (1.5%)
+// 2º Puesto: Mitad de probabilidad (7.5%, 5%, 3%, 1.5%, 0.75%)
+// 3º Puesto: Un tercio de probabilidad (5%, 3.3%, 2%, 1%, 0.5%)
+// 4º - 6º Puesto: 0% de probabilidad (No drop)
+const RACE_DROP_BASE_RATES = {
+    common: 0.15,
+    uncommon: 0.10,
+    rare: 0.06,
+    epic: 0.03,
+    legendary: 0.015
+};
+
+function calculateRacePartsDrop(trackId, playerRank, forceDrop = false) {
+    // Si queda 4º o peor, sin probabilidad de pieza (a menos que se fuerce explícitamente en tests)
+    const force = forceDrop || (typeof window !== 'undefined' && window.__TEST_FORCE_RACE_DROP);
+    if (playerRank > 3 && !force) {
+        return null;
+    }
+
+    const rarity = getDropRarityForTrack(trackId);
+    let baseRate = RACE_DROP_BASE_RATES[rarity] || 0.15;
+    
+    // Modificador por posición en el podio
+    let rankMultiplier = 1.0;
+    if (playerRank === 2) rankMultiplier = 0.5;
+    else if (playerRank === 3) rankMultiplier = 0.333;
+    else if (playerRank > 3) rankMultiplier = 0;
+
+    const finalRate = baseRate * rankMultiplier;
+    const roll = Math.random();
+    const isWinner = force || (roll < finalRate);
+
+    if (!isWinner) {
+        return null; // Sin drop en esta carrera
+    }
+
+    // Filtrar piezas del catálogo correspondientes a la rareza del circuito
+    if (typeof WORKSHOP_PIECES_CATALOG === 'undefined') return null;
+    const matchingPieces = Object.values(WORKSHOP_PIECES_CATALOG).filter(p => p.rarity === rarity);
+    if (matchingPieces.length === 0) return null;
+
+    const chosen = matchingPieces[Math.floor(Math.random() * matchingPieces.length)];
+    const nftSerial = 'NFT-' + Math.floor(100000 + Math.random() * 900000);
+
+    return {
+        partId: chosen.id,
+        name: chosen.name,
+        icon: chosen.icon,
+        rarity: chosen.rarity,
+        category: chosen.category,
+        costCr: chosen.costCr,
+        nftSerial: nftSerial,
+        rateRolled: finalRate
+    };
+}
+
+if (typeof window !== 'undefined') {
+    window.getDropRarityForTrack = getDropRarityForTrack;
+    window.calculateRacePartsDrop = calculateRacePartsDrop;
+    window.RACE_DROP_BASE_RATES = RACE_DROP_BASE_RATES;
+}
+
 // Gestión de guardado del Modo Historia en LocalStorage con Modo Diseñador
 function loadStoryProgress() {
     let data = null;
@@ -6030,17 +6119,14 @@ function endRace() {
         u.credits = (u.credits || 0) + crReward;
         u.gems = (u.gems || 0) + gemReward;
 
-        // Botín de piezas mecánicas del taller: 1º (4), 2º (3), 3º (2), Resto (1)
-        const partsWonCount = playerRank === 1 ? 4 : (playerRank === 2 ? 3 : (playerRank === 3 ? 2 : 1));
-        if (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && partsWonCount > 0) {
+        // Botín de piezas mecánicas del taller con drop rate Web3 por circuito y podio
+        const droppedPart = (typeof calculateRacePartsDrop === 'function') 
+            ? calculateRacePartsDrop(currentTrackId, playerRank) 
+            : null;
+        if (droppedPart) {
             if (!u.partsInventory) u.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
-            const catalogKeys = Object.keys(WORKSHOP_PIECES_CATALOG);
-            for (let i = 0; i < partsWonCount; i++) {
-                const pKey = catalogKeys[Math.floor(Math.random() * catalogKeys.length)];
-                u.partsInventory[pKey] = (u.partsInventory[pKey] || 0) + 1;
-                const pDef = WORKSHOP_PIECES_CATALOG[pKey] || { name: pKey, icon: '🔧' };
-                partsWonSummary.push(`${pDef.icon} ${pDef.name}`);
-            }
+            u.partsInventory[droppedPart.partId] = (u.partsInventory[droppedPart.partId] || 0) + 1;
+            partsWonSummary.push(`${droppedPart.icon} ${droppedPart.name} [${droppedPart.rarity.toUpperCase()} #${droppedPart.nftSerial}]`);
         }
         saveNftUserData(u);
     }
@@ -6068,9 +6154,13 @@ function endRace() {
     }
 
     if (partsWonSummary.length > 0) {
-        const partsText = `📦 BOTÍN DE TALLER: +${partsWonSummary.length} PIEZAS (${partsWonSummary.slice(0, 3).join(', ')}${partsWonSummary.length > 3 ? '...' : ''})`;
+        const partsText = `💎 ¡DROP DE PIEZA NFT CONSEGUIDO! ${partsWonSummary.join(' • ')}`;
         raceScene.add.text(480, 288, partsText, {
-            font: 'bold 12px Arial', fill: '#facc15'
+            font: '900 12px Arial', fill: '#00f5d4', backgroundColor: '#0f172add', padding: { x: 10, y: 3 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+    } else if (playerRank <= 3) {
+        raceScene.add.text(480, 288, '🏁 Sin drop de pieza en esta carrera (Probabilidad de obtención no superada)', {
+            font: 'italic 11px Arial', fill: '#94a3b8'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
     }
 
@@ -6181,15 +6271,14 @@ function handleWagerRaceEnd(scene, playerRank) {
         u.wagerStats.devFees = Math.round(((u.wagerStats.devFees || 0) + potData.devFee) * 100) / 100;
         u.wagerStats.rewardsFees = Math.round(((u.wagerStats.rewardsFees || 0) + potData.rewardsFee) * 100) / 100;
 
-        // Botín de taller adicional por competir
-        const partsWonCount = playerRank === 1 ? 4 : (playerRank === 2 ? 3 : (playerRank === 3 ? 2 : 1));
-        if (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && partsWonCount > 0) {
+        // Botín de taller adicional por competir según circuito y podio
+        const compTrack = wRoom.trackId || (raceScene && raceScene.track && raceScene.track.id) || currentTrackId;
+        const droppedCompPart = (typeof calculateRacePartsDrop === 'function')
+            ? calculateRacePartsDrop(compTrack, playerRank)
+            : null;
+        if (droppedCompPart) {
             if (!u.partsInventory) u.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
-            const catalogKeys = Object.keys(WORKSHOP_PIECES_CATALOG);
-            for (let i = 0; i < partsWonCount; i++) {
-                const pKey = catalogKeys[Math.floor(Math.random() * catalogKeys.length)];
-                u.partsInventory[pKey] = (u.partsInventory[pKey] || 0) + 1;
-            }
+            u.partsInventory[droppedCompPart.partId] = (u.partsInventory[droppedCompPart.partId] || 0) + 1;
         }
 
         saveNftUserData(u);

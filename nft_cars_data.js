@@ -146,36 +146,153 @@ const NFT_CAR_MODELS = [
     { id: "leg_bentley_speed8", name: "BENTLEY SPEED 8 LE MANS", rarity: "legendary", sprite: "car_green", visualId: 12, desc: "El mítico prototipo británico ganador absoluto de las 24 Horas de Le Mans", stats: makeStats(4,4,3,3,3,3,2,2,3,1) }
 ];
 
-// Catálogo de 16 Piezas de Mecánica y Recambios de Taller (Crafting & Tuning)
+// Catálogo Extendido de 65 Piezas de Mecánica y Recambios de Taller Motorsport (5 Niveles de Rareza)
 const WORKSHOP_PIECES_CATALOG = {
-    // 1. Motor & Velocidad Punta
-    spark_plugs: { id: "spark_plugs", name: "Bujías de Iridio", icon: "🔌", category: "speed_power", desc: "Chispa de encendido de alta frecuencia para combustión óptima", costCr: 250 },
-    cylinders: { id: "cylinders", name: "Cilindros Forjados", icon: "🔩", category: "speed_power", desc: "Pistones de compresión reforzada para soportar altas RPM", costCr: 550 },
-    engine_block: { id: "engine_block", name: "Bloque Motor V8/Bóxer", icon: "⚙️", category: "speed_power", desc: "Cárter seco y bloque de aleación ultraligero", costCr: 1200 },
-    turbocharger: { id: "turbocharger", name: "Turbocompresor Twin-Scroll", icon: "🌪️", category: "speed_power", desc: "Turbina de titanio para máxima presión de sobrealimentación", costCr: 2200 },
+    // -------------------------------------------------------------
+    // 1. MOTOR & VELOCIDAD PUNTA (speed_power)
+    // -------------------------------------------------------------
+    // Común (Tier 1 • Capítulo 1 Rookie)
+    spark_plugs: { id: "spark_plugs", name: "Bujías de Iridio NGK", icon: "🔌", category: "speed_power", rarity: "common", desc: "Chispa de alta frecuencia para combustión óptima", costCr: 250 },
+    air_filter_sport: { id: "air_filter_sport", name: "Filtro Cónico K&N Sport", icon: "🌪️", category: "speed_power", rarity: "common", desc: "Mayor flujo de admisión de aire frío", costCr: 280 },
+    ecu_chip_stage1: { id: "ecu_chip_stage1", name: "Reprogramación ECU Stage 1", icon: "💻", category: "speed_power", rarity: "common", desc: "Curva de encendido e inyección optimizada", costCr: 320 },
+    throttle_body_sport: { id: "throttle_body_sport", name: "Mariposa de Admisión Agrandada 70mm", icon: "🚪", category: "speed_power", rarity: "common", desc: "Respuesta inmediata al acelerador en aperturas bruscas", costCr: 270 },
 
-    // 2. Sistema de Frenos
-    brake_pads: { id: "brake_pads", name: "Pastillas Cerámicas", icon: "🛞", category: "braking", desc: "Compuesto de fricción resistente a fatiga térmica en curvas", costCr: 220 },
-    brake_discs: { id: "brake_discs", name: "Discos Perforados Carbono", icon: "💿", category: "braking", desc: "Ranuras de refrigeración activa para detención fulgurante", costCr: 500 },
-    brake_calipers: { id: "brake_calipers", name: "Pinzas Brembo Monobloque", icon: "🔴", category: "braking", desc: "6 pistones de mordida instantánea en frenada al límite", costCr: 1100 },
+    // Infrecuente (Tier 2 • Capítulo 2 Clubman)
+    cylinders: { id: "cylinders", name: "Pistones Forjados Wössner", icon: "🔩", category: "speed_power", rarity: "uncommon", desc: "Pistones de compresión reforzada para altas RPM", costCr: 550 },
+    fuel_injectors_high: { id: "fuel_injectors_high", name: "Inyectores Bosch Motorsport", icon: "💉", category: "speed_power", rarity: "uncommon", desc: "Inyección atomizada a 4.5 bar de presión", costCr: 600 },
+    exhaust_manifold_sport: { id: "exhaust_manifold_sport", name: "Colectores 4-en-1 Acero Inox", icon: "💨", category: "speed_power", rarity: "uncommon", desc: "Evacuación de gases sin contrapresión", costCr: 650 },
+    fuel_pump_highflow: { id: "fuel_pump_highflow", name: "Bomba de Gasolina Walbro 450 LPH", icon: "⛽", category: "speed_power", rarity: "uncommon", desc: "Caudal constante de combustible sin caídas de presión", costCr: 570 },
 
-    // 3. Chasis, Neumáticos & Agarre
-    slick_tires: { id: "slick_tires", name: "Neumáticos Slick GT3", icon: "🏎️", category: "handling_grip", desc: "Goma blanda de competición para paso por curva impecable", costCr: 260 },
-    suspension_springs: { id: "suspension_springs", name: "Muelles Roscados", icon: "🌀", category: "handling_grip", desc: "Amortiguación regulable en compresión y rebote", costCr: 520 },
-    antiroll_bars: { id: "antiroll_bars", name: "Barra Estabilizadora", icon: "🔗", category: "handling_grip", desc: "Rigidez torsional contra el balanceo en cambios de apoyo", costCr: 1150 },
+    // Rara (Tier 3 • Capítulo 3 Desierto)
+    engine_block: { id: "engine_block", name: "Bloque Motor V8/Bóxer Aligerado", icon: "⚙️", category: "speed_power", rarity: "rare", desc: "Cárter seco y bloque de aleación ultraligero", costCr: 1200 },
+    camshaft_racing: { id: "camshaft_racing", name: "Árbol de Levas Cruzado 284°", icon: "🪵", category: "speed_power", rarity: "rare", desc: "Mayor alzada de válvulas a 8.500 RPM", costCr: 1300 },
+    intercooler_forge: { id: "intercooler_forge", name: "Intercooler Frontal Forge", icon: "❄️", category: "speed_power", rarity: "rare", desc: "Enfriamiento criogénico de la admisión", costCr: 1400 },
+    blow_off_valve_hks: { id: "blow_off_valve_hks", name: "Válvula Blow-Off HKS SSQV", icon: "💨", category: "speed_power", rarity: "rare", desc: "Protege el compresor y reduce el lag entre cambios", costCr: 1250 },
 
-    // 4. Transmisión & Aceleración
-    racing_clutch: { id: "racing_clutch", name: "Embrague Multidisco", icon: "⚡", category: "accel_traction", desc: "Acople sin pérdidas de par motor en arrancada", costCr: 280 },
-    lsd_differential: { id: "lsd_differential", name: "Diferencial Autoblocante LSD", icon: "🔀", category: "accel_traction", desc: "Reparto de par 50/50 a las ruedas motrices", costCr: 580 },
-    gearbox_cogs: { id: "gearbox_cogs", name: "Caja de Cambios Secuencial", icon: "⚙️", category: "accel_traction", desc: "Engranajes rectos para cambio de marcha en 30 milisegundos", costCr: 1300 },
+    // Épica (Tier 4 • Capítulo 4 Pro)
+    turbocharger: { id: "turbocharger", name: "Turbocompresor Garrett G35-900", icon: "🔥", category: "speed_power", rarity: "epic", desc: "Turbina de titanio y soplado a 2.4 bar", costCr: 2200 },
+    motec_ecu_pro: { id: "motec_ecu_pro", name: "Centralita MoTeC M150 Pro GT", icon: "🧠", category: "speed_power", rarity: "epic", desc: "Telemetría en tiempo real y anti-lag launch control", costCr: 2500 },
+    titanium_valves_springs: { id: "titanium_valves_springs", name: "Válvulas y Muelles de Titanio Ferrea", icon: "✨", category: "speed_power", rarity: "epic", desc: "Distribución resistente a regímenes extremos de 10.000 RPM", costCr: 2400 },
 
-    // 5. Aerodinámica & Aligeramiento
-    carbon_wing: { id: "carbon_wing", name: "Alerón de Carbono GT", icon: "🪽", category: "aero_lightness", desc: "Carga aerodinámica vertical que pega el tren trasero a la pista", costCr: 300 },
-    front_splitter: { id: "front_splitter", name: "Splitter Delantero Venturi", icon: "🛡️", category: "aero_lightness", desc: "Efecto suelo que canaliza el flujo de aire bajo el chasis", costCr: 550 },
-    monocoque_frame: { id: "monocoque_frame", name: "Chasis Monocasco Carbono", icon: "🪶", category: "aero_lightness", desc: "Estructura de fibra de carbono peso pluma de competición", costCr: 1400 }
+    // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
+    billet_engine_v8: { id: "billet_engine_v8", name: "Bloque Motor CNC V8 Billet 1200HP", icon: "👑", category: "speed_power", rarity: "legendary", desc: "Mecanizado aeroespacial para más de 1.200 CV sin límite", costCr: 5500 },
+    water_meth_injection: { id: "water_meth_injection", name: "Inyección de Metanol Snow Performance", icon: "💧", category: "speed_power", rarity: "legendary", desc: "Elimina detonación permitiendo avance de encendido máximo", costCr: 6000 },
+    twin_turbo_hybrid_f1: { id: "twin_turbo_hybrid_f1", name: "Turbocompresor Híbrido F1 MGU-H", icon: "⚡", category: "speed_power", rarity: "legendary", desc: "Cero lag turbo mediante recuperación eléctrica térmica", costCr: 6200 },
+
+    // -------------------------------------------------------------
+    // 2. SISTEMA DE FRENOS (braking)
+    // -------------------------------------------------------------
+    // Común (Tier 1 • Capítulo 1 Rookie)
+    brake_pads: { id: "brake_pads", name: "Pastillas Cerámicas Ferodo Racing", icon: "🛞", category: "braking", rarity: "common", desc: "Compuesto resistente a fatiga térmica en curvas", costCr: 220 },
+    brake_fluid_dot5: { id: "brake_fluid_dot5", name: "Líquido de Frenos Motul RBF 660", icon: "🧪", category: "braking", rarity: "common", desc: "Punto de ebullición a 325°C para tacto duro de pedal", costCr: 240 },
+    brake_bias_valve: { id: "brake_bias_valve", name: "Repartidor de Frenada Manual Tilton", icon: "⚖️", category: "braking", rarity: "common", desc: "Regulación milimétrica de balance delantero/trasero", costCr: 230 },
+
+    // Infrecuente (Tier 2 • Capítulo 2 Clubman)
+    brake_discs: { id: "brake_discs", name: "Discos Perforados Girodisc", icon: "💿", category: "braking", rarity: "uncommon", desc: "Ranuras de refrigeración activa para detención fulgurante", costCr: 500 },
+    braided_brake_lines: { id: "braided_brake_lines", name: "Latiguillos Metálicos Goodridge", icon: "⛓️", category: "braking", rarity: "uncommon", desc: "Trenzados de acero inoxidable sin expansión volumétrica", costCr: 520 },
+    master_cylinder_race: { id: "master_cylinder_race", name: "Doble Bomba de Freno AP Racing", icon: "🪛", category: "braking", rarity: "uncommon", desc: "Circuitos hidráulicos dobles independientes para máxima seguridad", costCr: 530 },
+
+    // Rara (Tier 3 • Capítulo 3 Desierto)
+    brake_calipers: { id: "brake_calipers", name: "Pinzas Brembo Monobloque 4-Pistones", icon: "🔴", category: "braking", rarity: "rare", desc: "Mordida instantánea en frenadas a final de recta", costCr: 1100 },
+    ventilated_floating_discs: { id: "ventilated_floating_discs", name: "Discos Flotantes AP Racing 380mm", icon: "📀", category: "braking", rarity: "rare", desc: "Campana de ergal flotante con dilatación libre", costCr: 1250 },
+    titanium_brake_shims: { id: "titanium_brake_shims", name: "Aislantes Térmicos de Titanio", icon: "🛡️", category: "braking", rarity: "rare", desc: "Barrera térmica que evita la transferencia de calor al líquido", costCr: 1180 },
+
+    // Épica (Tier 4 • Capítulo 4 Pro)
+    carbon_ceramic_calipers: { id: "carbon_ceramic_calipers", name: "Pinzas Brembo GT-R Monobloque 6P", icon: "🛑", category: "braking", rarity: "epic", desc: "Mecanizadas de un bloque sólido de aluminio forjado", costCr: 2300 },
+    cooling_ducts_brakes: { id: "cooling_ducts_brakes", name: "Conductos de Aire de Carbono", icon: "🌬️", category: "braking", rarity: "epic", desc: "Túneles de refrigeración forzada a los discos", costCr: 2400 },
+    carbon_cooling_fans: { id: "carbon_cooling_fans", name: "Turbinas de Enfriamiento Dinámico", icon: "🌀", category: "braking", rarity: "epic", desc: "Aspas integradas en llantas para disipar calor a alta velocidad", costCr: 2350 },
+
+    // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
+    carbon_ceramic_brembo: { id: "carbon_ceramic_brembo", name: "Frenos Carbono-Cerámicos Brembo CCM-R", icon: "💎", category: "braking", rarity: "legendary", desc: "Resistencia térmica absoluta sin fading a más de 1.000°C", costCr: 5400 },
+    kers_f1_regen: { id: "kers_f1_regen", name: "MGU-K Regeneración Eléctrica F1", icon: "⚡", category: "braking", rarity: "legendary", desc: "Freno motor electromagnético de 160 CV con recarga", costCr: 5800 },
+    f1_brake_by_wire: { id: "f1_brake_by_wire", name: "Sistema de Freno F1 Brake-By-Wire", icon: "🖲️", category: "braking", rarity: "legendary", desc: "Modulación electrónica por microsegundo sin bloqueo de ruedas", costCr: 5900 },
+
+    // -------------------------------------------------------------
+    // 3. CHASIS, NEUMÁTICOS & AGARRE (handling_grip)
+    // -------------------------------------------------------------
+    // Común (Tier 1 • Capítulo 1 Rookie)
+    slick_tires: { id: "slick_tires", name: "Neumáticos Semi-Slick Sport", icon: "🏎️", category: "handling_grip", rarity: "common", desc: "Goma deportiva blanda con flanco reforzado", costCr: 260 },
+    lowering_springs: { id: "lowering_springs", name: "Muelles Pro-Kit Eibach", icon: "〰️", category: "handling_grip", rarity: "common", desc: "Baja el centro de gravedad en 35mm para menos balanceo", costCr: 270 },
+    wheel_spacers_hubcentric: { id: "wheel_spacers_hubcentric", name: "Separadores de Vía Ensanchada Eibach", icon: "📏", category: "handling_grip", rarity: "common", desc: "Ensancha la pisada en 20mm para mayor aplomo", costCr: 250 },
+
+    // Infrecuente (Tier 2 • Capítulo 2 Clubman)
+    suspension_springs: { id: "suspension_springs", name: "Muelles Roscados Coilover", icon: "🌀", category: "handling_grip", rarity: "uncommon", desc: "Amortiguación regulable en compresión y rebote", costCr: 520 },
+    strut_brace_front: { id: "strut_brace_front", name: "Barra de Torretas Delantera Carbono", icon: "➖", category: "handling_grip", rarity: "uncommon", desc: "Elimina la flexión del chasis en apoyos violentos", costCr: 540 },
+    camber_plates_adjustable: { id: "camber_plates_adjustable", name: "Copelas Regulables de Caída Dinámica", icon: "📐", category: "handling_grip", rarity: "uncommon", desc: "Caída negativa precisa para apoyo en curva máxima", costCr: 530 },
+
+    // Rara (Tier 3 • Capítulo 3 Desierto)
+    antiroll_bars: { id: "antiroll_bars", name: "Barra Estabilizadora H&R Gruesa", icon: "🔗", category: "handling_grip", rarity: "rare", desc: "Rigidez torsional contra el balanceo en cambios de apoyo", costCr: 1150 },
+    adjustable_coilovers: { id: "adjustable_coilovers", name: "Coilovers KW Competition 3-Vías", icon: "🎛️", category: "handling_grip", rarity: "rare", desc: "Ajuste milimétrico de alta/baja velocidad y rebote", costCr: 1300 },
+    polyurethane_bushings_kit: { id: "polyurethane_bushings_kit", name: "Silentblocks de Poliuretano Powerflex", icon: "🧱", category: "handling_grip", rarity: "rare", desc: "Cero holguras en los brazos de suspensión bajo carga", costCr: 1200 },
+
+    // Épica (Tier 4 • Capítulo 4 Pro)
+    michelin_cup_slicks: { id: "michelin_cup_slicks", name: "Slicks Lisos Michelin Pilot Sport GT", icon: "🏁", category: "handling_grip", rarity: "epic", desc: "Compuesto puro de goma slick para soportar 2.4G", costCr: 2450 },
+    pushrod_suspension: { id: "pushrod_suspension", name: "Suspensión Inboard Push-Rod", icon: "📐", category: "handling_grip", rarity: "epic", desc: "Amortiguadores horizontales dentro del habitáculo", costCr: 2600 },
+    magnesium_forged_wheels: { id: "magnesium_forged_wheels", name: "Llantas Forjadas de Magnesio BBS", icon: "🛞", category: "handling_grip", rarity: "epic", desc: "Masa no suspendida reducida a la mitad para giros veloces", costCr: 2550 },
+
+    // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
+    pirelli_f1_slicks: { id: "pirelli_f1_slicks", name: "Slicks F1 Pirelli P-Zero Rosso Corsa", icon: "🏆", category: "handling_grip", rarity: "legendary", desc: "Adherencia molecular térmica de monoplaza de GP", costCr: 5600 },
+    monocoque_chassis_gt: { id: "monocoque_chassis_gt", name: "Chasis Monocasco Carbono-Titanio LMP", icon: "🛡️", category: "handling_grip", rarity: "legendary", desc: "Rigidez espacial de 50.000 Nm/grado con peso mínimo", costCr: 6200 },
+    active_magnetic_dampers: { id: "active_magnetic_dampers", name: "Amortiguadores Magnetoreológicos Activos", icon: "🧲", category: "handling_grip", rarity: "legendary", desc: "Ajuste de viscosidad por campo electromagnético en 1ms", costCr: 6000 },
+
+    // -------------------------------------------------------------
+    // 4. TRANSMISIÓN & ACELERACIÓN (accel_traction)
+    // -------------------------------------------------------------
+    // Común (Tier 1 • Capítulo 1 Rookie)
+    racing_clutch: { id: "racing_clutch", name: "Embrague Reforzado Monodisco", icon: "⚡", category: "accel_traction", rarity: "common", desc: "Acople sin pérdidas de par motor en arrancada", costCr: 280 },
+    short_shifter_kit: { id: "short_shifter_kit", name: "Varillaje Corto Quick-Shift", icon: "🕹️", category: "accel_traction", rarity: "common", desc: "Recorrido de palanca reducido un 40% para cambios rápidos", costCr: 290 },
+    polyurethane_trans_mounts: { id: "polyurethane_trans_mounts", name: "Soportes Rígidos de Transmisión", icon: "🔩", category: "accel_traction", rarity: "common", desc: "Evita pérdidas de empuje por cabeceo de motor y caja", costCr: 270 },
+
+    // Infrecuente (Tier 2 • Capítulo 2 Clubman)
+    lsd_differential: { id: "lsd_differential", name: "Diferencial Autoblocante LSD 1.5-Way", icon: "🔀", category: "accel_traction", rarity: "uncommon", desc: "Reparto de par 50/50 a las ruedas motrices", costCr: 580 },
+    light_flywheel_crmo: { id: "light_flywheel_crmo", name: "Volante de Inercia Aligerado CrMo", icon: "💿", category: "accel_traction", rarity: "uncommon", desc: "Subidas de vueltas instantáneas al acelerar", costCr: 620 },
+    final_drive_short_gear: { id: "final_drive_short_gear", name: "Grupo Cónico Corto Rápido 4.44", icon: "⚙️", category: "accel_traction", rarity: "uncommon", desc: "Aceleración demoledora a costa de velocidad punta", costCr: 590 },
+
+    // Rara (Tier 3 • Capítulo 3 Desierto)
+    gearbox_cogs: { id: "gearbox_cogs", name: "Caja de Cambios Secuencial Quaife", icon: "⚙️", category: "accel_traction", rarity: "rare", desc: "Engranajes rectos para cambio de marcha en 30 milisegundos", costCr: 1300 },
+    carbon_driveshaft: { id: "carbon_driveshaft", name: "Árbol de Transmisión de Carbono", icon: "🥢", category: "accel_traction", rarity: "rare", desc: "Eje de transmisión peso pluma que absorbe picos de par", costCr: 1350 },
+    launch_control_module: { id: "launch_control_module", name: "Módulo de Salida Launch Control 2-Step", icon: "🚀", category: "accel_traction", rarity: "rare", desc: "Salidas perfectas desde parado sin patinaje de neumáticos", costCr: 1280 },
+
+    // Épica (Tier 4 • Capítulo 4 Pro)
+    sequential_dogbox: { id: "sequential_dogbox", name: "Caja Secuencial Holinger 6-Vel", icon: "🕹️", category: "accel_traction", rarity: "epic", desc: "Cambios de marcha sin pisar embrague en 25ms", costCr: 2500 },
+    triple_plate_clutch: { id: "triple_plate_clutch", name: "Embrague Triple-Disco Tilton Carbon", icon: "🔘", category: "accel_traction", rarity: "epic", desc: "Capaz de transferir hasta 1.500 Nm de par motor", costCr: 2600 },
+    pneumatic_paddle_shifters: { id: "pneumatic_paddle_shifters", name: "Levas Neumáticas Magneti Marelli", icon: "🎮", category: "accel_traction", rarity: "epic", desc: "Actuador neumático que engrana marchas por aire comprimido", costCr: 2550 },
+
+    // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
+    f1_dual_clutch_transaxle: { id: "f1_dual_clutch_transaxle", name: "Transmisión Transaxle Dual-Clutch F1", icon: "🚀", category: "accel_traction", rarity: "legendary", desc: "Cero interrupción de empuje y levas magnéticas de titanio", costCr: 5800 },
+    vectoring_ediff: { id: "vectoring_ediff", name: "Diferencial Vectorial E-Diff Activo", icon: "⚡", category: "accel_traction", rarity: "legendary", desc: "Vectorización de par activa por rueda para rotación milimétrica", costCr: 6200 },
+    carbon_matrix_differential: { id: "carbon_matrix_differential", name: "Diferencial de Discos Matriz de Carbono", icon: "💎", category: "accel_traction", rarity: "legendary", desc: "Tracción total simétrica que devora las curvas rápidas", costCr: 6100 },
+
+    // -------------------------------------------------------------
+    // 5. AERODINÁMICA & DOWNFORCE (aero_lightness)
+    // -------------------------------------------------------------
+    // Común (Tier 1 • Capítulo 1 Rookie)
+    carbon_wing: { id: "carbon_wing", name: "Alerón de Carbono GT", icon: "🪽", category: "aero_lightness", rarity: "common", desc: "Carga aerodinámica vertical que pega el tren trasero a la pista", costCr: 300 },
+    hood_louvers_aero: { id: "hood_louvers_aero", name: "Branquias de Evacuación Capó", icon: "🪟", category: "aero_lightness", rarity: "common", desc: "Reduce la sustentación de morro evacuando calor y presión", costCr: 310 },
+    roof_vortex_generator: { id: "roof_vortex_generator", name: "Generador de Vórtices Shark-Fin", icon: "🦈", category: "aero_lightness", rarity: "common", desc: "Micro-aletas en techo que dirigen flujo de aire limpio al alerón", costCr: 280 },
+
+    // Infrecuente (Tier 2 • Capítulo 2 Clubman)
+    front_splitter: { id: "front_splitter", name: "Splitter Delantero Venturi", icon: "🛡️", category: "aero_lightness", rarity: "uncommon", desc: "Efecto suelo que canaliza el flujo de aire bajo el chasis", costCr: 550 },
+    rear_diffuser_race: { id: "rear_diffuser_race", name: "Difusor Trasero Multicanal GT3", icon: "🪜", category: "aero_lightness", rarity: "uncommon", desc: "Acelera el flujo inferior succionando el coche al suelo", costCr: 590 },
+    carbon_side_skirts: { id: "carbon_side_skirts", name: "Taloneras Aerodinámicas de Carbono", icon: "🛹", category: "aero_lightness", rarity: "uncommon", desc: "Sellado aerodinámico inferior para impedir entrada de turbulencias", costCr: 560 },
+
+    // Rara (Tier 3 • Capítulo 3 Desierto)
+    monocoque_frame: { id: "monocoque_frame", name: "Chasis Monocasco Carbono", icon: "🪶", category: "aero_lightness", rarity: "rare", desc: "Estructura de fibra de carbono peso pluma de competición", costCr: 1400 },
+    canards_vortex: { id: "canards_vortex", name: "Generadores de Vórtices Canards", icon: "🔪", category: "aero_lightness", rarity: "rare", desc: "Aletas laterales que sellan aerodinámicamente el lateral", costCr: 1350 },
+    titanium_exhaust_system: { id: "titanium_exhaust_system", name: "Escape Completo Akrapovic Titanio", icon: "🎺", category: "aero_lightness", rarity: "rare", desc: "Ahorra 18 kg de peso suspendido y optimiza flujo aerodinámico", costCr: 1380 },
+
+    // Épica (Tier 4 • Capítulo 4 Pro)
+    flat_floor_undertray: { id: "flat_floor_undertray", name: "Fondo Plano de Carbono con Túneles Venturi", icon: "🛹", category: "aero_lightness", rarity: "epic", desc: "Efecto suelo integral que duplica el agarre en curva rápida", costCr: 2400 },
+    polycarbonate_windows: { id: "polycarbonate_windows", name: "Lunas de Policarbonato Lexan", icon: "🪟", category: "aero_lightness", rarity: "epic", desc: "Aligera 30 kg en la parte alta para bajar el centro de masas", costCr: 2300 },
+    carbon_fiber_doors: { id: "carbon_fiber_doors", name: "Puertas Ultraligeras de Carbono Seco", icon: "🚪", category: "aero_lightness", rarity: "epic", desc: "Reducción masiva de 45 kg en la cintura del vehículo", costCr: 2450 },
+
+    // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
+    active_drs_wing: { id: "active_drs_wing", name: "Alerón Activo con Sistema DRS F1", icon: "🪽", category: "aero_lightness", rarity: "legendary", desc: "Abre flap en rectas para +25 km/h y actúa como aerofreno", costCr: 5900 },
+    lmp1_aero_body: { id: "lmp1_aero_body", name: "Carrocería Completa Fibra de Carbono LMP1", icon: "👑", category: "aero_lightness", rarity: "legendary", desc: "Estructura autoclave de 900 kg con aerodinámica de Le Mans", costCr: 6500 },
+    active_ground_effect_fan: { id: "active_ground_effect_fan", name: "Turbina de Efecto Suelo Brabham Fan-Car", icon: "🌀", category: "aero_lightness", rarity: "legendary", desc: "Succión activa por ventilador de turbina para adherencia ilimitada", costCr: 6600 }
 };
 
-// Ramas de Mejora Específicas por Grupo de Estadísticas y Recetas de Piezas Requeridas
+// Ramas de Mejora Específicas: Stage 1 (Común), Stage 2 (Infrecuente), Stage 3 (Rara), Stage 4 (Épica), Stage 5 (Legendaria)
 const STAT_UPGRADE_BRANCHES = {
     speed_power: {
         id: "speed_power",
@@ -186,11 +303,16 @@ const STAT_UPGRADE_BRANCHES = {
         desc: "Aumenta la velocidad máxima y la fuerza del motor mediante piezas de combustión",
         maxLevel: 5,
         stages: [
-            { reqs: { spark_plugs: 2, cylinders: 1 }, cr: 600, gems: 0 },
-            { reqs: { spark_plugs: 4, cylinders: 2, engine_block: 1 }, cr: 1400, gems: 0 },
-            { reqs: { spark_plugs: 6, cylinders: 3, engine_block: 2, turbocharger: 1 }, cr: 2800, gems: 20 },
-            { reqs: { spark_plugs: 8, cylinders: 4, engine_block: 3, turbocharger: 2 }, cr: 5000, gems: 50 },
-            { reqs: { spark_plugs: 12, cylinders: 6, engine_block: 4, turbocharger: 3 }, cr: 8000, gems: 100 }
+            // Stage 1: Requiere piezas COMUNES (Cap. 1 Rookie)
+            { reqs: { spark_plugs: 2, air_filter_sport: 1 }, cr: 600, gems: 0, rarityRequired: "common" },
+            // Stage 2: Requiere piezas INFRECUENTES (Cap. 2 Clubman)
+            { reqs: { cylinders: 2, fuel_injectors_high: 1 }, cr: 1400, gems: 0, rarityRequired: "uncommon" },
+            // Stage 3: Requiere piezas RARAS (Cap. 3 Desierto)
+            { reqs: { engine_block: 2, camshaft_racing: 1 }, cr: 2800, gems: 20, rarityRequired: "rare" },
+            // Stage 4: Requiere piezas ÉPICAS (Cap. 4 Pro)
+            { reqs: { turbocharger: 2, motec_ecu_pro: 1 }, cr: 5000, gems: 50, rarityRequired: "epic" },
+            // Stage 5: Requiere piezas LEGENDARIAS (Cap. 5 Leyendas Mundial)
+            { reqs: { billet_engine_v8: 1, water_meth_injection: 1 }, cr: 8000, gems: 100, rarityRequired: "legendary" }
         ]
     },
     braking: {
@@ -202,11 +324,16 @@ const STAT_UPGRADE_BRANCHES = {
         desc: "Reduce drásticamente la distancia de frenado y permite apurar las curvas al límite",
         maxLevel: 5,
         stages: [
-            { reqs: { brake_pads: 2, brake_discs: 1 }, cr: 550, gems: 0 },
-            { reqs: { brake_pads: 4, brake_discs: 2, brake_calipers: 1 }, cr: 1200, gems: 0 },
-            { reqs: { brake_pads: 6, brake_discs: 3, brake_calipers: 2 }, cr: 2500, gems: 15 },
-            { reqs: { brake_pads: 8, brake_discs: 4, brake_calipers: 3 }, cr: 4500, gems: 45 },
-            { reqs: { brake_pads: 12, brake_discs: 6, brake_calipers: 4 }, cr: 7500, gems: 90 }
+            // Stage 1: Común
+            { reqs: { brake_pads: 2, brake_fluid_dot5: 1 }, cr: 550, gems: 0, rarityRequired: "common" },
+            // Stage 2: Infrecuente
+            { reqs: { brake_discs: 2, braided_brake_lines: 1 }, cr: 1200, gems: 0, rarityRequired: "uncommon" },
+            // Stage 3: Rara
+            { reqs: { brake_calipers: 2, ventilated_floating_discs: 1 }, cr: 2500, gems: 15, rarityRequired: "rare" },
+            // Stage 4: Épica
+            { reqs: { carbon_ceramic_calipers: 2, cooling_ducts_brakes: 1 }, cr: 4500, gems: 45, rarityRequired: "epic" },
+            // Stage 5: Legendaria
+            { reqs: { carbon_ceramic_brembo: 1, kers_f1_regen: 1 }, cr: 7500, gems: 90, rarityRequired: "legendary" }
         ]
     },
     handling_grip: {
@@ -218,11 +345,16 @@ const STAT_UPGRADE_BRANCHES = {
         desc: "Optimiza la trazada en peraltes y evita deslizamientos involuntarios",
         maxLevel: 5,
         stages: [
-            { reqs: { slick_tires: 2, suspension_springs: 1 }, cr: 550, gems: 0 },
-            { reqs: { slick_tires: 4, suspension_springs: 2, antiroll_bars: 1 }, cr: 1300, gems: 0 },
-            { reqs: { slick_tires: 6, suspension_springs: 3, antiroll_bars: 2 }, cr: 2600, gems: 15 },
-            { reqs: { slick_tires: 8, suspension_springs: 4, antiroll_bars: 3 }, cr: 4800, gems: 45 },
-            { reqs: { slick_tires: 12, suspension_springs: 6, antiroll_bars: 4 }, cr: 7800, gems: 90 }
+            // Stage 1: Común
+            { reqs: { slick_tires: 2, lowering_springs: 1 }, cr: 550, gems: 0, rarityRequired: "common" },
+            // Stage 2: Infrecuente
+            { reqs: { suspension_springs: 2, strut_brace_front: 1 }, cr: 1300, gems: 0, rarityRequired: "uncommon" },
+            // Stage 3: Rara
+            { reqs: { antiroll_bars: 2, adjustable_coilovers: 1 }, cr: 2600, gems: 15, rarityRequired: "rare" },
+            // Stage 4: Épica
+            { reqs: { michelin_cup_slicks: 2, pushrod_suspension: 1 }, cr: 4800, gems: 45, rarityRequired: "epic" },
+            // Stage 5: Legendaria
+            { reqs: { pirelli_f1_slicks: 1, monocoque_chassis_gt: 1 }, cr: 7800, gems: 90, rarityRequired: "legendary" }
         ]
     },
     accel_traction: {
@@ -234,11 +366,16 @@ const STAT_UPGRADE_BRANCHES = {
         desc: "Salida fulgurante en rectas y aceleración inmediata tras salir de las curvas",
         maxLevel: 5,
         stages: [
-            { reqs: { racing_clutch: 2, lsd_differential: 1 }, cr: 600, gems: 0 },
-            { reqs: { racing_clutch: 4, lsd_differential: 2, gearbox_cogs: 1 }, cr: 1400, gems: 0 },
-            { reqs: { racing_clutch: 6, lsd_differential: 3, gearbox_cogs: 2 }, cr: 2800, gems: 20 },
-            { reqs: { racing_clutch: 8, lsd_differential: 4, gearbox_cogs: 3 }, cr: 5000, gems: 50 },
-            { reqs: { racing_clutch: 12, lsd_differential: 6, gearbox_cogs: 4 }, cr: 8000, gems: 100 }
+            // Stage 1: Común
+            { reqs: { racing_clutch: 2, short_shifter_kit: 1 }, cr: 600, gems: 0, rarityRequired: "common" },
+            // Stage 2: Infrecuente
+            { reqs: { lsd_differential: 2, light_flywheel_crmo: 1 }, cr: 1400, gems: 0, rarityRequired: "uncommon" },
+            // Stage 3: Rara
+            { reqs: { gearbox_cogs: 2, carbon_driveshaft: 1 }, cr: 2800, gems: 20, rarityRequired: "rare" },
+            // Stage 4: Épica
+            { reqs: { sequential_dogbox: 2, triple_plate_clutch: 1 }, cr: 5000, gems: 50, rarityRequired: "epic" },
+            // Stage 5: Legendaria
+            { reqs: { f1_dual_clutch_transaxle: 1, vectoring_ediff: 1 }, cr: 8000, gems: 100, rarityRequired: "legendary" }
         ]
     },
     aero_lightness: {
@@ -250,32 +387,108 @@ const STAT_UPGRADE_BRANCHES = {
         desc: "Aligera la masa total del chasis y genera sustentación negativa para mayor estabilidad",
         maxLevel: 5,
         stages: [
-            { reqs: { carbon_wing: 1, front_splitter: 1 }, cr: 550, gems: 0 },
-            { reqs: { carbon_wing: 2, front_splitter: 2, monocoque_frame: 1 }, cr: 1300, gems: 0 },
-            { reqs: { carbon_wing: 3, front_splitter: 3, monocoque_frame: 2 }, cr: 2600, gems: 15 },
-            { reqs: { carbon_wing: 4, front_splitter: 4, monocoque_frame: 3 }, cr: 4800, gems: 45 },
-            { reqs: { carbon_wing: 6, front_splitter: 6, monocoque_frame: 4 }, cr: 7800, gems: 90 }
+            // Stage 1: Común
+            { reqs: { carbon_wing: 1, hood_louvers_aero: 1 }, cr: 550, gems: 0, rarityRequired: "common" },
+            // Stage 2: Infrecuente
+            { reqs: { front_splitter: 1, rear_diffuser_race: 1 }, cr: 1300, gems: 0, rarityRequired: "uncommon" },
+            // Stage 3: Rara
+            { reqs: { monocoque_frame: 1, canards_vortex: 1 }, cr: 2600, gems: 15, rarityRequired: "rare" },
+            // Stage 4: Épica
+            { reqs: { flat_floor_undertray: 1, polycarbonate_windows: 1 }, cr: 4800, gems: 45, rarityRequired: "epic" },
+            // Stage 5: Legendaria
+            { reqs: { active_drs_wing: 1, lmp1_aero_body: 1 }, cr: 7800, gems: 90, rarityRequired: "legendary" }
         ]
     }
 };
 
 const DEFAULT_PARTS_INVENTORY = {
+    // Comunes
     spark_plugs: 16,
-    cylinders: 10,
-    engine_block: 5,
-    turbocharger: 3,
+    air_filter_sport: 10,
+    ecu_chip_stage1: 8,
+    throttle_body_sport: 8,
     brake_pads: 14,
-    brake_discs: 10,
-    brake_calipers: 5,
+    brake_fluid_dot5: 10,
+    brake_bias_valve: 8,
     slick_tires: 16,
-    suspension_springs: 10,
-    antiroll_bars: 5,
+    lowering_springs: 10,
+    wheel_spacers_hubcentric: 8,
     racing_clutch: 12,
-    lsd_differential: 8,
-    gearbox_cogs: 5,
+    short_shifter_kit: 10,
+    polyurethane_trans_mounts: 8,
     carbon_wing: 8,
+    hood_louvers_aero: 8,
+    roof_vortex_generator: 8,
+
+    // Infrecuentes
+    cylinders: 10,
+    fuel_injectors_high: 6,
+    exhaust_manifold_sport: 6,
+    fuel_pump_highflow: 5,
+    brake_discs: 10,
+    braided_brake_lines: 6,
+    master_cylinder_race: 5,
+    suspension_springs: 10,
+    strut_brace_front: 6,
+    camber_plates_adjustable: 5,
+    lsd_differential: 8,
+    light_flywheel_crmo: 6,
+    final_drive_short_gear: 5,
     front_splitter: 8,
-    monocoque_frame: 4
+    rear_diffuser_race: 6,
+    carbon_side_skirts: 5,
+
+    // Raras
+    engine_block: 5,
+    camshaft_racing: 4,
+    intercooler_forge: 4,
+    blow_off_valve_hks: 3,
+    brake_calipers: 5,
+    ventilated_floating_discs: 4,
+    titanium_brake_shims: 3,
+    antiroll_bars: 5,
+    adjustable_coilovers: 4,
+    polyurethane_bushings_kit: 3,
+    gearbox_cogs: 5,
+    carbon_driveshaft: 4,
+    launch_control_module: 3,
+    monocoque_frame: 4,
+    canards_vortex: 4,
+    titanium_exhaust_system: 3,
+
+    // Épicas
+    turbocharger: 3,
+    motec_ecu_pro: 2,
+    titanium_valves_springs: 2,
+    carbon_ceramic_calipers: 3,
+    cooling_ducts_brakes: 2,
+    carbon_cooling_fans: 2,
+    michelin_cup_slicks: 3,
+    pushrod_suspension: 2,
+    magnesium_forged_wheels: 2,
+    sequential_dogbox: 3,
+    triple_plate_clutch: 2,
+    pneumatic_paddle_shifters: 2,
+    flat_floor_undertray: 3,
+    polycarbonate_windows: 2,
+    carbon_fiber_doors: 2,
+
+    // Legendarias
+    billet_engine_v8: 1,
+    water_meth_injection: 1,
+    twin_turbo_hybrid_f1: 1,
+    carbon_ceramic_brembo: 1,
+    kers_f1_regen: 1,
+    f1_brake_by_wire: 1,
+    pirelli_f1_slicks: 1,
+    monocoque_chassis_gt: 1,
+    active_magnetic_dampers: 1,
+    f1_dual_clutch_transaxle: 1,
+    vectoring_ediff: 1,
+    carbon_matrix_differential: 1,
+    active_drs_wing: 1,
+    lmp1_aero_body: 1,
+    active_ground_effect_fan: 1
 };
 
 // Packs de Piezas para la Tienda Oficial Web3
@@ -1288,11 +1501,76 @@ function sellPartToMarketplace(partId, priceCr) {
         return { success: false, reason: "No posees unidades de esta pieza en tu inventario" };
     }
 
+    const feeRate = 0.075; // 7.5% comisión de plataforma / royalty para los creadores
+    const royaltyFee = Math.round(priceCr * feeRate);
+    const netCr = Math.max(1, priceCr - royaltyFee);
+
     userData.partsInventory[partId]--;
-    userData.credits += priceCr;
+    userData.credits += netCr;
+    userData.platformTreasuryFees = (userData.platformTreasuryFees || 0) + royaltyFee;
 
     saveNftUserData(userData);
-    return { success: true, partId: partId, earnedCr: priceCr, newCredits: userData.credits };
+    return {
+        success: true,
+        partId: partId,
+        grossCr: priceCr,
+        royaltyFee: royaltyFee,
+        earnedCr: netCr,
+        newCredits: userData.credits
+    };
+}
+
+// =========================================================================
+// 9.1 BILLETERA WEB3 & TON CONNECT (GESTIÓN ON-CHAIN Y TOKENS $CR / TON)
+// =========================================================================
+function connectTonWallet(walletProvider = 'telegram_wallet') {
+    const userData = loadNftUserData();
+    const mockAddr = 'EQB' + Math.random().toString(36).substring(2, 8).toUpperCase() + '...' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    userData.walletConnected = true;
+    userData.walletAddress = mockAddr;
+    userData.walletProvider = walletProvider;
+    saveNftUserData(userData);
+    return { success: true, address: mockAddr, provider: walletProvider };
+}
+
+function disconnectTonWallet() {
+    const userData = loadNftUserData();
+    userData.walletConnected = false;
+    userData.walletAddress = null;
+    userData.walletProvider = null;
+    saveNftUserData(userData);
+    return { success: true };
+}
+
+function buyCrWithTon(tonAmount) {
+    const userData = loadNftUserData();
+    if ((userData.gems || 0) < tonAmount) {
+        return { success: false, reason: "ton_insufficient" };
+    }
+    const crGained = Math.round(tonAmount * 12500); // Tasa: 1 TON = 12.500 $CR
+    userData.gems -= tonAmount;
+    userData.credits += crGained;
+    saveNftUserData(userData);
+    return { success: true, tonSpent: tonAmount, crGained: crGained, credits: userData.credits, gems: userData.gems };
+}
+
+function withdrawCrToTon(crAmount) {
+    const userData = loadNftUserData();
+    if (!userData.walletConnected) {
+        return { success: false, reason: "wallet_not_connected" };
+    }
+    const minWithdraw = 1000;
+    if (crAmount < minWithdraw) {
+        return { success: false, reason: "min_withdraw_not_met", min: minWithdraw };
+    }
+    if ((userData.credits || 0) < crAmount) {
+        return { success: false, reason: "credits_insufficient" };
+    }
+    const tonGained = Number((crAmount / 12500).toFixed(4));
+    userData.credits -= crAmount;
+    userData.gems += tonGained;
+    saveNftUserData(userData);
+    return { success: true, crSpent: crAmount, tonGained: tonGained, credits: userData.credits, gems: userData.gems };
 }
 
 // =========================================================================

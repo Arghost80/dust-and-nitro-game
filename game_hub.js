@@ -215,7 +215,9 @@ function renderHubHeader() {
                         <span class="user-name" id="hub-user-name">${escapeHtml(pilotName)}</span>
                         <button class="btn-edit-pilot-name" id="btn-edit-name-header" title="${t('settings_edit_name') || 'Editar Nombre'}" onclick="event.stopPropagation(); promptChangePilotName();">✏️</button>
                     </div>
-                    <span class="wallet-tag" title="Click para copiar dirección Web3" onclick="event.stopPropagation(); copyWalletAddress();">🔗 0x7F2...88A1</span>
+                    <span class="wallet-tag ${userData.walletConnected ? 'wallet-connected' : 'wallet-disconnected'}" title="Gestionar Billetera Web3 TON Connect" onclick="event.stopPropagation(); openWeb3WalletModal();">
+                        ${userData.walletConnected ? `💎 ${userData.walletAddress}` : '💎 TON CONNECT'}
+                    </span>
                 </div>
             </div>
         </div>
@@ -3187,23 +3189,35 @@ function openPartsMarketplaceModal(activeTab = 'buy') {
                     </div>
                 ` : `
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 10px;">
-                            Selecciona una pieza mecánica de tu inventario para venderla al mercado comunitario y recibir créditos $CR al instante:
+                        <div style="background: rgba(0, 245, 212, 0.08); border: 1px solid rgba(0, 245, 212, 0.25); border-radius: 8px; padding: 10px 14px; font-size: 11px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
+                            <span>🤝 <strong>MERCADO P2P DE JUGADORES</strong>: Vende tus piezas sobrantes a otros pilotos.</span>
+                            <span style="color: #00f5d4; font-weight: 800;">Comisión / Royalty de plataforma: 7.5%</span>
+                        </div>
+                        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 6px;">
+                            Selecciona una pieza mecánica de tu inventario para listarla y venderla al instante:
                         </p>
                         ${Object.entries(inv).filter(([k, v]) => v > 0).map(([partKey, count]) => {
-                            const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey, icon: '🔧', costCr: 300 };
+                            const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey, icon: '🔧', costCr: 300, rarity: 'common' };
                             const sellPrice = Math.round((pDef.costCr || 300) * 0.75);
+                            const royaltyFee = Math.round(sellPrice * 0.075);
+                            const netCr = Math.max(1, sellPrice - royaltyFee);
                             return `
                                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
                                     <div style="display: flex; align-items: center; gap: 12px;">
                                         <span style="font-size: 24px;">${pDef.icon}</span>
                                         <div>
-                                            <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${pDef.name}</div>
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${pDef.name}</div>
+                                                <span class="badge-rarity badge-rarity-${pDef.rarity}">${(pDef.rarity || 'common').toUpperCase()}</span>
+                                            </div>
                                             <div style="font-size: 11px; color: #00f5d4;">En inventario: ${count} unidad${count > 1 ? 'es' : ''}</div>
                                         </div>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 14px;">
-                                        <span style="font-size: 13px; font-weight: 900; color: #10b981;">+${sellPrice.toLocaleString()} $CR</span>
+                                        <div style="text-align: right;">
+                                            <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
+                                            <div style="font-size: 9px; color: #94a3b8;">Precio: ${sellPrice} (Royalty 7.5%: -${royaltyFee})</div>
+                                        </div>
                                         <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer;" onclick="handleSellMarketplacePart('${partKey}', ${sellPrice})">
                                             VENDER 1x
                                         </button>
@@ -3247,7 +3261,7 @@ function handleSellMarketplacePart(partKey, priceCr) {
         hubAudio.playOpenCrate();
         renderHubHeader();
         openPartsMarketplaceModal('sell');
-        alert(`💰 ¡Pieza vendida! Recibiste +${priceCr} $CR en tu billetera.`);
+        alert(`💰 ¡Pieza NFT vendida! Recibiste +${res.earnedCr} $CR netos en tu balance (-${res.royaltyFee} $CR de royalty 7.5% a la plataforma).`);
     }
 }
 
@@ -3264,6 +3278,7 @@ function closePartsMarketplaceModal() {
 // 10. VISTA INVENTARIO DE PIEZAS & TALLER (WORKSHOP INVENTORY)
 // -------------------------------------------------------------
 let inventoryActiveCategory = 'all';
+let inventoryActiveRarity = 'all';
 
 function renderInventoryView() {
     const container = document.getElementById('view-inventory');
@@ -3277,7 +3292,7 @@ function renderInventoryView() {
     const totalPiecesCount = Object.values(inv).reduce((sum, n) => sum + (typeof n === 'number' ? n : 0), 0);
 
     const categories = [
-        { id: 'all', name: 'TODAS LAS PIEZAS', icon: '🎒' },
+        { id: 'all', name: 'TODAS LAS CATEGORÍAS', icon: '🎒' },
         { id: 'speed_power', name: 'MOTOR & VELOCIDAD', icon: '⚡' },
         { id: 'braking', name: 'FRENOS', icon: '🛑' },
         { id: 'handling_grip', name: 'AGARRE & SUSPENSIÓN', icon: '🏎️' },
@@ -3285,26 +3300,46 @@ function renderInventoryView() {
         { id: 'aero_lightness', name: 'AERODINÁMICA', icon: '🪽' }
     ];
 
+    const rarities = [
+        { id: 'all', name: 'TODAS LAS RAREZAS', icon: '✨' },
+        { id: 'common', name: 'COMÚN (STAGE 1)', icon: '⚪' },
+        { id: 'uncommon', name: 'INFRECUENTE (STAGE 2)', icon: '🟢' },
+        { id: 'rare', name: 'RARA (STAGE 3)', icon: '🔵' },
+        { id: 'epic', name: 'ÉPICA (STAGE 4)', icon: '🟣' },
+        { id: 'legendary', name: 'LEGENDARIA (STAGE 5)', icon: '🟡' }
+    ];
+
     const piecesList = Object.entries(catalog).filter(([key, def]) => {
-        if (inventoryActiveCategory === 'all') return true;
-        return def.category === inventoryActiveCategory;
+        const matchCat = (inventoryActiveCategory === 'all') || (def.category === inventoryActiveCategory);
+        const matchRarity = (inventoryActiveRarity === 'all') || (def.rarity === inventoryActiveRarity);
+        return matchCat && matchRarity;
     });
 
     container.innerHTML = `
         <div class="view-header-bar">
             <button class="btn-nav-back" onclick="showHubView('main')">${t('btn_back')}</button>
             <div>
-                <h2 class="view-title">🎒 ALMACÉN & INVENTARIO DE PIEZAS</h2>
+                <h2 class="view-title">🎒 ALMACÉN & INVENTARIO DE PIEZAS NFT</h2>
                 <div class="garage-count-tag">${totalPiecesCount} PIEZAS MECÁNICAS DISPONIBLES EN TU STOCK</div>
             </div>
             <div></div>
         </div>
 
         <div class="inventory-container">
+            <!-- Pestañas de Categoría -->
             <div class="inventory-tabs">
                 ${categories.map(cat => `
                     <button class="inv-tab-btn ${inventoryActiveCategory === cat.id ? 'active' : ''}" onclick="setInventoryCategory('${cat.id}')">
                         ${cat.icon} ${cat.name}
+                    </button>
+                `).join('')}
+            </div>
+
+            <!-- Filtro de Rarezas -->
+            <div class="inventory-rarity-filter-bar" style="display: flex; gap: 6px; overflow-x: auto; padding: 6px 4px; margin-bottom: 12px; scrollbar-width: thin;">
+                ${rarities.map(rar => `
+                    <button class="inv-rarity-btn ${inventoryActiveRarity === rar.id ? 'active' : ''}" onclick="setInventoryRarity('${rar.id}')" style="padding: 6px 12px; background: ${inventoryActiveRarity === rar.id ? 'rgba(0, 245, 212, 0.25)' : 'rgba(15, 23, 42, 0.6)'}; border: 1px solid ${inventoryActiveRarity === rar.id ? '#00f5d4' : 'rgba(255,255,255,0.1)'}; color: ${inventoryActiveRarity === rar.id ? '#00f5d4' : '#94a3b8'}; border-radius: 20px; font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap;">
+                        ${rar.icon} ${rar.name}
                     </button>
                 `).join('')}
             </div>
@@ -3314,17 +3349,20 @@ function renderInventoryView() {
                     const count = inv[key] || 0;
                     const hasStock = count > 0;
                     return `
-                        <div class="inv-part-card ${hasStock ? 'owned' : 'empty'}">
+                        <div class="inv-part-card ${hasStock ? 'owned' : 'empty'} card-rarity-${def.rarity}">
                             <div class="inv-part-top">
                                 <span class="inv-part-icon">${def.icon}</span>
-                                <span class="inv-part-qty ${hasStock ? 'has-stock' : ''}">${hasStock ? `x${count} EN STOCK` : '0 EN STOCK'}</span>
+                                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                                    <span class="inv-part-qty ${hasStock ? 'has-stock' : ''}">${hasStock ? `x${count} EN STOCK` : '0 EN STOCK'}</span>
+                                    <span class="badge-rarity badge-rarity-${def.rarity}">${def.rarity.toUpperCase()}</span>
+                                </div>
                             </div>
-                            <div class="inv-part-cat">${def.category.replace('_', ' ').toUpperCase()}</div>
+                            <div class="inv-part-cat">${def.category.replace('_', ' ').toUpperCase()} • 💎 WEB3 NFT</div>
                             <h4 class="inv-part-name">${def.name}</h4>
                             <p class="inv-part-desc">${def.desc || ''}</p>
                             <div class="inv-part-actions">
                                 <button class="btn-inv-use" onclick="showHubView('garage')" title="Instalar en tu coche equipado">🔧 INSTALAR EN GARAJE</button>
-                                <button class="btn-inv-market" onclick="openPartsMarketplaceModal('buy')" title="Comprar / Vender en mercado comunitario">🤝 P2P</button>
+                                <button class="btn-inv-market" onclick="openPartsMarketplaceModal('sell')" title="Vender en mercado comunitario">🤝 VENDER P2P</button>
                             </div>
                         </div>
                     `;
@@ -3345,9 +3383,233 @@ function setInventoryCategory(catId) {
     inventoryActiveCategory = catId;
     renderInventoryView();
 }
+
+function setInventoryRarity(rarId) {
+    hubAudio.playClick();
+    inventoryActiveRarity = rarId;
+    renderInventoryView();
+}
+
 if (typeof window !== 'undefined') {
     window.renderInventoryView = renderInventoryView;
     window.setInventoryCategory = setInventoryCategory;
+    window.setInventoryRarity = setInventoryRarity;
+    window.openPartsMarketplaceModal = openPartsMarketplaceModal;
+    window.closePartsMarketplaceModal = closePartsMarketplaceModal;
+    window.handleBuyMarketplacePart = handleBuyMarketplacePart;
+    window.handleSellMarketplacePart = handleSellMarketplacePart;
+}
+
+// =========================================================================
+// 11. MODAL BILLETERA WEB3 & TON CONNECT
+// =========================================================================
+function openWeb3WalletModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('wallet-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'wallet-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const userData = loadNftUserData();
+    const isConnected = !!userData.walletConnected;
+    const addr = userData.walletAddress || '';
+    const crBalance = userData.credits || 0;
+    const tonBalance = typeof userData.gems === 'number' ? userData.gems : 0;
+    const pilotLvl = (userData.equippedCarId && userData.carLevels && userData.carLevels[userData.equippedCarId]) || 1;
+    const canWithdraw = pilotLvl >= 3 && crBalance >= 1000;
+
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 600px;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(0, 152, 234, 0.25), rgba(0, 245, 212, 0.2)); border-bottom: 1px solid rgba(0, 152, 234, 0.4);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">💎</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #0098ea;">BILLETERA WEB3 & TON CONNECT</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Gestión on-chain en The Open Network (TON) y tokens $CR del juego</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeWeb3WalletModal()">✖</button>
+            </div>
+
+            <div class="settings-body" style="padding: 20px; max-height: 480px; overflow-y: auto;">
+                ${!isConnected ? `
+                    <div style="text-align: center; padding: 15px 10px;">
+                        <div style="font-size: 40px; margin-bottom: 12px;">🔗</div>
+                        <h3 style="margin: 0 0 8px; color: #ffffff; font-size: 16px;">VINCULA TU BILLETERA TON</h3>
+                        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 20px;">
+                            Conecta tu billetera para recibir ingresos de anuncios, comprar tokens $CR con TON y comerciar con piezas y coches NFT.
+                        </p>
+
+                        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto;">
+                            <button class="btn-wallet-connect" onclick="handleConnectWallet('telegram_wallet')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #0098ea; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
+                                <span>📱</span> CONECTAR CON TELEGRAM WALLET (@wallet)
+                            </button>
+                            <button class="btn-wallet-connect" onclick="handleConnectWallet('tonkeeper')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #2f8af5; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
+                                <span>🛡️</span> CONECTAR TONKEEPER
+                            </button>
+                            <button class="btn-wallet-connect" onclick="handleConnectWallet('mytonwallet')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #ff9900; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
+                                <span>💎</span> CONECTAR MYTONWALLET
+                            </button>
+                        </div>
+                    </div>
+                ` : `
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <!-- ESTADO DE CONEXIÓN -->
+                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(0, 152, 234, 0.3); border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
+                                    <span style="font-size: 12px; font-weight: 800; color: #10b981;">BILLETERA CONECTADA</span>
+                                    <span style="font-size: 11px; color: #94a3b8;">(${userData.walletProvider || 'Telegram Wallet'})</span>
+                                </div>
+                                <div style="font-family: monospace; font-size: 14px; color: #ffffff; font-weight: bold; margin-top: 4px;">${addr}</div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="copyWalletAddress()" style="padding: 6px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 11px; cursor: pointer;">COPIAR</button>
+                                <button onclick="handleDisconnectWallet()" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 11px; cursor: pointer;">DESCONECTAR</button>
+                            </div>
+                        </div>
+
+                        <!-- BALANCES -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                                <div style="font-size: 11px; color: #94a3b8; font-weight: 800;">BALANCE DE TOKENS DEL JUEGO</div>
+                                <div style="font-size: 20px; font-weight: 900; color: #fde047; margin-top: 4px;">💰 ${crBalance.toLocaleString()} $CR</div>
+                                <div style="font-size: 10px; color: #cbd5e1; margin-top: 2px;">Úsalos en mejoras, apuestas y tienda</div>
+                            </div>
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                                <div style="font-size: 11px; color: #94a3b8; font-weight: 800;">BALANCE ON-CHAIN EN TON</div>
+                                <div style="font-size: 20px; font-weight: 900; color: #0098ea; margin-top: 4px;">💎 ${tonBalance.toFixed(2)} TON</div>
+                                <div style="font-size: 10px; color: #cbd5e1; margin-top: 2px;">Pagos de ads e intercambios</div>
+                            </div>
+                        </div>
+
+                        <!-- SWAP: COMPRAR $CR CON TON -->
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(0, 245, 212, 0.2); border-radius: 10px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 900; color: #00f5d4;">🔄 COMPRAR TOKENS $CR CON TON</span>
+                                <span style="font-size: 11px; color: #cbd5e1;">Tasa: 1 TON = 12.500 $CR</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleSwapTonToCr(0.5)">
+                                    0.5 TON<br><span style="color: #fde047; font-size: 10px;">+6.250 $CR</span>
+                                </button>
+                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleSwapTonToCr(1.0)">
+                                    1.0 TON<br><span style="color: #fde047; font-size: 10px;">+12.500 $CR</span>
+                                </button>
+                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleSwapTonToCr(5.0)">
+                                    5.0 TON<br><span style="color: #fde047; font-size: 10px;">+62.500 $CR</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- RETIRO A TON (SISTEMA ANTI-DRENAJE SEGURO) -->
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 10px; padding: 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; font-weight: 900; color: #f87171;">💸 RETIRAR $CR A TON (CASH-OUT)</span>
+                                <span style="font-size: 10px; color: #94a3b8;">Seguridad Anti-Drenaje</span>
+                            </div>
+                            <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 10px;">
+                                Requisitos: <strong>Nivel 3+</strong> de piloto y mínimo <strong>1.000 $CR</strong>.
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(1000)">
+                                    1.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">0.08 TON</span>
+                                </button>
+                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(5000)">
+                                    5.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">0.40 TON</span>
+                                </button>
+                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(10000)">
+                                    10.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">0.80 TON</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `}
+            </div>
+
+            <div class="settings-footer">
+                <button class="btn-settings-save" onclick="closeWeb3WalletModal()">CERRAR</button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function closeWeb3WalletModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('wallet-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function handleConnectWallet(provider) {
+    hubAudio.playClick();
+    if (typeof connectTonWallet === 'function') {
+        const res = connectTonWallet(provider);
+        hubAudio.playLevelUp();
+        renderHubHeader();
+        openWeb3WalletModal();
+        alert(`✅ ¡Billetera vinculada con éxito!\nDirección: ${res.address}`);
+    }
+}
+
+function handleDisconnectWallet() {
+    hubAudio.playClick();
+    if (typeof disconnectTonWallet === 'function') {
+        disconnectTonWallet();
+        renderHubHeader();
+        openWeb3WalletModal();
+        alert('Billetera desconectada.');
+    }
+}
+
+function handleSwapTonToCr(tonAmount) {
+    hubAudio.playClick();
+    if (typeof buyCrWithTon === 'function') {
+        const res = buyCrWithTon(tonAmount);
+        if (!res.success) {
+            alert('Saldo insuficiente de TON para realizar el swap.');
+            return;
+        }
+        hubAudio.playOpenCrate();
+        renderHubHeader();
+        openWeb3WalletModal();
+        alert(`🎉 ¡Swap completado! Recibiste +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} TON.`);
+    }
+}
+
+function handleWithdrawCrToTon(crAmount) {
+    hubAudio.playClick();
+    if (typeof withdrawCrToTon === 'function') {
+        const res = withdrawCrToTon(crAmount);
+        if (!res.success) {
+            if (res.reason === 'wallet_not_connected') alert('Debes conectar una billetera primero.');
+            else if (res.reason === 'min_withdraw_not_met') alert(`Retiro mínimo: ${res.min} $CR.`);
+            else if (res.reason === 'credits_insufficient') alert('Créditos $CR insuficientes.');
+            return;
+        }
+        hubAudio.playOpenCrate();
+        renderHubHeader();
+        openWeb3WalletModal();
+        alert(`✅ ¡Retiro procesado! Transferidos ${res.tonGained} TON a tu billetera (-${res.crSpent.toLocaleString()} $CR).`);
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.openWeb3WalletModal = openWeb3WalletModal;
+    window.closeWeb3WalletModal = closeWeb3WalletModal;
+    window.handleConnectWallet = handleConnectWallet;
+    window.handleDisconnectWallet = handleDisconnectWallet;
+    window.handleSwapTonToCr = handleSwapTonToCr;
+    window.handleWithdrawCrToTon = handleWithdrawCrToTon;
 }
 
 // Secuencia de Salida FIA y Animación de Carga de Competición

@@ -3539,3 +3539,75 @@
     border-color: #00f5d4;
     color: #00f5d4;
 }
+
+/* Insignias de Rareza de Piezas Motorsport */
+.badge-rarity {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.badge-rarity-common {
+    background: rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.5);
+}
+.badge-rarity-uncommon {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.5);
+}
+.badge-rarity-rare {
+    background: rgba(14, 165, 233, 0.2);
+    color: #38bdf8;
+    border: 1px solid rgba(14, 165, 233, 0.5);
+}
+.badge-rarity-epic {
+    background: rgba(168, 85, 247, 0.2);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.5);
+}
+.badge-rarity-legendary {
+    background: rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.7);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+/* Bordes y Resplandores de Tarjetas de Piezas según Rareza */
+.card-rarity-common.owned { border-color: rgba(148, 163, 184, 0.35); }
+.card-rarity-uncommon.owned { border-color: rgba(16, 185, 129, 0.45); }
+.card-rarity-rare.owned { border-color: rgba(14, 165, 233, 0.45); }
+.card-rarity-epic.owned { border-color: rgba(168, 85, 247, 0.55); box-shadow: 0 0 12px rgba(168, 85, 247, 0.2); }
+.card-rarity-legendary.owned { border-color: rgba(245, 158, 11, 0.7); box-shadow: 0 0 16px rgba(245, 158, 11, 0.3); }
+
+/* Billetera Web3 & TON Connect */
+.wallet-tag {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.wallet-tag.wallet-connected {
+    background: rgba(16, 185, 129, 0.2) !important;
+    color: #34d399 !important;
+    border: 1px solid #10b981 !important;
+}
+.wallet-tag.wallet-disconnected {
+    background: rgba(0, 152, 234, 0.2) !important;
+    color: #38bdf8 !important;
+    border: 1px solid #0098ea !important;
+    animation: pulseGlow 2.5s infinite;
+}
+@keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 4px rgba(0, 152, 234, 0.4); }
+    50% { box-shadow: 0 0 12px rgba(0, 152, 234, 0.8); }
+}
+.btn-wallet-connect {
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+.btn-wallet-connect:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
