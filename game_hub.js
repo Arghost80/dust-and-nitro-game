@@ -1313,7 +1313,7 @@ function buyEnergyPackShop(packKey) {
 }
 
 // ===== INTEGRACIÓN OFICIAL ADSGRAM (REWARDED VIDEO ADS) =====
-const ADSGRAM_BLOCK_ID = '51228';
+const ADSGRAM_BLOCK_ID = '54054';
 
 function launchAdsgramRewardedAd(onSuccess, onFallback) {
     if (window.Adsgram && typeof window.Adsgram.init === 'function') {
