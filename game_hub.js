@@ -3241,6 +3241,86 @@ function closePartsMarketplaceModal() {
     }
 }
 
+// Secuencia de Salida FIA y Animación de Carga de Competición
+function runRacingPreloaderSequence() {
+    const preloader = document.getElementById('game-preloader');
+    if (!preloader) return;
+
+    const fill = document.getElementById('preloader-fill');
+    const pct = document.getElementById('preloader-pct');
+    const rpm = document.getElementById('preloader-rpm');
+    const tip = document.getElementById('preloader-tip');
+    const status = document.getElementById('fia-status');
+
+    const tips = [
+        "🔥 Calentando neumáticos slick y ajustando presiones...",
+        "🏎️ Calibrando telemetría del Apex Cadet 1.0...",
+        "🧪 Comprobando inyectores de Óxido Nitroso N2O...",
+        "🏁 Semáforo de salida activado: ¡GAS A FONDO!"
+    ];
+
+    let currentPct = 0;
+    const timer = setInterval(() => {
+        currentPct += 8;
+        if (currentPct > 100) currentPct = 100;
+
+        if (fill) fill.style.width = currentPct + '%';
+        if (pct) pct.textContent = currentPct + '%';
+        if (rpm) rpm.textContent = Math.round((currentPct / 100) * 8500) + ' RPM';
+
+        // Encendido progresivo de las 5 luces rojas FIA
+        if (currentPct >= 20) {
+            const l1 = document.getElementById('fia-l1');
+            if (l1) l1.classList.add('active-red');
+            if (tip && currentPct < 40) tip.textContent = tips[0];
+        }
+        if (currentPct >= 40) {
+            const l2 = document.getElementById('fia-l2');
+            if (l2) l2.classList.add('active-red');
+            if (tip && currentPct < 60) tip.textContent = tips[1];
+        }
+        if (currentPct >= 60) {
+            const l3 = document.getElementById('fia-l3');
+            if (l3) l3.classList.add('active-red');
+            if (tip && currentPct < 80) tip.textContent = tips[2];
+        }
+        if (currentPct >= 80) {
+            const l4 = document.getElementById('fia-l4');
+            if (l4) l4.classList.add('active-red');
+        }
+        if (currentPct >= 100) {
+            clearInterval(timer);
+            const l5 = document.getElementById('fia-l5');
+            if (l5) l5.classList.add('active-red');
+            if (status) {
+                status.textContent = "GREEN LIGHTS!";
+                status.style.color = "#10b981";
+            }
+            if (tip) tip.textContent = tips[3];
+
+            // Salida con semáforos verdes tras completar el 100%
+            setTimeout(() => {
+                for (let i = 1; i <= 5; i++) {
+                    const l = document.getElementById('fia-l' + i);
+                    if (l) {
+                        l.classList.remove('active-red');
+                        l.classList.add('active-green');
+                    }
+                }
+
+                // Desvanecimiento suave
+                setTimeout(() => {
+                    preloader.classList.add('fade-out');
+                    setTimeout(() => {
+                        preloader.style.display = 'none';
+                    }, 500);
+                }, 280);
+            }, 180);
+        }
+    }, 40);
+}
+if (typeof window !== 'undefined') window.runRacingPreloaderSequence = runRacingPreloaderSequence;
+
 // Inicialización automática tolerante a si DOMContentLoaded ya ocurrió o no
 function initGameHub() {
     try {
@@ -3251,6 +3331,7 @@ function initGameHub() {
         }
         renderHubHeader();
         showHubView('main');
+        runRacingPreloaderSequence();
     } catch(e) {
         console.error('Error inicializando Hub:', e);
     }

@@ -1216,6 +1216,32 @@ if (!garageContent.includes('INICIAL F2P') || !garageContent.includes('NO-NFT'))
 }
 console.log('✓ Garaje muestra la insignia "NO-NFT" y categoría "INICIAL F2P" para el Apex Cadet');
 
+console.log('\n--- VERIFICANDO PANTALLA DE CARGA Y PRESENTACIÓN DE CARRERAS (V65) ---');
+const updatedHtml = fs.readFileSync('index.html', 'utf8');
+const updatedCss = fs.readFileSync('hub_styles.css', 'utf8');
+
+if (!updatedHtml.includes('id="game-preloader"')) {
+    throw new Error('index.html debe contener el elemento #game-preloader');
+}
+if (!updatedHtml.includes('class="fia-gantry"') || !updatedHtml.includes('id="fia-l1"')) {
+    throw new Error('index.html debe contener el semáforo FIA de 5 luces');
+}
+if (!updatedHtml.includes('class="racing-car-svg"') || !updatedHtml.includes('class="preloader-cars-stage"')) {
+    throw new Error('index.html debe contener la ilustración de coches de carreras enfrentados');
+}
+if (!updatedHtml.includes('id="preloader-fill"') || !updatedHtml.includes('id="preloader-rpm"')) {
+    throw new Error('index.html debe incluir el tacómetro de progreso');
+}
+if (!updatedCss.includes('.game-preloader') || !updatedCss.includes('.fia-light.active-green')) {
+    throw new Error('hub_styles.css debe definir los estilos de la pantalla de carga y luces FIA');
+}
+
+const preloaderFn = vm.runInContext('typeof window.runRacingPreloaderSequence', ctx);
+if (preloaderFn !== 'function') {
+    throw new Error('runRacingPreloaderSequence debe estar definida en window');
+}
+console.log('✓ Pantalla de carga con semáforo FIA 5 luces, coches GT3 enfrentados y tacómetro RPM verificada al 100%');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
