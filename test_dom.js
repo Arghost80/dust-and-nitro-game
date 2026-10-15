@@ -1226,21 +1226,21 @@ if (!updatedHtml.includes('id="game-preloader"')) {
 if (!updatedHtml.includes('class="fia-gantry"') || !updatedHtml.includes('id="fia-l1"')) {
     throw new Error('index.html debe contener el semáforo FIA de 5 luces');
 }
-if (!updatedHtml.includes('class="racing-car-svg"') || !updatedHtml.includes('class="preloader-cars-stage"')) {
-    throw new Error('index.html debe contener la ilustración de coches de carreras enfrentados');
+if (!updatedHtml.includes('class="preloader-hero-bg"') || !updatedHtml.includes('class="preloader-overlay"')) {
+    throw new Error('index.html debe contener el fondo realista preloader-hero-bg');
 }
 if (!updatedHtml.includes('id="preloader-fill"') || !updatedHtml.includes('id="preloader-rpm"')) {
     throw new Error('index.html debe incluir el tacómetro de progreso');
 }
-if (!updatedCss.includes('.game-preloader') || !updatedCss.includes('.fia-light.active-green')) {
-    throw new Error('hub_styles.css debe definir los estilos de la pantalla de carga y luces FIA');
+if (!updatedCss.includes('racing_splash_cover.jpg') || !updatedCss.includes('.preloader-hero-bg')) {
+    throw new Error('hub_styles.css debe vincular racing_splash_cover.jpg');
 }
 
 const preloaderFn = vm.runInContext('typeof window.runRacingPreloaderSequence', ctx);
 if (preloaderFn !== 'function') {
     throw new Error('runRacingPreloaderSequence debe estar definida en window');
 }
-console.log('✓ Pantalla de carga con semáforo FIA 5 luces, coches GT3 enfrentados y tacómetro RPM verificada al 100%');
+console.log('✓ Pantalla de carga cinematográfica hiperrealista GT3 con semáforo FIA 5 luces y tacómetro verificada al 100%');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

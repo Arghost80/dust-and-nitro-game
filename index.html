@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Apex Motorsport - Web3 NFT GT Circuit Edition</title>
-    <link rel="stylesheet" href="style.css?v=65">
-    <link rel="stylesheet" href="hub_styles.css?v=65">
+    <link rel="stylesheet" href="style.css?v=66">
+    <link rel="stylesheet" href="hub_styles.css?v=66">
     <!-- Telegram WebApp SDK (carga asíncrona no bloqueante) -->
     <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <!-- Adsgram SDK Oficial (Rewarded Video Ads para Telegram Mini Apps) -->
@@ -14,9 +14,10 @@
     <script src="assets/phaser.min.js"></script>
 </head>
 <body>
-    <!-- PANTALLA DE CARGA Y PRESENTACIÓN DE CARRERAS (RACING PRELOADER) -->
+    <!-- PANTALLA DE CARGA Y PRESENTACIÓN DE CARRERAS (RACING PRELOADER REALISTA) -->
     <div id="game-preloader" class="game-preloader">
-        <div class="preloader-bg-ambient"></div>
+        <div class="preloader-hero-bg"></div>
+        <div class="preloader-overlay"></div>
         <div class="preloader-content">
             <!-- Semáforo de Salida FIA (5 Luces de Competición) -->
             <div class="fia-gantry">
@@ -30,82 +31,20 @@
                 <div class="fia-status-badge" id="fia-status">START SEQUENCE</div>
             </div>
 
-            <!-- Logo y Emblema de Carreras -->
+            <!-- Logo y Emblema de Carreras Pro -->
             <div class="preloader-branding">
-                <div class="preloader-badge">⚡ WEB3 MOTORSPORT ⚡</div>
+                <div class="preloader-badge">⚡ OFFICIAL GT MOTORSPORT ⚡</div>
                 <h1 class="preloader-title">DUST <span class="accent-nitro">&</span> NITRO</h1>
-                <div class="preloader-subtitle">GT CIRCUIT RACING CHAMPIONSHIP</div>
+                <div class="preloader-subtitle">APEX WORLD CHAMPIONSHIP</div>
             </div>
 
-            <!-- Ilustración de Coches de Carreras enfrentados -->
-            <div class="preloader-cars-stage">
-                <div class="car-rival car-red-gt">
-                    <div class="car-headlight left"></div>
-                    <div class="car-headlight right"></div>
-                    <svg viewBox="0 0 160 80" class="racing-car-svg">
-                        <defs>
-                            <linearGradient id="gtRedGrad" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stop-color="#ef4444"/>
-                                <stop offset="50%" stop-color="#dc2626"/>
-                                <stop offset="100%" stop-color="#991b1b"/>
-                            </linearGradient>
-                            <linearGradient id="gtCockpit" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="#38bdf8"/>
-                                <stop offset="100%" stop-color="#0369a1"/>
-                            </linearGradient>
-                        </defs>
-                        <!-- Spoiler alerón GT3 -->
-                        <rect x="8" y="18" width="8" height="44" rx="2" fill="#0f172a" stroke="#ef4444" stroke-width="1.5"/>
-                        <!-- Chasis aerodinámico -->
-                        <path d="M 16 26 L 50 20 L 95 18 L 135 25 L 152 35 L 152 45 L 135 55 L 95 62 L 50 60 L 16 54 Z" fill="url(#gtRedGrad)" stroke="#fee2e2" stroke-width="1"/>
-                        <!-- Cockpit cabina de carreras -->
-                        <path d="M 55 28 L 85 26 L 105 32 L 105 48 L 85 54 L 55 52 Z" fill="url(#gtCockpit)"/>
-                        <!-- Líneas de carrera vinilo -->
-                        <path d="M 16 40 L 150 40" stroke="#ffffff" stroke-width="3" stroke-dasharray="12 4"/>
-                        <!-- Ruedas slick -->
-                        <rect x="32" y="10" width="22" height="10" rx="3" fill="#18181b" stroke="#facc15" stroke-width="1"/>
-                        <rect x="32" y="60" width="22" height="10" rx="3" fill="#18181b" stroke="#facc15" stroke-width="1"/>
-                        <rect x="110" y="11" width="24" height="10" rx="3" fill="#18181b" stroke="#facc15" stroke-width="1"/>
-                        <rect x="110" y="59" width="24" height="10" rx="3" fill="#18181b" stroke="#facc15" stroke-width="1"/>
-                    </svg>
-                    <div class="underglow-red"></div>
-                </div>
-
-                <div class="vs-badge">VS</div>
-
-                <div class="car-rival car-cyan-gt">
-                    <div class="car-headlight left"></div>
-                    <div class="car-headlight right"></div>
-                    <svg viewBox="0 0 160 80" class="racing-car-svg flipped">
-                        <defs>
-                            <linearGradient id="gtCyanGrad" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stop-color="#06b6d4"/>
-                                <stop offset="50%" stop-color="#0284c7"/>
-                                <stop offset="100%" stop-color="#1e3a8a"/>
-                            </linearGradient>
-                        </defs>
-                        <!-- Spoiler alerón GT3 -->
-                        <rect x="8" y="18" width="8" height="44" rx="2" fill="#0f172a" stroke="#06b6d4" stroke-width="1.5"/>
-                        <!-- Chasis aerodinámico -->
-                        <path d="M 16 26 L 50 20 L 95 18 L 135 25 L 152 35 L 152 45 L 135 55 L 95 62 L 50 60 L 16 54 Z" fill="url(#gtCyanGrad)" stroke="#cffafe" stroke-width="1"/>
-                        <!-- Cockpit cabina de carreras -->
-                        <path d="M 55 28 L 85 26 L 105 32 L 105 48 L 85 54 L 55 52 Z" fill="#0f172a"/>
-                        <!-- Líneas de carrera vinilo -->
-                        <path d="M 16 40 L 150 40" stroke="#facc15" stroke-width="3" stroke-dasharray="12 4"/>
-                        <!-- Ruedas slick -->
-                        <rect x="32" y="10" width="22" height="10" rx="3" fill="#18181b" stroke="#38bdf8" stroke-width="1"/>
-                        <rect x="32" y="60" width="22" height="10" rx="3" fill="#18181b" stroke="#38bdf8" stroke-width="1"/>
-                        <rect x="110" y="11" width="24" height="10" rx="3" fill="#18181b" stroke="#38bdf8" stroke-width="1"/>
-                        <rect x="110" y="59" width="24" height="10" rx="3" fill="#18181b" stroke="#38bdf8" stroke-width="1"/>
-                    </svg>
-                    <div class="underglow-cyan"></div>
-                </div>
-            </div>
+            <!-- Espaciador dinámico para dejar lucir los coches hiperrealistas en el centro -->
+            <div class="preloader-spacer"></div>
 
             <!-- Tacómetro / Barra de Progreso de Aceleración -->
             <div class="preloader-progress-box">
                 <div class="tachometer-header">
-                    <span class="tacho-label">🚀 TELEMETRÍA DE SALIDA</span>
+                    <span class="tacho-label">🚀 TELEMETRÍA EN DIRECTO</span>
                     <span class="tacho-rpm" id="preloader-rpm">0 RPM</span>
                     <span class="tacho-percent" id="preloader-pct">0%</span>
                 </div>
@@ -188,10 +127,10 @@
     </div>
 
     <!-- Módulos de Datos, Traducciones y Lógica Web3 -->
-    <script src="translations.js?v=65"></script>
-    <script src="nft_cars_data.js?v=65"></script>
-    <script src="tracks_data.js?v=65"></script>
-    <script src="dustrac_game.js?v=65"></script>
-    <script src="game_hub.js?v=65"></script>
+    <script src="translations.js?v=66"></script>
+    <script src="nft_cars_data.js?v=66"></script>
+    <script src="tracks_data.js?v=66"></script>
+    <script src="dustrac_game.js?v=66"></script>
+    <script src="game_hub.js?v=66"></script>
 </body>
 </html>

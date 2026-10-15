@@ -3039,13 +3039,30 @@
     pointer-events: none;
 }
 
-.preloader-bg-ambient {
+.preloader-hero-bg {
     position: absolute;
     inset: 0;
-    background: 
-        radial-gradient(circle at 50% 20%, rgba(6, 182, 212, 0.15) 0%, transparent 60%),
-        radial-gradient(circle at 50% 80%, rgba(239, 68, 68, 0.15) 0%, transparent 60%),
-        linear-gradient(180deg, #070b14 0%, #030712 100%);
+    background: url('assets/racing_splash_cover.jpg') center center / cover no-repeat;
+    transform: scale(1.0);
+    animation: splashZoom 6s ease-out forwards;
+    filter: brightness(0.95) contrast(1.08);
+}
+
+@keyframes splashZoom {
+    0% { transform: scale(1.0); }
+    100% { transform: scale(1.06); }
+}
+
+.preloader-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(5, 8, 17, 0.84) 0%,
+        rgba(5, 8, 17, 0.20) 28%,
+        rgba(5, 8, 17, 0.35) 60%,
+        rgba(5, 8, 17, 0.94) 100%
+    );
     pointer-events: none;
 }
 
@@ -3055,12 +3072,20 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     width: 92%;
     max-width: 440px;
+    height: 92vh;
+    max-height: 820px;
     text-align: center;
-    gap: 16px;
-    padding: 20px;
+    padding: 16px 10px;
+    box-sizing: border-box;
+}
+
+.preloader-spacer {
+    flex: 1;
+    min-height: 120px;
+    pointer-events: none;
 }
 
 /* Semáforo FIA 5 Luces */
@@ -3069,16 +3094,18 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
+    margin-top: 8px;
 }
 
 .fia-gantry-frame {
     display: flex;
     gap: 10px;
-    background: #090d16;
+    background: rgba(9, 13, 22, 0.85);
+    backdrop-filter: blur(8px);
     border: 2px solid #1e293b;
     padding: 8px 16px;
     border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 .fia-light {
@@ -3114,123 +3141,45 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
+    background: rgba(5, 8, 17, 0.6);
+    backdrop-filter: blur(6px);
+    padding: 8px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .preloader-badge {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 900;
     letter-spacing: 2.5px;
     color: #38bdf8;
-    background: rgba(56, 189, 248, 0.1);
-    border: 1px solid rgba(56, 189, 248, 0.3);
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.35);
     padding: 3px 12px;
     border-radius: 12px;
 }
 
 .preloader-title {
-    font-size: 32px;
+    font-size: 34px;
     font-weight: 900;
     font-style: italic;
     letter-spacing: 2px;
     margin: 0;
     line-height: 1.1;
     color: #f8fafc;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
 }
 
 .accent-nitro {
     color: #f59e0b;
-    text-shadow: 0 0 16px rgba(245, 158, 11, 0.6);
+    text-shadow: 0 0 16px rgba(245, 158, 11, 0.7);
 }
 
 .preloader-subtitle {
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 1.5px;
-    color: #64748b;
-}
-
-/* Escenario de Coches Enfrentados */
-.preloader-cars-stage {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    margin: 8px 0;
-    position: relative;
-}
-
-.car-rival {
-    position: relative;
-    width: 140px;
-    height: 70px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.racing-car-svg {
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.8));
-    animation: carRumble 0.18s infinite alternate ease-in-out;
-}
-
-.racing-car-svg.flipped {
-    transform: scaleX(-1);
-    animation: carRumbleFlipped 0.22s infinite alternate ease-in-out;
-}
-
-@keyframes carRumble {
-    0% { transform: translateY(0px) rotate(0deg); }
-    100% { transform: translateY(-1.5px) rotate(-0.5deg); }
-}
-
-@keyframes carRumbleFlipped {
-    0% { transform: scaleX(-1) translateY(0px) rotate(0deg); }
-    100% { transform: scaleX(-1) translateY(-1.5px) rotate(0.5deg); }
-}
-
-.underglow-red {
-    position: absolute;
-    bottom: 6px;
-    left: 20px;
-    right: 20px;
-    height: 12px;
-    background: rgba(239, 68, 68, 0.5);
-    filter: blur(8px);
-    border-radius: 50%;
-    pointer-events: none;
-}
-
-.underglow-cyan {
-    position: absolute;
-    bottom: 6px;
-    left: 20px;
-    right: 20px;
-    height: 12px;
-    background: rgba(6, 182, 212, 0.5);
-    filter: blur(8px);
-    border-radius: 50%;
-    pointer-events: none;
-}
-
-.vs-badge {
-    font-size: 13px;
-    font-weight: 900;
-    font-style: italic;
-    background: #0f172a;
-    color: #facc15;
-    border: 2px solid #334155;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 -8px;
-    z-index: 3;
-    box-shadow: 0 0 12px rgba(250, 204, 21, 0.3);
+    color: #94a3b8;
 }
 
 /* Tacómetro y Barra de Progreso */
@@ -3239,6 +3188,14 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    background: rgba(8, 12, 22, 0.75);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 12px 14px;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+    margin-bottom: 8px;
+    box-sizing: border-box;
 }
 
 .tachometer-header {
