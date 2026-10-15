@@ -1314,16 +1314,15 @@ function buyEnergyPackShop(packKey) {
 
 // ===== INTEGRACIÓN OFICIAL ADSGRAM (REWARDED VIDEO ADS) =====
 const ADSGRAM_BLOCK_ID = '54054';
+// Poner en true en cuanto Adsgram apruebe la moderación de la plataforma
+const ADSGRAM_ACTIVE = false;
 
 function launchAdsgramRewardedAd(onSuccess, onFallback) {
-    if (window.Adsgram && typeof window.Adsgram.init === 'function') {
+    if (ADSGRAM_ACTIVE && window.Adsgram && typeof window.Adsgram.init === 'function') {
         try {
             console.log('🎬 Inicializando anuncio de Adsgram con blockId:', ADSGRAM_BLOCK_ID);
-            // Modo debug activo para permitir tests inmediatos mientras Adsgram aprueba la moderación
             const AdController = window.Adsgram.init({
-                blockId: ADSGRAM_BLOCK_ID,
-                debug: true,
-                debugBannerType: 'RewardedVideo'
+                blockId: ADSGRAM_BLOCK_ID
             });
             AdController.show().then((result) => {
                 console.log('✅ Anuncio Adsgram completado con éxito:', result);
