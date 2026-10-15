@@ -4348,22 +4348,40 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         { name: "Sahara Dune Runner", texture: "car_orange", colorHex: "#ea580c", archetype: "dakar_truck", speed: 342, accel: 272, handling: 4.1, driver: "Tarek 'Sand' Mansour", laneOffset: 14, drivingStyle: "draft_passer" }
     ];
 
-    // Mezclar y elegir exactamente: 2 Coches Buenos (Tier A), 1 Medio (Tier B), 2 Coches Lentos (Tier C)
-    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
-    const chosenA = shuffle(AI_TIER_A).slice(0, 2);
-    const chosenB = shuffle(AI_TIER_B).slice(0, 1);
-    const chosenC = shuffle(AI_TIER_C).slice(0, 2);
-    let gridRivals = shuffle([...chosenA, ...chosenB, ...chosenC]);
+    const AI_TIER_ROOKIE = [
+        { name: "Novice Kart 50", texture: "car_yellow", colorHex: "#facc15", archetype: "hot_hatch", speed: 292, accel: 210, handling: 3.9, driver: "Leo 'Trainee' Gomez", laneOffset: 16, drivingStyle: "sweeper" },
+        { name: "Club Sport 100", texture: "car_grey", colorHex: "#94a3b8", archetype: "rally_evo", speed: 296, accel: 215, handling: 4.0, driver: "Nico 'Paddock' Sanz", laneOffset: -16, drivingStyle: "draft_passer" },
+        { name: "Rust & Roll Hatch", texture: "car_pink", colorHex: "#ec4899", archetype: "hot_hatch", speed: 288, accel: 205, handling: 3.8, driver: "Pablo 'Bumper' Diaz", laneOffset: 12, drivingStyle: "apex_hunter" },
+        { name: "Scrapville Cruiser", texture: "car_green", colorHex: "#16a34a", archetype: "bentley_gt3", speed: 298, accel: 218, handling: 4.0, driver: "Sam 'Sunday' Miller", laneOffset: -12, drivingStyle: "sweeper" },
+        { name: "Amateur Cup Racer", texture: "car_orange", colorHex: "#ea580c", archetype: "jdm_supra", speed: 294, accel: 212, handling: 3.9, driver: "Lucas 'Drifter' Rios", laneOffset: 0, drivingStyle: "draft_passer" },
+        { name: "Oldtimer Sprint", texture: "car_blue", colorHex: "#3b82f6", archetype: "le_mans_proto", speed: 290, accel: 208, handling: 3.9, driver: "Felix 'Steady' Stone", laneOffset: -18, drivingStyle: "apex_hunter" }
+    ];
+    if (typeof window !== 'undefined') window.AI_TIER_ROOKIE = AI_TIER_ROOKIE;
 
-    // Garantizar máxima diversidad táctica en la parrilla (al menos 1 cazador de ápice y 1 trazada amplia)
-    const currentStyles = gridRivals.map(r => r.drivingStyle);
-    if (!currentStyles.includes('sweeper')) {
-        const swp = [...AI_TIER_A, ...AI_TIER_B, ...AI_TIER_C].find(r => r.drivingStyle === 'sweeper');
-        if (swp) gridRivals[gridRivals.length - 1] = swp;
-    }
-    if (!currentStyles.includes('apex_hunter')) {
-        const apx = [...AI_TIER_A, ...AI_TIER_B, ...AI_TIER_C].find(r => r.drivingStyle === 'apex_hunter');
-        if (apx) gridRivals[0] = apx;
+    // Calibración de dificultad por circuito: los primeros circuitos son asequibles para el coche inicial F2P
+    const isBeginnerTrack = (currentTrackId === 'rookie_ring' || currentTrackId === 'radiator_oval');
+    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+    let gridRivals;
+
+    if (isBeginnerTrack) {
+        gridRivals = shuffle(AI_TIER_ROOKIE).slice(0, 5);
+    } else {
+        // Mezclar y elegir exactamente: 2 Coches Buenos (Tier A), 1 Medio (Tier B), 2 Coches Lentos (Tier C)
+        const chosenA = shuffle(AI_TIER_A).slice(0, 2);
+        const chosenB = shuffle(AI_TIER_B).slice(0, 1);
+        const chosenC = shuffle(AI_TIER_C).slice(0, 2);
+        gridRivals = shuffle([...chosenA, ...chosenB, ...chosenC]);
+
+        // Garantizar máxima diversidad táctica en la parrilla (al menos 1 cazador de ápice y 1 trazada amplia)
+        const currentStyles = gridRivals.map(r => r.drivingStyle);
+        if (!currentStyles.includes('sweeper')) {
+            const swp = [...AI_TIER_A, ...AI_TIER_B, ...AI_TIER_C].find(r => r.drivingStyle === 'sweeper');
+            if (swp) gridRivals[gridRivals.length - 1] = swp;
+        }
+        if (!currentStyles.includes('apex_hunter')) {
+            const apx = [...AI_TIER_A, ...AI_TIER_B, ...AI_TIER_C].find(r => r.drivingStyle === 'apex_hunter');
+            if (apx) gridRivals[0] = apx;
+        }
     }
 
     const isWager = Boolean(typeof window !== 'undefined' && window.activeWagerConfig);
@@ -6112,13 +6130,21 @@ function endRace() {
         showMenu(raceScene);
     });
 
-    // Botón Salir al Hub Principal
-    const hubBtn = raceScene.add.text(480, btnY + 44, '🏠 SALIR AL HUB PRINCIPAL (GARAJE / CAJAS / TIENDA)', {
-        font: 'bold 11px Arial', fill: '#ffffff', backgroundColor: '#e53935', padding: { x: 16, y: 7 }
+    // Botón Salir al Hub Principal (o Garaje para tunear en caso de victoria inicial)
+    const isBeginnerWin = isPodium && (currentTrackId === 'rookie_ring' || currentTrackId === 'radiator_oval');
+    const hubBtnText = isBeginnerWin
+        ? '🔧 IR AL GARAJE A TUNEAR TU APEX CADET (+TOKEN $CR LISTOS) 🚀'
+        : '🏠 SALIR AL HUB PRINCIPAL (GARAJE / CAJAS / TIENDA)';
+    const hubBtnBg = isBeginnerWin ? '#d97706' : '#e53935';
+
+    const hubBtn = raceScene.add.text(480, btnY + 44, hubBtnText, {
+        font: 'bold 11px Arial', fill: '#ffffff', backgroundColor: hubBtnBg, padding: { x: 16, y: 7 }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true });
 
     hubBtn.on('pointerdown', () => {
-        if (window.returnToGameHub) window.returnToGameHub();
+        if (window.returnToGameHub) {
+            window.returnToGameHub(isBeginnerWin ? 'garage' : 'main');
+        }
     });
 }
 

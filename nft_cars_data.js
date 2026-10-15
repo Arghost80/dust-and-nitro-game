@@ -43,6 +43,9 @@ function makeStats(p, v, a, ag, f, m, t, d, tr, l) {
 // 73 Modelos Base clasificados por Rareza y Presupuesto de Puntos con 24 siluetas visuales únicas:
 // Comunes: 10 a 12 Puntos | Infrecuentes: 15 a 16 Puntos | Raros: 20 a 22 Puntos | Legendarios: 26 a 28 Puntos
 const NFT_CAR_MODELS = [
+    // --- VEHÍCULO INICIAL FREE-TO-PLAY (No-NFT / Presupuesto: 7 Puntos) ---
+    { id: "s_01", name: "Apex Cadet 1.0", rarity: "starter", isNft: false, sprite: "car_grey", visualId: 23, desc: "Vehículo escuela de iniciación. No es NFT pero se puede tunear y potenciar en el taller.", stats: makeStats(1,1,1,1,1,1,0,0,1,0) },
+
     // --- 28 COMUNES (Presupuesto: 10 - 12 Puntos) ---
     { id: "c_01", name: "Monza Hatch 1.4", rarity: "common", sprite: "car_red", visualId: 23, desc: "Compacto ágil urbano ideal para principiantes", stats: makeStats(1,2,1,1,1,1,1,1,1,1) },
     { id: "c_02", name: "Tokyo Metro Turbo", rarity: "common", sprite: "car_blue", visualId: 13, desc: "Hatchback japonés con turbo ligero", stats: makeStats(1,2,2,1,1,1,1,1,1,1) },
@@ -411,41 +414,41 @@ function loadNftUserData() {
         if (raw) data = JSON.parse(raw);
     } catch(e) {}
 
-    const starterColor = NFT_CAR_COLORS[0];
-    const starterModel = NFT_CAR_MODELS[0];
+    const starterColor = NFT_CAR_COLORS.find(c => c.name.includes("Grey")) || NFT_CAR_COLORS[0];
+    const starterModel = NFT_CAR_MODELS.find(m => m.id === "s_01") || NFT_CAR_MODELS[0];
     const starterCar = {
-        instanceId: "nft_inst_001",
+        instanceId: "inst_starter_01",
         modelId: starterModel.id,
         name: starterModel.name,
-        rarity: starterModel.rarity,
+        rarity: starterModel.rarity || "starter",
+        isNft: false,
         visualId: starterModel.visualId || 23,
         stats: { ...starterModel.stats },
         level: 1,
         xp: 0,
-        xpNeeded: 250,
+        xpNeeded: 150,
         parts: { ecu: 0, tires: 0, brakes: 0, turbo: 0, chassis: 0 },
         colorName: starterColor.name,
         colorHex: starterColor.hex,
         tint: starterColor.tint,
-        mintNumber: 1042,
-        tokenHash: "0x7a3f89b...c41e",
-        sprite: starterModel.sprite,
+        mintNumber: 0,
+        tokenHash: "NO-NFT (SERIE)",
+        sprite: starterModel.sprite || "car_grey",
         obtainedAt: Date.now()
     };
 
     if (!data || typeof data.credits !== 'number' || typeof data.gems !== 'number' || !Array.isArray(data.garage) || data.garage.length === 0) {
         data = {
-            credits: (data && typeof data.credits === 'number') ? data.credits : 1000000,
-            gems: (data && typeof data.gems === 'number') ? data.gems : 50000,
+            credits: (data && typeof data.credits === 'number') ? data.credits : 100,
+            gems: (data && typeof data.gems === 'number') ? data.gems : 10,
             equippedInstanceId: (data && data.equippedInstanceId) ? data.equippedInstanceId : starterCar.instanceId,
             garage: (data && Array.isArray(data.garage) && data.garage.length > 0) ? data.garage : [starterCar]
         };
         saveNftUserData(data);
     }
 
-    // Auto-recarga para modo pruebas si el saldo es inferior a las cantidades de test
-    if (typeof data.credits !== 'number' || data.credits < 500000) data.credits = 1000000;
-    if (typeof data.gems !== 'number' || data.gems < 10000) data.gems = 50000;
+    if (typeof data.credits !== 'number') data.credits = 100;
+    if (typeof data.gems !== 'number') data.gems = 10;
     if (!Array.isArray(data.garage) || data.garage.length === 0) data.garage = [starterCar];
     if (!data.equippedInstanceId && data.garage[0]) data.equippedInstanceId = data.garage[0].instanceId;
     if (typeof data.nitros !== 'number') data.nitros = 2;

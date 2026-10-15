@@ -543,7 +543,7 @@ function launchRaceDirectly(trackId = 'rookie_ring', timeOfDay = 'day') {
 }
 
 // Volver al Hub Principal desde el juego
-window.returnToGameHub = function() {
+window.returnToGameHub = function(targetView = 'main') {
     const hubRoot = document.getElementById('game-hub-root');
     if (hubRoot) hubRoot.classList.remove('hidden');
     const tc = document.getElementById('touch-controls');
@@ -555,7 +555,7 @@ window.returnToGameHub = function() {
             window.Telegram.WebApp.unlockOrientation();
         }
     } catch(e) {}
-    showHubView('main');
+    showHubView(targetView || 'main');
 };
 
 // -------------------------------------------------------------
@@ -569,6 +569,7 @@ function renderGarageView() {
     const cars = userData.garage || [];
 
     // Contadores por categoría
+    const countStarter = cars.filter(m => m.rarity === 'starter').length;
     const countCommon = NFT_CAR_MODELS.filter(m => m.rarity === 'common').length;
     const countUncommon = NFT_CAR_MODELS.filter(m => m.rarity === 'uncommon').length;
     const countRare = NFT_CAR_MODELS.filter(m => m.rarity === 'rare').length;
@@ -590,6 +591,7 @@ function renderGarageView() {
 
         <div class="garage-filter-tabs">
             <button class="g-tab ${garageFilterRarity === 'all' ? 'active' : ''}" onclick="setGarageFilter('all')">TODOS (${cars.length})</button>
+            ${countStarter > 0 ? `<button class="g-tab tab-starter ${garageFilterRarity === 'starter' ? 'active' : ''}" onclick="setGarageFilter('starter')">🏁 ${t('rarity_starter') || 'INICIAL'} (${countStarter})</button>` : ''}
             <button class="g-tab tab-common ${garageFilterRarity === 'common' ? 'active' : ''}" onclick="setGarageFilter('common')">${t('rarity_common')} (${countCommon})</button>
             <button class="g-tab tab-uncommon ${garageFilterRarity === 'uncommon' ? 'active' : ''}" onclick="setGarageFilter('uncommon')">${t('rarity_uncommon')} (${countUncommon})</button>
             <button class="g-tab tab-rare ${garageFilterRarity === 'rare' ? 'active' : ''}" onclick="setGarageFilter('rare')">${t('rarity_rare')} (${countRare})</button>
@@ -604,7 +606,7 @@ function renderGarageView() {
                 </div>
             ` : filteredCars.map(car => {
                 const isEquipped = userData.equippedInstanceId === car.instanceId;
-                const rarityLabel = t(`rarity_${car.rarity}`);
+                const rarityLabel = t(`rarity_${car.rarity}`) || (car.rarity === 'starter' ? '🏁 INICIAL F2P (7 PTS)' : car.rarity.toUpperCase());
                 const perf = calculateCarPerformance(car);
                 const eff = perf.effectiveStats;
                 const raw = car.stats || makeStats(1,1,1,1,1,1,1,1,1,1);
@@ -623,7 +625,9 @@ function renderGarageView() {
                         <div class="car-card-top">
                             <span class="rarity-badge badge-${car.rarity}">${rarityLabel}</span>
                             <div class="card-chips-group">
-                                <span class="mint-chip">#${car.mintNumber}</span>
+                                ${car.isNft === false
+                                    ? `<span class="mint-chip" style="background:#334155;color:#cbd5e1;padding:1px 6px;border-radius:4px;font-weight:900;">NO-NFT</span>`
+                                    : `<span class="mint-chip">#${car.mintNumber}</span>`}
                                 <span class="level-chip">⭐ NIV. ${lvl}</span>
                                 <span class="points-chip">⚡ ${perf.totalPoints} PTS</span>
                             </div>
@@ -639,7 +643,7 @@ function renderGarageView() {
                         <div class="car-card-info">
                             <div class="car-info-headline">
                                 <h4 class="car-name">${car.name}</h4>
-                                <div class="token-hash-label">⛓️ ${car.tokenHash}</div>
+                                <div class="token-hash-label">${car.isNft === false ? '🛡️ VEHÍCULO DE SERIE (F2P)' : `⛓️ ${car.tokenHash}`}</div>
                             </div>
 
                             <!-- Barra de Nivel y XP del Vehículo -->

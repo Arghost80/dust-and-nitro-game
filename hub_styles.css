@@ -543,6 +543,7 @@
     transform: translateY(-4px);
 }
 
+.card-rarity-starter { border-color: #64748b; background: rgba(30, 41, 59, 0.45); }
 .card-rarity-common { border-color: #94a3b8; }
 .card-rarity-uncommon { border-color: #22c55e; }
 .card-rarity-rare { border-color: #0284c7; }
@@ -570,6 +571,7 @@
     letter-spacing: 0.5px;
 }
 
+.badge-starter { background: #334155; color: #94a3b8; border: 1px solid #64748b; }
 .badge-common { background: #475569; color: #fff; }
 .badge-uncommon { background: #15803d; color: #fff; }
 .badge-rare { background: #0369a1; color: #fff; }

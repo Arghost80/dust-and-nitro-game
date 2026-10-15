@@ -200,6 +200,12 @@ if (branchCount !== 5) throw new Error('Debe haber exactamente 5 ramas de mejora
 
 // Test de mejora con piezas físicas
 console.log('\n--- PROBANDO MEJORA POR PIEZAS FÍSICAS EN EL TALLER ---');
+vm.runInContext(`
+    const _tUser = loadNftUserData();
+    _tUser.credits = 50000;
+    _tUser.gems = 500;
+    saveNftUserData(_tUser);
+`, ctx);
 const starterCarId = vm.runInContext('loadNftUserData().garage[0].instanceId', ctx);
 const preLvl = vm.runInContext(`loadNftUserData().garage[0].parts.speed_power || 0`, ctx);
 console.log('Nivel inicial de Motor & Velocidad:', preLvl);
@@ -1163,6 +1169,52 @@ if (!styleCssContent.includes('#btn-handbrake') || !styleCssContent.includes('ri
     throw new Error('style.css debe colocar el freno de mano en el arco semicircular izquierdo');
 }
 console.log('✓ Botonera semicircular RPG (GAS pivot en esquina, Nitro justo arriba, Freno y Derrape en abanico) verificada al 100%');
+
+console.log('\n--- VERIFICANDO COCHE INICIAL F2P (APEX CADET 1.0) Y DIFICULTAD ROOKIE (V64) ---');
+const starterModel = vm.runInContext('NFT_CAR_MODELS.find(m => m.id === "s_01")', ctx);
+if (!starterModel) throw new Error('No se encontró el modelo inicial s_01 (Apex Cadet 1.0)');
+if (starterModel.rarity !== 'starter') throw new Error(`Raridad incorrecta: ${starterModel.rarity}`);
+if (starterModel.isNft !== false) throw new Error('El coche inicial NO debe ser un NFT (isNft: false)');
+
+const starterBasePoints = Object.values(starterModel.stats).reduce((a, b) => a + b, 0);
+console.log(`Puntos base de Apex Cadet 1.0: ${starterBasePoints} pts (Coches Comunes: 10-12 pts)`);
+if (starterBasePoints !== 7) throw new Error(`El coche inicial debe tener exactamente 7 puntos, actual: ${starterBasePoints}`);
+
+// Verificar datos iniciales de nuevo jugador
+vm.runInContext(`
+    localStorage.removeItem('apex_web3_garage_save');
+`, ctx);
+const starterFreshUser = vm.runInContext('loadNftUserData()', ctx);
+if (starterFreshUser.garage.length === 0 || starterFreshUser.garage[0].modelId !== 's_01') {
+    throw new Error('Un nuevo jugador debe comenzar con el Apex Cadet 1.0');
+}
+if (starterFreshUser.garage[0].isNft !== false) {
+    throw new Error('La instancia del coche inicial en el garaje debe tener isNft: false');
+}
+if (starterFreshUser.credits !== 100) {
+    throw new Error(`Los créditos iniciales deben ser 100 $CR, actual: ${starterFreshUser.credits}`);
+}
+console.log('✓ Nuevo jugador recibe Apex Cadet 1.0 (NO-NFT, 7 pts) y saldo base de 100 $CR');
+
+// Verificar AI_TIER_ROOKIE
+const rookieTier = vm.runInContext('window.AI_TIER_ROOKIE', ctx);
+if (!Array.isArray(rookieTier) || rookieTier.length < 5) {
+    throw new Error('AI_TIER_ROOKIE debe tener al menos 5 rivales configurados');
+}
+rookieTier.forEach(r => {
+    if (r.speed > 305) throw new Error(`Rival novato demasiado rápido: ${r.name} (${r.speed} km/h)`);
+    if (r.accel > 230) throw new Error(`Rival novato con aceleración excesiva: ${r.name} (${r.accel})`);
+});
+console.log(`✓ AI_TIER_ROOKIE verificado: ${rookieTier.length} rivales calibrados con velocidades asequibles (288-298 km/h)`);
+
+// Verificar renderizado en Garaje con badge de NO-NFT
+doc.getElementById('view-garage').innerHTML = '';
+vm.runInContext('renderGarageView()', ctx);
+const garageContent = doc.getElementById('view-garage').innerHTML;
+if (!garageContent.includes('INICIAL F2P') || !garageContent.includes('NO-NFT')) {
+    throw new Error('El garaje debe mostrar la pestaña y chip NO-NFT para el coche inicial');
+}
+console.log('✓ Garaje muestra la insignia "NO-NFT" y categoría "INICIAL F2P" para el Apex Cadet');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
