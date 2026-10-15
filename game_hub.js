@@ -1312,6 +1312,36 @@ function buyEnergyPackShop(packKey) {
     alert(`⚡ ¡${res.pack.name} recargada con éxito en ${res.car.name}! Nueva energía: ${res.newEnergy}/10.`);
 }
 
+// ===== INTEGRACIÓN OFICIAL ADSGRAM (REWARDED VIDEO ADS) =====
+const ADSGRAM_BLOCK_ID = '51228';
+
+function launchAdsgramRewardedAd(onSuccess, onFallback) {
+    if (window.Adsgram && typeof window.Adsgram.init === 'function') {
+        try {
+            console.log('🎬 Inicializando anuncio de Adsgram con blockId:', ADSGRAM_BLOCK_ID);
+            const AdController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+            AdController.show().then((result) => {
+                console.log('✅ Anuncio Adsgram completado con éxito:', result);
+                if (typeof onSuccess === 'function') {
+                    onSuccess(result);
+                }
+            }).catch((err) => {
+                console.warn('Adsgram cerrado o sin anuncio disponible:', err);
+                if (err && err.done === false) {
+                    alert('⚠️ Para recibir la recompensa debes ver el anuncio completo.');
+                } else {
+                    if (typeof onFallback === 'function') onFallback();
+                }
+            });
+            return true;
+        } catch (e) {
+            console.error('Error al invocar Adsgram:', e);
+        }
+    }
+    if (typeof onFallback === 'function') onFallback();
+    return false;
+}
+
 function openRewardedAdModal(instanceId = null) {
     hubAudio.playClick();
     const userData = loadNftUserData();
@@ -1325,6 +1355,20 @@ function openRewardedAdModal(instanceId = null) {
         return;
     }
 
+    launchAdsgramRewardedAd(() => {
+        const res = rechargeEnergyWithAd(car.instanceId);
+        if (res.success) {
+            hubAudio.playOpenCrate();
+            renderHubHeader();
+            renderGarageView();
+            alert(`⚡ ¡Anuncio completado! Recuperaste +1 punto de energía para ${res.car.name}. Ahora tienes ${res.newEnergy}/10.`);
+        }
+    }, () => {
+        showLocalAdModalForEnergy(car);
+    });
+}
+
+function showLocalAdModalForEnergy(car) {
     let modal = document.getElementById('ad-reward-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -1504,6 +1548,23 @@ function startRewardedAdForNitro() {
     hubAudio.playClick();
     closeNitroRefillModal();
 
+    launchAdsgramRewardedAd(() => {
+        if (typeof addNitroWithAd === 'function') {
+            const res = addNitroWithAd();
+            if (res.success) {
+                hubAudio.playOpenCrate();
+                closeRewardedAdModal();
+                renderHubHeader();
+                alert(`🧪 ¡Anuncio completado! Ganaste +1 Cápsula de Nitro N₂O. Tienes ${res.newNitros} en tu inventario.`);
+            }
+        }
+    }, () => {
+        showLocalAdModalForNitro();
+    });
+}
+window.startRewardedAdForNitro = startRewardedAdForNitro;
+
+function showLocalAdModalForNitro() {
     let modal = document.getElementById('ad-reward-modal');
     if (!modal) {
         modal = document.createElement('div');
