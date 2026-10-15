@@ -1319,7 +1319,12 @@ function launchAdsgramRewardedAd(onSuccess, onFallback) {
     if (window.Adsgram && typeof window.Adsgram.init === 'function') {
         try {
             console.log('🎬 Inicializando anuncio de Adsgram con blockId:', ADSGRAM_BLOCK_ID);
-            const AdController = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+            // Modo debug activo para permitir tests inmediatos mientras Adsgram aprueba la moderación
+            const AdController = window.Adsgram.init({
+                blockId: ADSGRAM_BLOCK_ID,
+                debug: true,
+                debugBannerType: 'RewardedVideo'
+            });
             AdController.show().then((result) => {
                 console.log('✅ Anuncio Adsgram completado con éxito:', result);
                 if (typeof onSuccess === 'function') {
