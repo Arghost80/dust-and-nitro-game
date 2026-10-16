@@ -851,9 +851,6 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                     ▶ SALIDA DIRECTA: ROOKIE RING
                 </button>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn-retro-canvas-menu" onclick="launchRetroCanvasMenu()">
-                        🕹️ MODO CLÁSICO 2D
-                    </button>
                     <button class="btn-close-track-select" onclick="closeTrackSelectModal()">
                         VOLVER AL HUB
                     </button>
