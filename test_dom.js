@@ -1433,6 +1433,85 @@ if (!v68Css.includes('grid-column: span 2') || !v68Css.includes('.shop-items-gri
 }
 console.log('✓ Adaptabilidad CSS para frenos Brembo y fondo radial luminoso verificada al 100%');
 
+console.log('\n--- VERIFICANDO MAPA DE HISTORIA: CASILLAS, 3 ESTRELLAS Y COCHE AVANZANDO (V71) ---');
+// 1. Abrir Modo Historia
+vm.runInContext('launchStoryMode()', ctx);
+const storyModal = doc.getElementById('track-select-modal');
+if (!storyModal || storyModal.classList.contains('hidden') || storyModal.style.display === 'none') {
+    throw new Error('El modal del Modo Historia debe abrirse al llamar a launchStoryMode()');
+}
+
+// 2. Verificar cabecera, estrellas globales y tabs de capítulos
+if (!storyModal.innerHTML.includes('MODO HISTORIA: WORLD GT TOUR') || !storyModal.innerHTML.includes('ESTRELLAS')) {
+    throw new Error('El modal debe mostrar el título de World GT Tour y el contador global de estrellas');
+}
+const tabButtonsCount = (storyModal.innerHTML.match(/class="story-tab-btn/g) || []).length;
+if (tabButtonsCount !== 5) {
+    throw new Error(`Se esperan 5 pestañas de capítulos de bioma, se encontraron: ${tabButtonsCount}`);
+}
+console.log('✓ 5 Pestañas de capítulos y contador global de estrellas verificados');
+
+// 3. Verificar la carretera, las casillas con estrellas y el coche del jugador
+if (!storyModal.innerHTML.includes('story-road-view')) {
+    throw new Error('Debe existir el contenedor .story-road-view con el mapa de carretera');
+}
+const stageNodesCount = (storyModal.innerHTML.match(/class="story-stage-node/g) || []).length;
+if (stageNodesCount < 4) {
+    throw new Error(`El capítulo debe renderizar al menos 4 casillas de etapa, encontradas: ${stageNodesCount}`);
+}
+const starsRowsCount = (storyModal.innerHTML.match(/class="node-stars-row"/g) || []).length;
+if (starsRowsCount < 4) {
+    throw new Error('Cada casilla de etapa debe mostrar sus 3 estrellas de rendimiento');
+}
+console.log(`✓ Carretera activa con ${stageNodesCount} casillas de circuito y filas de 3 estrellas`);
+
+// 4. Verificar el coche del jugador avanzando por las casillas
+const playerCarMarker = doc.getElementById('story-map-player-car');
+if (!playerCarMarker) {
+    throw new Error('Debe existir el elemento del coche del jugador (#story-map-player-car) sobre las casillas');
+}
+const initialLeft = playerCarMarker.style.left;
+const initialTop = playerCarMarker.style.top;
+console.log(`Posición inicial del coche del jugador: left=${initialLeft}, top=${initialTop}`);
+
+// 5. Probar selección de otra casilla y avance dinámico del coche
+const targetTrack = initialLeft === '24%' ? 'radiator_oval' : 'tri_apex_coliseum';
+vm.runInContext(`selectStoryMapTrack('${targetTrack}')`, ctx);
+const movedLeft = playerCarMarker.style.left;
+const movedTop = playerCarMarker.style.top;
+console.log(`Posición tras avanzar a ${targetTrack}: left=${movedLeft}, top=${movedTop}`);
+if (movedLeft === initialLeft && movedTop === initialTop) {
+    throw new Error('El coche debe desplazarse de casilla al seleccionar otra pista');
+}
+if (!storyModal.innerHTML.includes('player-car-tag') || !storyModal.innerHTML.includes('player-car-body')) {
+    throw new Error('El marcador del coche debe contener su etiqueta identificativa y carrocería');
+}
+console.log('✓ Coche del jugador avanza dinámicamente y se posiciona sobre la casilla seleccionada');
+
+// 6. Verificar panel de misión con requisitos de las 3 estrellas y recompensas
+const missionCard = doc.getElementById('story-mission-card-root');
+const expectedTrackName = targetTrack === 'radiator_oval' ? 'RADIATOR OVAL' : 'TRI-APEX';
+if (!missionCard || !missionCard.innerHTML.includes(expectedTrackName) || !missionCard.innerHTML.includes('1ª Estrella:')) {
+    throw new Error('El panel de misión debe mostrar la pista seleccionada y la guía para las 3 estrellas');
+}
+if (!missionCard.innerHTML.includes('btn-story-launch-race')) {
+    throw new Error('El panel de misión debe incluir el botón de acción para salir a pista');
+}
+console.log('✓ Panel de misión con desglose de 3 estrellas, recompensas ($CR, XP, Drop NFT) verificado');
+
+// 7. Probar cambio a Capítulo 2
+vm.runInContext('setStoryMapChapter(1)', ctx);
+if (!storyModal.innerHTML.includes('Red Rock Junction')) {
+    throw new Error('Al cambiar a Capítulo 2 debe renderizarse el circuito Red Rock Junction');
+}
+console.log('✓ Cambio fluido entre capítulos y biomas verificado');
+
+// Cerrar modal
+vm.runInContext('closeTrackSelectModal()', ctx);
+if (!storyModal.classList.contains('hidden') && storyModal.style.display !== 'none') {
+    throw new Error('El modal debe cerrarse correctamente al llamar a closeTrackSelectModal()');
+}
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

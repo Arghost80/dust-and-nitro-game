@@ -373,8 +373,167 @@ function launchStoryMode() {
     openTrackSelectModal();
 }
 
-// Modal de Selección de Circuitos del Modo Historia
-function openTrackSelectModal() {
+// =========================================================================
+// MODAL DE MAPA DE CAMPAÑA & ETAPAS (MODO HISTORIA CON CASILLAS Y COCHE)
+// =========================================================================
+let currentStoryMapChapter = 0;
+let selectedStoryTrackId = null;
+
+function getStoryMapChapterCoords(tracksCount) {
+    if (tracksCount === 4) {
+        return [
+            { x: 24, y: 14 },
+            { x: 74, y: 38 },
+            { x: 26, y: 62 },
+            { x: 74, y: 86 }
+        ];
+    } else {
+        return [
+            { x: 22, y: 10 },
+            { x: 76, y: 25 },
+            { x: 24, y: 40 },
+            { x: 76, y: 55 },
+            { x: 26, y: 70 },
+            { x: 72, y: 87 }
+        ];
+    }
+}
+
+function getStoryRoadSvgPath(tracksCount) {
+    if (tracksCount === 4) {
+        return "M 24 14 C 60 14, 74 24, 74 38 C 74 50, 26 50, 26 62 C 26 74, 74 74, 74 86";
+    } else {
+        return "M 22 10 C 65 10, 76 17, 76 25 C 76 32, 24 33, 24 40 C 24 47, 76 48, 76 55 C 76 62, 26 63, 26 70 C 26 78, 72 79, 72 87";
+    }
+}
+
+function renderStoryMissionCardHtml(chapter, track, trackStars, isUnlocked) {
+    const chapterRarities = ['Común', 'Infrecuente', 'Rara', 'Épica', 'Legendaria'];
+    const rarityName = chapterRarities[(chapter.number || 1) - 1] || 'Común';
+    const crReward = 100 + ((chapter.number || 1) * 50);
+    const xpReward = 30 + ((chapter.number || 1) * 20);
+
+    const todMap = {
+        day: '☀️ DÍA (ÓPTIMO)',
+        sunset: '🌅 ATARDECER',
+        night: '🌙 NOCHE (XENÓN)'
+    };
+    const todText = todMap[track.tod] || '☀️ DÍA';
+
+    return `
+        <div class="mission-header">
+            <div class="mission-title-group">
+                <span class="mission-chap-badge">CAPÍTULO ${chapter.number} • ETAPA</span>
+                <h3 class="mission-track-name">${track.name.toUpperCase()}</h3>
+                <span style="font-size: 10px; color: #38bdf8; font-weight: 800; margin-top: 2px; display: inline-block;">${todText} • 3 VUELTAS</span>
+            </div>
+            <div class="mission-stars-summary">
+                <span class="mission-stars-label">Estrellas</span>
+                <span class="mission-stars-display">${'⭐'.repeat(trackStars)}${'☆'.repeat(Math.max(0, 3 - trackStars))}</span>
+            </div>
+        </div>
+
+        <div class="mission-desc">
+            ${track.desc || 'Circuito de velocidad y técnica de competición'}. Supera a la IA rival y domina los vértices para conseguir las 3 estrellas.
+        </div>
+
+        <div class="mission-stars-guide">
+            <div class="star-req-item ${trackStars >= 1 ? 'achieved' : ''}">
+                <div class="req-left">
+                    <span class="req-stars">⭐</span>
+                    <span class="req-text">1ª Estrella: <strong>Podio (Top 3)</strong></span>
+                </div>
+                <span class="req-status">${trackStars >= 1 ? '✅ CONSEGUIDA' : '🔒 PENDIENTE'}</span>
+            </div>
+            <div class="star-req-item ${trackStars >= 2 ? 'achieved' : ''}">
+                <div class="req-left">
+                    <span class="req-stars">⭐⭐</span>
+                    <span class="req-text">2ª Estrella: <strong>Subcampeón (2º Puesto)</strong></span>
+                </div>
+                <span class="req-status">${trackStars >= 2 ? '✅ CONSEGUIDA' : '🔒 PENDIENTE'}</span>
+            </div>
+            <div class="star-req-item ${trackStars >= 3 ? 'achieved' : ''}">
+                <div class="req-left">
+                    <span class="req-stars">⭐⭐⭐</span>
+                    <span class="req-text">3ª Estrella: <strong>¡Victoria! (1º Puesto)</strong></span>
+                </div>
+                <span class="req-status">${trackStars >= 3 ? '✅ CONSEGUIDA' : '🔒 PENDIENTE'}</span>
+            </div>
+        </div>
+
+        <div class="mission-rewards-row">
+            <div class="reward-pill">💰 <strong>+${crReward} $CR</strong><br><span style="font-size: 9px; color: #94a3b8;">Tokens Recompensa</span></div>
+            <div class="reward-pill">⚡ <strong>+${xpReward} XP</strong><br><span style="font-size: 9px; color: #94a3b8;">Nivel Coche</span></div>
+            <div class="reward-pill">⚙️ <strong>Drop NFT</strong><br><span style="font-size: 9px; color: #fde047;">${rarityName.toUpperCase()}</span></div>
+        </div>
+
+        <div class="mission-cta-wrap">
+            ${isUnlocked ? `
+                <button class="btn-story-launch-race" onclick="launchRaceDirectly('${track.id}', '${track.tod || 'day'}')">
+                    🚦 ¡A CORRER! (SALIR A PISTA)
+                </button>
+            ` : `
+                <button class="btn-story-launch-race locked" disabled>
+                    🔒 CIRCUITO BLOQUEADO • Termina en podio el anterior
+                </button>
+            `}
+        </div>
+    `;
+}
+
+function selectStoryMapTrack(trackId) {
+    hubAudio.playClick();
+    const chapters = window.STORY_CHAPTERS || [];
+    const chapter = chapters[currentStoryMapChapter] || chapters[0];
+    if (!chapter) return;
+
+    const trackIdx = (chapter.tracks || []).findIndex(t => t.id === trackId);
+    if (trackIdx === -1) return;
+
+    selectedStoryTrackId = trackId;
+    const track = chapter.tracks[trackIdx];
+    const coordsList = getStoryMapChapterCoords(chapter.tracks.length);
+    const coords = coordsList[trackIdx] || coordsList[0];
+
+    // Desplazar el coche animadamente a la casilla seleccionada
+    const carEl = document.getElementById('story-map-player-car');
+    if (carEl) {
+        carEl.style.left = `${coords.x}%`;
+        carEl.style.top = `${coords.y}%`;
+    }
+
+    // Actualizar clases de selección en casillas
+    if (typeof document.querySelectorAll === 'function') {
+        document.querySelectorAll('.story-stage-node').forEach(node => {
+            if (node && node.classList) {
+                node.classList.toggle('selected', node.id === `story-node-${trackId}`);
+            }
+        });
+    }
+
+    // Actualizar el panel de misión
+    const progress = (typeof loadStoryProgress === 'function') ? loadStoryProgress() : { unlockedTracks: ['rookie_ring'] };
+    const unlocked = progress.unlockedTracks || ['rookie_ring'];
+    const isUnlocked = unlocked.includes(track.id) || progress.designerMode;
+    const trackStars = (progress.stars && progress.stars[track.id]) || 0;
+
+    const missionContainer = document.getElementById('story-mission-card-root');
+    if (missionContainer) {
+        missionContainer.innerHTML = renderStoryMissionCardHtml(chapter, track, trackStars, isUnlocked);
+    }
+}
+window.selectStoryMapTrack = selectStoryMapTrack;
+
+function setStoryMapChapter(chapIndex) {
+    hubAudio.playClick();
+    currentStoryMapChapter = chapIndex;
+    selectedStoryTrackId = null;
+    openTrackSelectModal(chapIndex);
+}
+window.setStoryMapChapter = setStoryMapChapter;
+
+// Modal de Selección de Circuitos del Modo Historia (Mapa de Campaña)
+function openTrackSelectModal(targetChapterIdx, targetTrackId) {
     hubAudio.playClick();
     let modal = document.getElementById('track-select-modal');
     if (!modal) {
@@ -389,69 +548,220 @@ function openTrackSelectModal() {
     const progress = (typeof loadStoryProgress === 'function') ? loadStoryProgress() : { unlockedTracks: ['rookie_ring'] };
     const unlocked = progress.unlockedTracks || ['rookie_ring'];
 
+    // Cálculo total de estrellas del campeonato mundial
+    let totalEarnedStars = 0;
+    let totalPossibleStars = 0;
+    chapters.forEach(ch => {
+        (ch.tracks || []).forEach(t => {
+            totalPossibleStars += 3;
+            totalEarnedStars += (progress.stars && progress.stars[t.id]) || 0;
+        });
+    });
+
+    // Determinar capítulo activo por defecto si no se especificó
+    if (typeof targetChapterIdx === 'number') {
+        currentStoryMapChapter = Math.max(0, Math.min(chapters.length - 1, targetChapterIdx));
+    } else if (selectedStoryTrackId) {
+        const foundChIdx = chapters.findIndex(ch => ch.tracks.some(t => t.id === selectedStoryTrackId));
+        if (foundChIdx !== -1) currentStoryMapChapter = foundChIdx;
+    } else {
+        // Encontrar la primera etapa desbloqueada con menos de 3 estrellas
+        let foundChapter = -1;
+        let foundTrack = null;
+        for (let c = 0; c < chapters.length; c++) {
+            const trks = chapters[c].tracks || [];
+            for (let tr of trks) {
+                const isUnl = unlocked.includes(tr.id) || progress.designerMode;
+                const stars = (progress.stars && progress.stars[tr.id]) || 0;
+                if (isUnl && stars < 3) {
+                    foundChapter = c;
+                    foundTrack = tr.id;
+                    break;
+                }
+            }
+            if (foundChapter !== -1) break;
+        }
+        if (foundChapter !== -1) {
+            currentStoryMapChapter = foundChapter;
+            selectedStoryTrackId = foundTrack;
+        } else {
+            currentStoryMapChapter = 0;
+        }
+    }
+
+    const currentChapter = chapters[currentStoryMapChapter] || chapters[0];
+    const tracksList = currentChapter.tracks || [];
+
+    // Determinar la pista seleccionada dentro del capítulo
+    if (targetTrackId && tracksList.some(t => t.id === targetTrackId)) {
+        selectedStoryTrackId = targetTrackId;
+    } else if (!selectedStoryTrackId || !tracksList.some(t => t.id === selectedStoryTrackId)) {
+        // Primera pista con menos de 3 estrellas en este capítulo, o la primera de la lista
+        const firstIncomplete = tracksList.find(t => {
+            const isUnl = unlocked.includes(t.id) || progress.designerMode;
+            const stars = (progress.stars && progress.stars[t.id]) || 0;
+            return isUnl && stars < 3;
+        });
+        selectedStoryTrackId = firstIncomplete ? firstIncomplete.id : (tracksList[0] ? tracksList[0].id : 'rookie_ring');
+    }
+
+    const selectedTrackIdx = Math.max(0, tracksList.findIndex(t => t.id === selectedStoryTrackId));
+    const selectedTrack = tracksList[selectedTrackIdx] || tracksList[0];
+    const isSelectedUnlocked = unlocked.includes(selectedTrack.id) || progress.designerMode;
+    const selectedTrackStars = (progress.stars && progress.stars[selectedTrack.id]) || 0;
+
+    // Coordenadas de las casillas en la carretera
+    const coordsList = getStoryMapChapterCoords(tracksList.length);
+    const svgPath = getStoryRoadSvgPath(tracksList.length);
+    const carCoords = coordsList[selectedTrackIdx] || coordsList[0];
+
+    // Coche equipado del usuario
+    const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : { garage: [] };
+    const equippedCar = (typeof getEquippedNftCar === 'function')
+        ? getEquippedNftCar()
+        : ((userData.garage || []).find(c => c.instanceId === userData.equippedInstanceId) || userData.garage[0] || { name: 'Apex Cadet 1.0', level: 1 });
+
+    const chapterIcons = ['🔰', '🌲', '🏜️', '⚡', '👑'];
+
     modal.innerHTML = `
         <div class="track-modal-box">
-            <div class="track-modal-header">
-                <div>
-                    <h2 class="track-modal-title">🏆 SELECCIÓN DE CIRCUITO • MODO HISTORIA</h2>
-                    <p class="track-modal-sub">Elige un circuito para disputar el Gran Premio o sal a pista inmediatamente</p>
+            <!-- Cabecera del Mapa con Contador Global de Estrellas -->
+            <div class="story-map-top-bar">
+                <div class="story-map-title-wrap">
+                    <h2 class="story-map-main-title">
+                        <span>🏆 MODO HISTORIA: WORLD GT TOUR</span>
+                    </h2>
+                    <span class="story-map-sub">Avanza casilla a casilla por los circuitos oficiales y conquista las 3 estrellas ⭐⭐⭐</span>
                 </div>
-                <button class="track-modal-close" onclick="closeTrackSelectModal()">✖</button>
-            </div>
-
-            <div class="track-quick-launch">
-                <button class="btn-instant-race" onclick="launchRaceDirectly('rookie_ring')">
-                    ▶ ¡SALIR A PISTA INMEDIATAMENTE! (ROOKIE RING SPEEDWAY)
-                </button>
-            </div>
-
-            <div class="chapters-accordion">
-                ${chapters.map((ch) => `
-                    <div class="chapter-card">
-                        <div class="chapter-title-bar">
-                            <span class="chap-badge">CAPÍTULO ${ch.number}</span>
-                            <span class="chap-name">${ch.title}</span>
-                            <span class="chap-rival">🏁 ${ch.rival || 'IA Rival'}</span>
-                        </div>
-                        <div class="chapter-tracks-grid">
-                            ${ch.tracks.map(trk => {
-                                const isUnlocked = unlocked.includes(trk.id) || progress.designerMode;
-                                const starsCount = (progress.stars && progress.stars[trk.id]) || 0;
-                                const starsStr = '⭐'.repeat(starsCount) + '☆'.repeat(Math.max(0, 3 - starsCount));
-                                return `
-                                    <div class="track-item-card ${isUnlocked ? 'unlocked' : 'locked'}" ${isUnlocked ? `onclick="launchRaceDirectly('${trk.id}', '${trk.tod || 'day'}')"` : ''} style="${isUnlocked ? 'cursor: pointer;' : ''}">
-                                        <div class="track-item-top">
-                                            <span class="track-item-name">${trk.name}</span>
-                                            <span class="track-stars-pill">${starsStr}</span>
-                                        </div>
-                                        <div class="track-item-desc">${trk.desc || 'Circuito de Velocidad'} • ${trk.tod === 'night' ? '🌙 Noche' : (trk.tod === 'sunset' ? '🌅 Atardecer' : '☀️ Día')}</div>
-                                        <div class="track-item-btn-wrap">
-                                            ${isUnlocked ? `
-                                                <button class="btn-play-track" onclick="event.stopPropagation(); launchRaceDirectly('${trk.id}', '${trk.tod || 'day'}')">
-                                                    ▶ CORRER AHORA
-                                                </button>
-                                            ` : `
-                                                <button class="btn-locked-track" disabled>🔒 BLOQUEADO</button>
-                                            `}
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
+                <div class="story-map-top-actions">
+                    <div class="story-global-stars-badge" title="Estrellas ganadas en todos los capítulos">
+                        <span class="star-icon">⭐</span>
+                        <span>${totalEarnedStars} / ${totalPossibleStars} ESTRELLAS</span>
                     </div>
-                `).join('')}
+                    <button class="track-modal-close" onclick="closeTrackSelectModal()">✖</button>
+                </div>
             </div>
 
+            <!-- Navegación por Capítulos (Tabs de Bioma) -->
+            <div class="story-chapter-tabs-nav">
+                ${chapters.map((ch, idx) => {
+                    let chStars = 0;
+                    const chMax = (ch.tracks || []).length * 3;
+                    (ch.tracks || []).forEach(t => { chStars += (progress.stars && progress.stars[t.id]) || 0; });
+                    const isChUnlocked = ch.tracks.some(t => unlocked.includes(t.id)) || progress.designerMode;
+                    const isActive = idx === currentStoryMapChapter;
+                    const icon = chapterIcons[idx] || '🏁';
+
+                    return `
+                        <button class="story-tab-btn ${isActive ? 'active' : ''} ${!isChUnlocked ? 'locked' : ''}" 
+                                onclick="setStoryMapChapter(${idx})" title="${ch.title}">
+                            <div class="tab-badge-title">
+                                <span>${icon}</span>
+                                <span>${ch.title}</span>
+                            </div>
+                            <div class="tab-stars-pill">${!isChUnlocked ? '🔒 Bloqueado' : `⭐ ${chStars} / ${chMax}`}</div>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+
+            <!-- Layout Principal: Carretera Serpenteante a la Izquierda + Panel de Misión a la Derecha -->
+            <div class="story-map-main-layout">
+                <!-- 1. Contenedor de la Carretera Serpenteante con Casillas y Coche Avanzando -->
+                <div class="story-road-view" id="story-road-container">
+                    <!-- Trazado SVG de la Carretera de Competición con Línea Continua -->
+                    <svg class="story-road-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <!-- Asfalto Base -->
+                        <path d="${svgPath}" fill="none" stroke="#090e1a" stroke-width="20" stroke-linecap="round"/>
+                        <!-- Calzada de Asfalto Gris Oscuro -->
+                        <path d="${svgPath}" fill="none" stroke="#172033" stroke-width="15" stroke-linecap="round"/>
+                        <!-- Borde con Pianos FIA -->
+                        <path d="${svgPath}" fill="none" stroke="#334155" stroke-width="13" stroke-linecap="round"/>
+                        <!-- Línea Central Discontinua de Carreras -->
+                        <path d="${svgPath}" fill="none" stroke="#facc15" stroke-width="1.8" stroke-dasharray="3 3"/>
+                    </svg>
+
+                    <!-- Casillas de Circuito (Stage Nodes) -->
+                    ${tracksList.map((trk, tIdx) => {
+                        const coords = coordsList[tIdx] || { x: 50, y: 50 };
+                        const isTrkUnlocked = unlocked.includes(trk.id) || progress.designerMode;
+                        const stars = (progress.stars && progress.stars[trk.id]) || 0;
+                        const isSelected = trk.id === selectedStoryTrackId;
+                        const isCurrentActive = isTrkUnlocked && stars < 3;
+
+                        let statusClass = 'locked';
+                        if (isTrkUnlocked) {
+                            if (stars >= 3) statusClass = 'completed-gold';
+                            else if (stars > 0) statusClass = 'completed';
+                            else statusClass = 'unlocked';
+                        }
+                        if (isCurrentActive) statusClass += ' current';
+
+                        const isFinalStage = tIdx === tracksList.length - 1;
+
+                        return `
+                            <div class="story-stage-node ${statusClass} ${isSelected ? 'selected' : ''}" 
+                                 id="story-node-${trk.id}"
+                                 style="left: ${coords.x}%; top: ${coords.y}%;"
+                                 onclick="selectStoryMapTrack('${trk.id}')"
+                                 title="${trk.name}">
+                                <div class="node-core">
+                                    ${!isTrkUnlocked ? '🔒' : (isFinalStage ? '👑' : (tIdx + 1))}
+                                </div>
+                                <div class="node-stars-row">
+                                    <span class="star ${stars >= 1 ? 'filled' : 'empty'}">${stars >= 1 ? '⭐' : '☆'}</span>
+                                    <span class="star ${stars >= 2 ? 'filled' : 'empty'}">${stars >= 2 ? '⭐' : '☆'}</span>
+                                    <span class="star ${stars >= 3 ? 'filled' : 'empty'}">${stars >= 3 ? '⭐' : '☆'}</span>
+                                </div>
+                                <div class="node-name-label">${trk.name}</div>
+                                ${isCurrentActive ? '<div class="node-current-beacon">🏁 ¡AQUÍ!</div>' : ''}
+                            </div>
+                        `;
+                    }).join('')}
+
+                    <!-- El Coche "Todo Guapo" del Jugador que Avanza por las Casillas -->
+                    <div id="story-map-player-car" class="story-map-player-car" 
+                         style="left: ${carCoords.x}%; top: ${carCoords.y}%;">
+                        <div class="player-car-tag">
+                            <span>🏎️</span>
+                            <span>${(equippedCar.name || 'APEX GT').toUpperCase()}</span>
+                            <span class="tag-level">NV.${equippedCar.level || 1}</span>
+                        </div>
+                        <div class="player-car-body">
+                            ${typeof generateCarSvg === 'function' && equippedCar ? generateCarSvg(equippedCar, 96, 48) : '<div style="font-size: 28px;">🏎️</div>'}
+                        </div>
+                        <div class="player-car-nitro-glow"></div>
+                    </div>
+                </div>
+
+                <!-- 2. Panel Dossier de Misión de la Etapa Seleccionada -->
+                <div class="story-mission-card" id="story-mission-card-root">
+                    ${renderStoryMissionCardHtml(currentChapter, selectedTrack, selectedTrackStars, isSelectedUnlocked)}
+                </div>
+            </div>
+
+            <!-- Pie del Modal con Opciones Secundarias -->
             <div class="track-modal-footer">
-                <button class="btn-retro-canvas-menu" onclick="launchRetroCanvasMenu()">
-                    🕹️ MENÚ CLÁSICO 2D (CANVAS)
+                <button class="btn-instant-race" onclick="launchRaceDirectly('rookie_ring')">
+                    ▶ SALIDA DIRECTA: ROOKIE RING
                 </button>
-                <button class="btn-close-track-select" onclick="closeTrackSelectModal()">
-                    VOLVER AL HUB
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-retro-canvas-menu" onclick="launchRetroCanvasMenu()">
+                        🕹️ MODO CLÁSICO 2D
+                    </button>
+                    <button class="btn-close-track-select" onclick="closeTrackSelectModal()">
+                        VOLVER AL HUB
+                    </button>
+                </div>
             </div>
         </div>
     `;
+
+    const playerCarMarkerEl = document.getElementById('story-map-player-car');
+    if (playerCarMarkerEl) {
+        playerCarMarkerEl.style.left = `${carCoords.x}%`;
+        playerCarMarkerEl.style.top = `${carCoords.y}%`;
+    }
 
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
@@ -3795,6 +4105,11 @@ function handleWithdrawCrToTon(crAmount) {
 }
 
 if (typeof window !== 'undefined') {
+    window.openTrackSelectModal = openTrackSelectModal;
+    window.closeTrackSelectModal = closeTrackSelectModal;
+    window.selectStoryMapTrack = selectStoryMapTrack;
+    window.setStoryMapChapter = setStoryMapChapter;
+    window.launchStoryMode = launchStoryMode;
     window.openWeb3WalletModal = openWeb3WalletModal;
     window.closeWeb3WalletModal = closeWeb3WalletModal;
     window.handleConnectWallet = handleConnectWallet;
