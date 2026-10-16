@@ -1760,8 +1760,8 @@ function buyEnergyPackShop(packKey) {
 
 // ===== INTEGRACIÓN OFICIAL ADSGRAM (REWARDED VIDEO ADS) =====
 const ADSGRAM_BLOCK_ID = '54054';
-// Poner en true en cuanto Adsgram apruebe la moderación de la plataforma
-const ADSGRAM_ACTIVE = false;
+// Activado: Bloque 54054 aprobado por Adsgram
+const ADSGRAM_ACTIVE = true;
 
 function launchAdsgramRewardedAd(onSuccess, onFallback) {
     if (ADSGRAM_ACTIVE && window.Adsgram && typeof window.Adsgram.init === 'function') {
