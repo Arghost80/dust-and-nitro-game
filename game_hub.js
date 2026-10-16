@@ -426,28 +426,29 @@ window.generateTrackMiniSvg = generateTrackMiniSvg;
 function getStoryMapChapterCoords(tracksCount) {
     if (tracksCount === 4) {
         return [
-            { x: 22, y: 15 },
-            { x: 78, y: 38 },
-            { x: 22, y: 62 },
-            { x: 78, y: 85 }
+            { x: 30, y: 76 },
+            { x: 16, y: 44 },
+            { x: 52, y: 22 },
+            { x: 82, y: 56 }
         ];
     } else {
         return [
-            { x: 18, y: 10 },
-            { x: 82, y: 26 },
-            { x: 18, y: 42 },
-            { x: 82, y: 58 },
-            { x: 20, y: 74 },
-            { x: 80, y: 90 }
+            { x: 30, y: 78 },
+            { x: 14, y: 54 },
+            { x: 22, y: 26 },
+            { x: 54, y: 20 },
+            { x: 84, y: 44 },
+            { x: 74, y: 72 }
         ];
     }
 }
 
 function getStoryRoadSvgPath(tracksCount) {
     if (tracksCount === 4) {
-        return "M 22 15 C 65 15, 78 26, 78 38 C 78 50, 35 50, 22 62 C 22 74, 65 74, 78 85";
+        // Trazado perimetral de telemetría que recorre el circuito real
+        return "M 30 76 C 16 76, 8 60, 16 44 C 22 28, 32 22, 52 22 C 72 22, 90 36, 82 56 C 76 74, 50 76, 30 76";
     } else {
-        return "M 20 10 C 65 10, 80 18, 80 26 C 80 34, 35 34, 20 42 C 20 50, 65 50, 80 58 C 80 66, 35 66, 22 74 C 22 82, 65 82, 78 90";
+        return "M 30 78 C 16 78, 8 68, 14 54 C 16 38, 18 26, 22 26 C 34 20, 44 20, 54 20 C 74 20, 88 28, 84 44 C 82 60, 80 66, 74 72 C 64 78, 48 78, 30 78";
     }
 }
 
@@ -682,6 +683,14 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
         .slice(0, 14);
 
     const chapterIcons = ['🔰', '🌲', '🏜️', '⚡', '👑'];
+    const chapterCircuitImages = [
+        'assets/real_gp_circuit.jpg',
+        'assets/pbr_cinematic_track.jpg',
+        'assets/neo_sierra_prime.jpg',
+        'assets/cyber_circuit_track.jpg',
+        'assets/real_gp_circuit.jpg'
+    ];
+    const currentCircuitBg = chapterCircuitImages[currentStoryMapChapter] || 'assets/real_gp_circuit.jpg';
 
     modal.innerHTML = `
         <div class="track-modal-box">
@@ -691,7 +700,7 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                     <h2 class="story-map-main-title">
                         <span>🏆 MODO HISTORIA: WORLD GT TOUR</span>
                     </h2>
-                    <span class="story-map-sub">Avanza casilla a casilla por los circuitos oficiales y conquista las 3 estrellas ⭐⭐⭐</span>
+                    <span class="story-map-sub">Avanza por las paradas oficiales del circuito y domina las 3 estrellas ⭐⭐⭐</span>
                 </div>
                 <div class="story-map-top-actions">
                     <div class="story-global-stars-badge" title="Estrellas ganadas en todos los capítulos">
@@ -725,29 +734,42 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                 }).join('')}
             </div>
 
-            <!-- Layout Principal: Carretera Serpenteante a la Izquierda + Panel de Misión a la Derecha -->
+            <!-- Layout Principal: Circuito Real con Paradas a la Izquierda + Panel de Misión a la Derecha -->
             <div class="story-map-main-layout">
-                <!-- 1. Contenedor de la Carretera Serpenteante con Casillas y Coche Avanzando -->
-                <div class="story-road-view" id="story-road-container">
-                    <div class="telemetry-gps-tag">🛰️ SATELLITE GPS • 45°28'N 9°16'E • WORLD GT TOUR</div>
+                <!-- 1. Contenedor del Circuito Real con Paradas de Misión y Coche en Boxes -->
+                <div class="story-road-view" id="story-road-container" style="background-image: url('${currentCircuitBg}');">
+                    <div class="telemetry-gps-tag">🛰️ LIVE GPS TELEMETRY • FIA AUTODROME • 45°28'N 9°16'E</div>
+                    <div class="telemetry-weather-tag">⛅ SECO • 23°C • GRIP 100%</div>
+                    <div class="telemetry-paddock-tag">🏁 SECTORES OFICIALES GP</div>
+                    <div class="telemetry-radar-tag">📡 SEÑAL SATELITAL ACTIVA</div>
 
-                    <!-- Trazado SVG Multicapa de Carretera Real con Pianos FIA y Asfalto -->
+                    <!-- Trazada FIA de Telemetría Láser sobre el asfalto del circuito -->
                     <svg class="story-road-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <!-- 1. Base Grava de Escapatoria Exterior -->
-                        <path d="${svgPath}" fill="none" stroke="#141c2c" stroke-width="30" stroke-linecap="round"/>
-                        <!-- 2. Pianos FIA exteriores (Rojo & Blanco) -->
-                        <path d="${svgPath}" fill="none" stroke="#ef4444" stroke-width="24" stroke-linecap="round"/>
-                        <path d="${svgPath}" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-dasharray="3.5 3.5"/>
-                        <!-- 3. Asfalto de Competición (Dark Charcoal Tarmac) -->
-                        <path d="${svgPath}" fill="none" stroke="#080c16" stroke-width="19" stroke-linecap="round"/>
-                        <path d="${svgPath}" fill="none" stroke="#121828" stroke-width="15" stroke-linecap="round"/>
-                        <!-- 4. Racing Groove (Trazada engomada oscura por neumáticos) -->
-                        <path d="${svgPath}" fill="none" stroke="#04060d" stroke-width="8" stroke-linecap="round"/>
-                        <!-- 5. Guía Láser de Telemetría GPS Cyan -->
-                        <path d="${svgPath}" fill="none" stroke="#00f5d4" stroke-width="1.8" stroke-dasharray="5 3" opacity="0.85"/>
+                        <defs>
+                            <linearGradient id="fiaLaserGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#00f5d4"/>
+                                <stop offset="50%" stop-color="#00bbf9"/>
+                                <stop offset="100%" stop-color="#fee440"/>
+                            </linearGradient>
+                            <filter id="laserGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <!-- Resplandor de trazada de competición -->
+                        <path d="${svgPath}" fill="none" stroke="rgba(0, 245, 212, 0.22)" stroke-width="6" stroke-linecap="round"/>
+                        <!-- Línea láser de telemetría de carrera con pulsos -->
+                        <path d="${svgPath}" fill="none" stroke="url(#fiaLaserGrad)" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="6 3" filter="url(#laserGlow)"/>
+                        <!-- Puntos de Apex / Waypoints en la trazada -->
+                        ${coordsList.map((c, i) => `
+                            <circle cx="${c.x}" cy="${c.y}" r="3" fill="#00f5d4" stroke="#060913" stroke-width="1.6"/>
+                        `).join('')}
                     </svg>
 
-                    <!-- Casillas de Circuito (Stage Nodes con Silueta Real del Trazado) -->
+                    <!-- Paradas Oficiales del Circuito (FIA Sector Waypoints) -->
                     ${tracksList.map((trk, tIdx) => {
                         const coords = coordsList[tIdx] || { x: 50, y: 50 };
                         const isTrkUnlocked = unlocked.includes(trk.id) || progress.designerMode;
@@ -775,10 +797,13 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                                  style="left: ${coords.x}%; top: ${coords.y}%;"
                                  onclick="selectStoryMapTrack('${trk.id}')"
                                  title="${trk.name}">
+                                
+                                ${isCurrentActive ? '<div class="waypoint-radar-ring"></div>' : ''}
+
                                 <div class="node-telemetry-dial">
-                                    <span class="stage-pill-top">${isFinalStage ? '👑 FINAL' : `ETAPA ${tIdx + 1}`}</span>
+                                    <span class="stage-pill-top">${isFinalStage ? '👑 FINAL' : `PARADA 0${tIdx + 1}`}</span>
                                     <div class="stage-mini-track-wrap">
-                                        ${!isTrkUnlocked ? '<div style="font-size: 22px; opacity: 0.6;">🔒</div>' : generateTrackMiniSvg(trk.id, 46, 36, strokeColor)}
+                                        ${!isTrkUnlocked ? '<div style="font-size: 20px; opacity: 0.65;">🔒</div>' : generateTrackMiniSvg(trk.id, 46, 32, strokeColor)}
                                     </div>
                                     <div class="node-stars-row">
                                         <span class="star ${stars >= 1 ? 'filled' : 'empty'}">${stars >= 1 ? '⭐' : '☆'}</span>
@@ -787,17 +812,17 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                                     </div>
                                 </div>
                                 <div class="node-name-label">${trk.name}</div>
-                                ${isCurrentActive ? '<div class="node-current-beacon">📍 EN DISPUTA</div>' : ''}
+                                ${isCurrentActive ? '<div class="node-current-beacon">📍 SALIDA A PISTA</div>' : ''}
                             </div>
                         `;
                     }).join('')}
 
-                    <!-- El Coche del Jugador Avanzando por las Casillas (Silueta Fotorrealista Sin Caja Negra) -->
+                    <!-- El Coche del Jugador Aparcado en la Parada Activa sobre el Asfalto -->
                     <div id="story-map-player-car" class="story-map-player-car" 
                          style="left: ${carCoords.x}%; top: ${carCoords.y}%;">
                         <div class="player-car-tag">
-                            <span>🏎️</span>
-                            <span>${shortCarName.toUpperCase()}</span>
+                            <span class="car-tag-dot"></span>
+                            <span>🏎️ ${shortCarName.toUpperCase()}</span>
                             <span class="tag-level">NV.${equippedCar.level || 1}</span>
                         </div>
                         <div class="player-car-body">
@@ -807,7 +832,7 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                                  alt="${equippedCar.name}"
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
                             <div class="map-car-fallback-svg" style="display: none;">
-                                ${typeof generateCarSvg === 'function' && equippedCar ? generateCarSvg(equippedCar, 80, 40) : '<div style="font-size: 24px;">🏎️</div>'}
+                                ${typeof generateCarSvg === 'function' && equippedCar ? generateCarSvg(equippedCar, 75, 38) : '<div style="font-size: 22px;">🏎️</div>'}
                             </div>
                             <div class="player-car-nitro-glow"></div>
                         </div>
