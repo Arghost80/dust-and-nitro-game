@@ -655,16 +655,28 @@ function renderGarageView() {
                                 <div class="token-hash-label">${car.isNft === false ? '🛡️ VEHÍCULO DE SERIE (F2P)' : `⛓️ ${car.tokenHash}`}</div>
                             </div>
 
-                            <!-- Barra de Nivel y XP del Vehículo -->
+                            <!-- Barra de Nivel y XP del Vehículo (Hasta Nivel 50) -->
                             <div class="car-xp-box">
                                 <div class="car-xp-labels">
-                                    <span class="xp-level-title">NIVEL ${lvl}</span>
+                                    <span class="xp-level-title">NIVEL ${lvl} / 50</span>
                                     <span class="xp-ratio-text">${xp} / ${xpNeeded} XP (${xpPct}%)</span>
                                 </div>
                                 <div class="car-xp-track">
                                     <div class="car-xp-bar" style="width: ${xpPct}%;"></div>
                                 </div>
                             </div>
+
+                            ${(() => {
+                                const pendingM = (typeof getCarPendingMilestones === 'function') ? getCarPendingMilestones(car) : [];
+                                if (pendingM.length > 0) {
+                                    return `
+                                        <button class="btn-milestone-banner" onclick="openCarMilestoneModal('${car.instanceId}')">
+                                            👑 ¡HITO DE NIVEL ${pendingM[0].level} LISTO! (+1 STAT POR ${pendingM[0].costCr.toLocaleString()} $CR)
+                                        </button>
+                                    `;
+                                }
+                                return '';
+                            })()}
 
                             <!-- Barra de Energía de Carrera (+1⚡ cada 1 hora) -->
                             <div class="car-energy-box">
@@ -739,6 +751,15 @@ function renderGarageView() {
                             ` : `
                                 <button class="btn-equip-car" onclick="equipNftCar('${car.instanceId}')">${t('garage_equip')}</button>
                             `}
+                            ${(() => {
+                                const allM = (typeof getCarMilestones === 'function') ? getCarMilestones(car) : [];
+                                const claimedN = allM.filter(m => m.isClaimed).length;
+                                return `
+                                    <button class="btn-milestones-open" onclick="openCarMilestoneModal('${car.instanceId}')" title="Hitos de Maestría por Nivel (Cada 10 niveles: +1 Stat)">
+                                        ⭐ HITOS (${claimedN}/${allM.length})
+                                    </button>
+                                `;
+                            })()}
                             <button class="btn-tune-open" onclick="openTuningModal('${car.instanceId}')">
                                 🔧 ${t('btn_tune')}
                             </button>
@@ -3028,7 +3049,7 @@ function openWeeklyTournamentModal() {
             </div>
 
             <div class="settings-body" style="padding: 18px; max-height: 480px; overflow-y: auto;">
-                <!-- Tarjeta del Circuito Semanal -->
+                <!-- Tarjeta del Circuito Semanal y Desglose Financiero -->
                 <div style="background: linear-gradient(135deg, #090d16, #0f172a); border: 1.5px solid #fbbf24; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.2);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                         <div>
@@ -3041,51 +3062,64 @@ function openWeeklyTournamentModal() {
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px;">
-                        <div style="background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                            <span style="font-size: 11px; color: #94a3b8;">BOTE DE PREMIOS EN TON:</span>
-                            <div style="font-size: 16px; font-weight: 900; color: #00f5d4;">💎 ${tInfo.prizeTon || 750} TON</div>
+                    <!-- Métricas del Bote Dinámico (20 $CR Inscripción • Casa +200 $CR • 5% Fee) -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px;">
+                        <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                            <span style="font-size: 10px; color: #94a3b8;">INSCRITOS:</span>
+                            <div style="font-size: 14px; font-weight: 900; color: #38bdf8;">👥 ${tInfo.registeredPlayers || 124} pilotos</div>
+                            <div style="font-size: 9px; color: #64748b;">${((tInfo.registeredPlayers || 124) * 20).toLocaleString()} $CR en entradas</div>
                         </div>
-                        <div style="background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                            <span style="font-size: 11px; color: #94a3b8;">BOTE EN TOKENS $CR:</span>
-                            <div style="font-size: 16px; font-weight: 900; color: #fde047;">💰 ${(tInfo.prizeCr || 500000).toLocaleString()} $CR</div>
+                        <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                            <span style="font-size: 10px; color: #94a3b8;">FONDO CASA + TON:</span>
+                            <div style="font-size: 14px; font-weight: 900; color: #00f5d4;">💎 +${tInfo.prizeTon || 25} TON</div>
+                            <div style="font-size: 9px; color: #64748b;">+${(tInfo.houseBonusCr || 200)} $CR de patrocinio</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                            <span style="font-size: 10px; color: #94a3b8;">BOTE NETO PREMIOS (95%):</span>
+                            <div style="font-size: 14px; font-weight: 900; color: #fde047;">💰 ${(tInfo.netPrizePotCr || 2090).toLocaleString()} $CR</div>
+                            <div style="font-size: 9px; color: #10b981;">Fee Plataforma 5%: ${(tInfo.devFeeCr || 110)} $CR</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Tabla de Tiempos en Vivo -->
-                <h4 style="margin: 0 0 10px; font-size: 13px; color: #f8fafc; letter-spacing: 0.5px;">⏱️ CLASIFICACIÓN DEL TORNEO EN VIVO</h4>
+                <!-- Tabla de Tiempos y Premios Dinámicos (Top 10 o Top 5) -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="margin: 0; font-size: 13px; color: #f8fafc; letter-spacing: 0.5px;">
+                        ⏱️ CLASIFICACIÓN Y PREMIOS (${tInfo.isTop10 ? 'TOP 10 PILOTOS' : 'TOP 5 PILOTOS'})
+                    </h4>
+                    <span style="font-size: 10px; color: #00f5d4; font-weight: 800;">REPARTO 95% DEL BOTE</span>
+                </div>
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
                     ${(tInfo.leaderboard || []).map(row => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-weight: 900; font-size: 14px; color: ${row.rank === 1 ? '#fee440' : (row.rank === 2 ? '#cbd5e1' : '#ff9800')};">#${row.rank}</span>
+                                <span style="font-weight: 900; font-size: 14px; color: ${row.rank === 1 ? '#fee440' : (row.rank === 2 ? '#cbd5e1' : (row.rank === 3 ? '#ff9800' : '#64748b'))}; min-width: 28px;">#${row.rank}</span>
                                 <div>
                                     <div style="font-size: 13px; font-weight: 900; color: #f8fafc;">${row.pilot}</div>
-                                    <div style="font-size: 11px; color: #94a3b8;">${row.car} • <strong style="color: #00f5d4;">${row.reward}</strong></div>
+                                    <div style="font-size: 11px; color: #94a3b8;">${row.car} • <strong style="color: #00f5d4;">${row.rewardText}</strong></div>
                                 </div>
                             </div>
-                            <span style="font-family: monospace; font-weight: 900; color: #fee440; font-size: 14px;">${row.lapTime}</span>
+                            <span style="font-family: monospace; font-weight: 900; color: #fee440; font-size: 13px;">${row.lapTime}</span>
                         </div>
                     `).join('')}
 
                     <!-- Tu tiempo estimado -->
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: linear-gradient(135deg, rgba(0, 245, 212, 0.15), rgba(0, 187, 249, 0.15)); border: 1.5px solid #00f5d4; border-radius: 10px;">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="background: #00f5d4; color: #000; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 4px;">TÚ #6</span>
+                            <span style="background: #00f5d4; color: #000; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 4px;">TÚ</span>
                             <div>
                                 <div style="font-size: 13px; font-weight: 900; color: #ffffff;">${escapeHtml(curPilot)}</div>
-                                <div style="font-size: 11px; color: #00f5d4;">${escapeHtml(carName)}</div>
+                                <div style="font-size: 11px; color: #00f5d4;">${escapeHtml(carName)} • ${tInfo.playerBestTime ? `Mejor Vuelta: ${tInfo.playerBestTime}` : 'Sin tiempo registrado todavía'}</div>
                             </div>
                         </div>
-                        <span style="font-family: monospace; font-weight: 900; color: #fee440; font-size: 14px;">39.12s</span>
+                        <span style="font-family: monospace; font-weight: 900; color: #fee440; font-size: 14px;">${tInfo.playerBestTime || '--.--s'}</span>
                     </div>
                 </div>
             </div>
 
             <div class="settings-footer" style="display: flex; justify-content: space-between; align-items: center;">
                 <button class="btn-primary" style="padding: 12px 20px; background: linear-gradient(135deg, #f59e0b, #ef4444); border:none; color:#ffffff; font-weight:900; font-size:13px; border-radius:8px; cursor:pointer;" onclick="handleEnterWeeklyTournament()">
-                    🏎️ ENTRAR Y COMPETIR (${(tInfo.entryFeeCr || 500)} $CR) ▶
+                    🏎️ ENTRAR Y COMPETIR (${(tInfo.entryFeeCr || 20)} $CR) ▶
                 </button>
                 <button class="btn-settings-save" onclick="closeWeeklyTournamentModal()">CERRAR</button>
             </div>
@@ -3116,6 +3150,163 @@ function closeWeeklyTournamentModal() {
     if (modal) {
         modal.style.display = 'none';
         modal.classList.add('hidden');
+    }
+}
+
+// =========================================================================
+// 8.1 MODAL DE HITOS DE MAESTRÍA POR NIVEL (+1 STAT CADA 10 NIVELES)
+// =========================================================================
+function openCarMilestoneModal(instanceId) {
+    hubAudio.playClick();
+    const userData = loadNftUserData();
+    const car = (userData.garage || []).find(c => c.instanceId === instanceId) || userData.garage[0];
+    if (!car) return;
+
+    let modal = document.getElementById('milestone-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'milestone-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const milestones = (typeof getCarMilestones === 'function') ? getCarMilestones(car) : [];
+    const perf = (typeof calculateCarPerformance === 'function') ? calculateCarPerformance(car) : { effectiveStats: car.stats || {} };
+    const eff = perf.effectiveStats;
+    const userCr = userData.credits || 0;
+
+    const statLabels = [
+        { key: 'potencia', name: 'Potencia', icon: '⚡' },
+        { key: 'velocidad', name: 'Velocidad', icon: '🏁' },
+        { key: 'aceleracion', name: 'Aceleración', icon: '🚀' },
+        { key: 'agarre', name: 'Agarre', icon: '🏎️' },
+        { key: 'frenada', name: 'Frenada', icon: '🛑' },
+        { key: 'manejo', name: 'Manejo', icon: '🎯' },
+        { key: 'turbo', name: 'Turbo', icon: '🌪️' },
+        { key: 'downforce', name: 'Downforce', icon: '🔻' },
+        { key: 'traccion', name: 'Tracción', icon: '🛞' },
+        { key: 'ligereza', name: 'Ligereza', icon: '🪶' }
+    ];
+
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 620px;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.25), rgba(249, 115, 22, 0.2)); border-bottom: 1px solid rgba(234, 179, 8, 0.4);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">👑</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #facc15;">HITOS DE MAESTRÍA: ${car.name.toUpperCase()}</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Nivel actual: <strong>${car.level || 1} / 50</strong> • Cada 10 niveles desbloqueas +1 punto a elección</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeCarMilestoneModal()">✖</button>
+            </div>
+
+            <div class="settings-body" style="padding: 18px; max-height: 480px; overflow-y: auto;">
+                <p style="font-size: 12px; color: #94a3b8; margin: 0 0 14px;">
+                    Compite en carreras con este coche para subirlo de nivel. Por cada 10 niveles alcanzados (10, 20, 30, 40, 50), desbloqueas un hito donde puedes asignar +1 punto a la estadística que quieras pagando una pequeña cantidad en tokens $CR.
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                    ${milestones.map(m => {
+                        if (m.isClaimed) {
+                            const foundStat = statLabels.find(s => s.key === m.claimedStat);
+                            const statNameDisplay = foundStat ? `${foundStat.icon} ${foundStat.name}` : (m.claimedStat || 'Estadística');
+                            return `
+                                <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-size: 14px; font-weight: 900; color: #34d399;">✅ HITO DE NIVEL ${m.level} RECLAMADO</div>
+                                        <div style="font-size: 11px; color: #cbd5e1; margin-top: 3px;">
+                                            Punto permanente asignado a: <strong style="color: #fde047; text-transform: uppercase;">${statNameDisplay} (+1)</strong>
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 12px; font-weight: 800; color: #10b981; background: rgba(16,185,129,0.2); padding: 4px 10px; border-radius: 6px;">COMPLETADO</span>
+                                </div>
+                            `;
+                        } else if (m.isUnlocked) {
+                            const canAfford = userCr >= m.costCr;
+                            return `
+                                <div style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.18), rgba(249, 115, 22, 0.18)); border: 2px solid #eab308; border-radius: 12px; padding: 16px; box-shadow: 0 0 16px rgba(234, 179, 8, 0.2);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                        <div>
+                                            <div style="font-size: 15px; font-weight: 900; color: #fde047;">🎉 ¡HITO DE NIVEL ${m.level} DESBLOQUEADO!</div>
+                                            <div style="font-size: 11px; color: #cbd5e1;">Elige qué atributo potenciar por <strong style="color: #00f5d4;">${m.costCr.toLocaleString()} $CR</strong></div>
+                                        </div>
+                                        <span style="font-size: 12px; font-weight: 900; color: ${canAfford ? '#00f5d4' : '#f87171'};">
+                                            Coste: ${m.costCr.toLocaleString()} $CR
+                                        </span>
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                        ${statLabels.map(st => {
+                                            const currentVal = eff[st.key] || 0;
+                                            return `
+                                                <button class="btn-stat-choice" onclick="handleClaimCarMilestone('${car.instanceId}', ${m.level}, '${st.key}')" 
+                                                    style="display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(234, 179, 8, 0.45); border-radius: 8px; color: #fff; cursor: pointer; transition: all 0.15s ease;">
+                                                    <span style="font-size: 12px; font-weight: 800;">${st.icon} ${st.name}</span>
+                                                    <span style="font-size: 11px; font-weight: 900; color: #fde047;">${currentVal} ➔ <strong style="color: #00f5d4;">${currentVal + 1}</strong></span>
+                                                </button>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            return `
+                                <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; opacity: 0.7;">
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 800; color: #94a3b8;">🔒 HITO DE NIVEL ${m.level} (BLOQUEADO)</div>
+                                        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                                            Progreso actual: Nivel ${car.level || 1} / ${m.level} • Coste: ${m.costCr.toLocaleString()} $CR
+                                        </div>
+                                    </div>
+                                    <span style="font-size: 11px; color: #64748b; font-weight: 800;">NIVEL ${m.level} REQUERIDO</span>
+                                </div>
+                            `;
+                        }
+                    }).join('')}
+                </div>
+            </div>
+
+            <div class="settings-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; color: #fde047; font-weight: 800;">💰 Saldo: ${(userCr).toLocaleString()} $CR</span>
+                <button class="btn-settings-save" onclick="closeCarMilestoneModal()">CERRAR</button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function closeCarMilestoneModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('milestone-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function handleClaimCarMilestone(instanceId, mLevel, statKey) {
+    hubAudio.playClick();
+    if (typeof claimCarMilestoneStat === 'function') {
+        const res = claimCarMilestoneStat(instanceId, mLevel, statKey);
+        if (!res.success) {
+            if (res.reason === 'credits_insufficient') {
+                alert(`No tienes suficientes créditos $CR. Necesitas ${res.costCr.toLocaleString()} $CR.`);
+            } else if (res.reason === 'level_insufficient') {
+                alert(`Nivel insuficiente. Este hito requiere que el coche alcance el nivel ${res.requiredLevel}.`);
+            } else {
+                alert(`No se pudo desbloquear el hito: ${res.reason}`);
+            }
+            return;
+        }
+
+        hubAudio.playLevelUp();
+        renderHubHeader();
+        renderGarageView();
+        openCarMilestoneModal(instanceId);
+        alert(`🎉 ¡Hito de Nivel ${mLevel} Desbloqueado!\n+1 punto permanente añadido a ${statKey.toUpperCase()}.`);
     }
 }
 
@@ -3610,6 +3801,12 @@ if (typeof window !== 'undefined') {
     window.handleDisconnectWallet = handleDisconnectWallet;
     window.handleSwapTonToCr = handleSwapTonToCr;
     window.handleWithdrawCrToTon = handleWithdrawCrToTon;
+    window.openWeeklyTournamentModal = openWeeklyTournamentModal;
+    window.closeWeeklyTournamentModal = closeWeeklyTournamentModal;
+    window.handleEnterWeeklyTournament = handleEnterWeeklyTournament;
+    window.openCarMilestoneModal = openCarMilestoneModal;
+    window.closeCarMilestoneModal = closeCarMilestoneModal;
+    window.handleClaimCarMilestone = handleClaimCarMilestone;
 }
 
 // Secuencia de Salida FIA y Animación de Carga de Competición

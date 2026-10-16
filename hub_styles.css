@@ -3611,3 +3611,52 @@
     transform: translateY(-2px);
     filter: brightness(1.1);
 }
+
+/* Botones y Banners de Hitos de Maestría por Nivel (Cada 10 niveles) */
+.btn-milestone-banner {
+    width: 100%;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: #ffffff;
+    font-weight: 900;
+    font-size: 11px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+    animation: pulseMilestone 2.2s infinite;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    transition: transform 0.15s ease;
+}
+.btn-milestone-banner:hover {
+    transform: scale(1.02);
+}
+@keyframes pulseMilestone {
+    0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+    50% { box-shadow: 0 0 18px rgba(239, 68, 68, 0.7); }
+}
+
+.btn-milestones-open {
+    background: rgba(234, 179, 8, 0.18);
+    color: #fde047;
+    border: 1px solid #eab308;
+    font-weight: 800;
+    font-size: 11px;
+    padding: 7px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-milestones-open:hover {
+    background: #eab308;
+    color: #000;
+    transform: translateY(-1px);
+}
+
+.btn-stat-choice:hover {
+    background: rgba(234, 179, 8, 0.25) !important;
+    border-color: #fde047 !important;
+    transform: translateY(-2px);
+}

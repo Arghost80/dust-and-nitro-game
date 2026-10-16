@@ -553,6 +553,9 @@ function calculateCarPerformance(car) {
     // Bonificación de nivel: +1 punto distribuido por cada 2 niveles superados
     const lvlBonus = Math.floor((level - 1) / 2);
 
+    // Puntos de Hito de Maestría por Nivel (Cada 10 niveles: +1 punto personalizado con tokens $CR)
+    const mStats = car.milestoneStats || {};
+
     // Integración de las 5 ramas de piezas (con retrocompatibilidad)
     const speedPowerLvl = parts.speed_power || Math.max(parts.turbo || 0, parts.ecu || 0);
     const brakingLvl = parts.braking || parts.brakes || 0;
@@ -561,16 +564,16 @@ function calculateCarPerformance(car) {
     const aeroLightnessLvl = parts.aero_lightness || parts.chassis || 0;
 
     const eff = {
-        potencia: (rawStats.potencia || 1) + speedPowerLvl + lvlBonus,
-        velocidad: (rawStats.velocidad || 1) + speedPowerLvl + lvlBonus,
-        aceleracion: (rawStats.aceleracion || 1) + accelTractionLvl + lvlBonus,
-        agarre: (rawStats.agarre || 1) + handlingGripLvl + lvlBonus,
-        frenada: (rawStats.frenada || 1) + (brakingLvl * 2) + lvlBonus,
-        manejo: (rawStats.manejo || 1) + handlingGripLvl + lvlBonus,
-        turbo: (rawStats.turbo || 1) + speedPowerLvl + lvlBonus,
-        downforce: (rawStats.downforce || 1) + aeroLightnessLvl + lvlBonus,
-        traccion: (rawStats.traccion || 1) + accelTractionLvl + lvlBonus,
-        ligereza: (rawStats.ligereza || 1) + aeroLightnessLvl + lvlBonus
+        potencia: (rawStats.potencia || 1) + speedPowerLvl + lvlBonus + (mStats.potencia || 0),
+        velocidad: (rawStats.velocidad || 1) + speedPowerLvl + lvlBonus + (mStats.velocidad || 0),
+        aceleracion: (rawStats.aceleracion || 1) + accelTractionLvl + lvlBonus + (mStats.aceleracion || 0),
+        agarre: (rawStats.agarre || 1) + handlingGripLvl + lvlBonus + (mStats.agarre || 0),
+        frenada: (rawStats.frenada || 1) + (brakingLvl * 2) + lvlBonus + (mStats.frenada || 0),
+        manejo: (rawStats.manejo || 1) + handlingGripLvl + lvlBonus + (mStats.manejo || 0),
+        turbo: (rawStats.turbo || 1) + speedPowerLvl + lvlBonus + (mStats.turbo || 0),
+        downforce: (rawStats.downforce || 1) + aeroLightnessLvl + lvlBonus + (mStats.downforce || 0),
+        traccion: (rawStats.traccion || 1) + accelTractionLvl + lvlBonus + (mStats.traccion || 0),
+        ligereza: (rawStats.ligereza || 1) + aeroLightnessLvl + lvlBonus + (mStats.ligereza || 0)
     };
 
     const totalPoints = Object.values(eff).reduce((sum, v) => sum + v, 0);
@@ -1166,7 +1169,7 @@ function upgradeCarPart(instanceId, partKey) {
     return upgradeCarStatBranch(instanceId, map[partKey] || 'speed_power');
 }
 
-// Añadir XP al coche actualmente equipado tras una carrera
+// Añadir XP al coche actualmente equipado tras una carrera (hasta nivel 50)
 function addXpToEquippedCar(xpAmount) {
     const userData = loadNftUserData();
     const car = userData.garage.find(c => c.instanceId === userData.equippedInstanceId) || userData.garage[0];
@@ -1178,20 +1181,120 @@ function addXpToEquippedCar(xpAmount) {
 
     car.xp += xpAmount;
     let leveledUp = false;
+    const oldLevel = car.level;
 
-    while (car.xp >= car.xpNeeded && car.level < 10) {
+    // Límite de nivel aumentado a 50 para hitos de maestría
+    while (car.xp >= car.xpNeeded && car.level < 50) {
         car.xp -= car.xpNeeded;
         car.level++;
         car.xpNeeded = car.level * 250;
         leveledUp = true;
     }
 
+    // Comprobar si se ha alcanzado un nuevo hito de maestría (múltiplo de 10)
+    let milestoneUnlocked = null;
+    for (let m = 10; m <= 50; m += 10) {
+        if (oldLevel < m && car.level >= m) {
+            milestoneUnlocked = m;
+        }
+    }
+
     saveNftUserData(userData);
     return {
         leveledUp: leveledUp,
         newLevel: car.level,
+        oldLevel: oldLevel,
         currentXp: car.xp,
-        xpNeeded: car.xpNeeded
+        xpNeeded: car.xpNeeded,
+        milestoneUnlocked: milestoneUnlocked
+    };
+}
+
+// =========================================================================
+// 8.1 HITOS DE MAESTRÍA POR NIVEL DE COCHE (CADA 10 NIVELES: +1 STAT A ELECCIÓN)
+// =========================================================================
+const VALID_CAR_STATS = [
+    'potencia', 'velocidad', 'aceleracion', 'agarre', 'frenada',
+    'manejo', 'turbo', 'downforce', 'traccion', 'ligereza'
+];
+
+function getCarMilestones(car) {
+    if (!car) return [];
+    const lvl = car.level || 1;
+    const claimed = car.claimedMilestones || [];
+    const milestones = [];
+    for (let m = 10; m <= 50; m += 10) {
+        const cost = (m / 10) * 1000;
+        const isUnlocked = lvl >= m;
+        const isClaimed = claimed.includes(m);
+        milestones.push({
+            level: m,
+            costCr: cost,
+            isUnlocked: isUnlocked,
+            isClaimed: isClaimed,
+            claimedStat: (car.milestoneStatChoices && car.milestoneStatChoices[m]) || null
+        });
+    }
+    return milestones;
+}
+
+function getCarPendingMilestones(car) {
+    if (!car) return [];
+    return getCarMilestones(car).filter(m => m.isUnlocked && !m.isClaimed);
+}
+
+function claimCarMilestoneStat(instanceId, milestoneLevel, statName) {
+    const userData = loadNftUserData();
+    const car = (userData.garage || []).find(c => c.instanceId === instanceId);
+    if (!car) return { success: false, reason: "car_not_found" };
+
+    const mLevel = parseInt(milestoneLevel, 10);
+    if (isNaN(mLevel) || mLevel % 10 !== 0 || mLevel < 10 || mLevel > 50) {
+        return { success: false, reason: "invalid_milestone" };
+    }
+
+    if ((car.level || 1) < mLevel) {
+        return { success: false, reason: "level_insufficient", requiredLevel: mLevel, currentLevel: car.level || 1 };
+    }
+
+    if (!car.claimedMilestones) car.claimedMilestones = [];
+    if (car.claimedMilestones.includes(mLevel)) {
+        return { success: false, reason: "milestone_already_claimed" };
+    }
+
+    if (!VALID_CAR_STATS.includes(statName)) {
+        return { success: false, reason: "invalid_stat" };
+    }
+
+    // Coste escalonado en $CR: Nivel 10 -> 1.000 $CR, Nivel 20 -> 2.000 $CR, Nivel 30 -> 3.000 $CR, etc.
+    const costCr = (mLevel / 10) * 1000;
+    if ((userData.credits || 0) < costCr) {
+        return { success: false, reason: "credits_insufficient", costCr: costCr, credits: userData.credits || 0 };
+    }
+
+    // Cobrar tokens $CR
+    userData.credits -= costCr;
+    car.claimedMilestones.push(mLevel);
+
+    if (!car.milestoneStats) car.milestoneStats = {};
+    car.milestoneStats[statName] = (car.milestoneStats[statName] || 0) + 1;
+
+    if (!car.milestoneStatChoices) car.milestoneStatChoices = {};
+    car.milestoneStatChoices[mLevel] = statName;
+
+    // Recalcular rendimiento efectivo del coche
+    const perf = calculateCarPerformance(car);
+
+    saveNftUserData(userData);
+    return {
+        success: true,
+        car: car,
+        milestoneLevel: mLevel,
+        chosenStat: statName,
+        statValue: car.milestoneStats[statName],
+        costCr: costCr,
+        remainingCredits: userData.credits,
+        newPerf: perf
     };
 }
 
@@ -1574,41 +1677,119 @@ function withdrawCrToTon(crAmount) {
 }
 
 // =========================================================================
-// 10. TORNEO SEMANAL OFICIAL GRAND PRIX ASÍNCRONO
+// 10. TORNEO SEMANAL OFICIAL GRAND PRIX ASÍNCRONO CON BOTE DINÁMICO & FEE 5%
 // =========================================================================
-const WEEKLY_TOURNAMENT_DATA = {
+const WEEKLY_TOURNAMENT_CONFIG = {
     title: "NEO-TOKYO HARBOR BAY GT GRAND PRIX",
     trackId: "neo_tokyo_bay",
     timeOfDay: "night",
     totalLaps: 3,
-    prizeTon: 750,
-    prizeCr: 500000,
-    entryFeeCr: 500,
+    entryFeeCr: 20,       // Inscripción: 20 $CR por piloto
+    houseBonusCr: 200,    // Aportación de la casa / patrocinador al bote
+    sponsorTon: 25,       // Bote adicional en TON de sponsors
     endsIn: "2 días 14 horas",
-    registeredPlayers: 1420,
-    leaderboard: [
-        { rank: 1, pilot: "Hans 'Blitz' Becker", car: "Chiron Pur Sport W16", lapTime: "36.84s", reward: "🏆 350 TON + 200.000 $CR" },
-        { rank: 2, pilot: "Phantom_Silva", car: "Hyperion Senna 720S", lapTime: "37.12s", reward: "🥈 200 TON + 150.000 $CR" },
-        { rank: 3, pilot: "Marco 'Apex' Rossi", car: "Valkyrie AMR Pro", lapTime: "37.58s", reward: "🥉 100 TON + 75.000 $CR" },
-        { rank: 4, pilot: "Torque_Viper", car: "Dodge Viper ACR", lapTime: "38.05s", reward: "⭐ 50 TON + 40.000 $CR" },
-        { rank: 5, pilot: "Grello_Manthey", car: "Porsche 911 GT3-RS", lapTime: "38.42s", reward: "⭐ 50 TON + 35.000 $CR" }
-    ]
+    platformFeePct: 0.05  // 5% comisión recuperada por la plataforma
 };
 
 function getWeeklyTournamentInfo() {
-    return WEEKLY_TOURNAMENT_DATA;
+    let savedTourney = null;
+    try {
+        const raw = localStorage.getItem('dustrac_tournament_state');
+        if (raw) savedTourney = JSON.parse(raw);
+    } catch(e) {}
+
+    const registeredPlayers = (savedTourney && savedTourney.registeredPlayers) || 124;
+    const playerBestTime = (savedTourney && savedTourney.playerBestTime) || null;
+
+    const totalCollectedCr = registeredPlayers * WEEKLY_TOURNAMENT_CONFIG.entryFeeCr;
+    const grossPotCr = totalCollectedCr + WEEKLY_TOURNAMENT_CONFIG.houseBonusCr;
+    const devFeeCr = Math.round(grossPotCr * WEEKLY_TOURNAMENT_CONFIG.platformFeePct); // 5% dev fee
+    const netPrizePotCr = grossPotCr - devFeeCr; // 95% repartido entre los mejores tiempos
+
+    // Distribución: Si hay más de 50 corredores, premia al Top 10. Si no, al Top 5.
+    const isTop10 = registeredPlayers >= 50;
+    const shareDistribution = isTop10 ? [
+        { rank: 1, pct: 0.30, pilot: "Hans 'Blitz' Becker", car: "Chiron Pur Sport W16", lapTime: "36.84s" },
+        { rank: 2, pct: 0.20, pilot: "Phantom_Silva", car: "Hyperion Senna 720S", lapTime: "37.12s" },
+        { rank: 3, pct: 0.15, pilot: "Marco 'Apex' Rossi", car: "Valkyrie AMR Pro", lapTime: "37.58s" },
+        { rank: 4, pct: 0.10, pilot: "Torque_Viper", car: "Dodge Viper ACR", lapTime: "38.05s" },
+        { rank: 5, pct: 0.07, pilot: "Grello_Manthey", car: "Porsche 911 GT3-RS", lapTime: "38.42s" },
+        { rank: 6, pct: 0.05, pilot: "Klaus_Weber", car: "Bavaria M4 Beast", lapTime: "38.75s" },
+        { rank: 7, pct: 0.04, pilot: "Ayrton_GT", car: "Ferrari Daytona SP3", lapTime: "38.92s" },
+        { rank: 8, pct: 0.03, pilot: "Drift_Master_Ken", car: "Lancer Evo VI TME", lapTime: "39.10s" },
+        { rank: 9, pct: 0.03, pilot: "Speedy_Gonzalo", car: "Lamborghini SVJ", lapTime: "39.28s" },
+        { rank: 10, pct: 0.03, pilot: "Nordic_Racer", car: "Bentley Continental GT3", lapTime: "39.45s" }
+    ] : [
+        { rank: 1, pct: 0.40, pilot: "Hans 'Blitz' Becker", car: "Chiron Pur Sport W16", lapTime: "36.84s" },
+        { rank: 2, pct: 0.25, pilot: "Phantom_Silva", car: "Hyperion Senna 720S", lapTime: "37.12s" },
+        { rank: 3, pct: 0.15, pilot: "Marco 'Apex' Rossi", car: "Valkyrie AMR Pro", lapTime: "37.58s" },
+        { rank: 4, pct: 0.12, pilot: "Torque_Viper", car: "Dodge Viper ACR", lapTime: "38.05s" },
+        { rank: 5, pct: 0.08, pilot: "Grello_Manthey", car: "Porsche 911 GT3-RS", lapTime: "38.42s" }
+    ];
+
+    const leaderboard = shareDistribution.map(entry => {
+        const prizeCr = Math.round(netPrizePotCr * entry.pct);
+        const prizeTon = Number((WEEKLY_TOURNAMENT_CONFIG.sponsorTon * entry.pct).toFixed(2));
+        const medal = entry.rank === 1 ? '🥇' : (entry.rank === 2 ? '🥈' : (entry.rank === 3 ? '🥉' : '⭐'));
+        return {
+            rank: entry.rank,
+            pilot: entry.pilot,
+            car: entry.car,
+            lapTime: entry.lapTime,
+            prizeCr: prizeCr,
+            prizeTon: prizeTon,
+            rewardText: `${medal} +${prizeCr.toLocaleString()} $CR ${prizeTon > 0 ? `+ ${prizeTon} TON` : ''}`
+        };
+    });
+
+    return {
+        ...WEEKLY_TOURNAMENT_CONFIG,
+        registeredPlayers: registeredPlayers,
+        totalCollectedCr: totalCollectedCr,
+        grossPotCr: grossPotCr,
+        devFeeCr: devFeeCr,
+        netPrizePotCr: netPrizePotCr,
+        prizeCr: grossPotCr,
+        prizeTon: WEEKLY_TOURNAMENT_CONFIG.sponsorTon,
+        leaderboard: leaderboard,
+        playerBestTime: playerBestTime,
+        isTop10: isTop10
+    };
 }
+
+const WEEKLY_TOURNAMENT_DATA = getWeeklyTournamentInfo();
 
 function enterWeeklyTournament() {
     const userData = loadNftUserData();
-    if (userData.credits < WEEKLY_TOURNAMENT_DATA.entryFeeCr) {
-        return { success: false, reason: "credits_insufficient" };
+    const tourneyInfo = getWeeklyTournamentInfo();
+    const fee = tourneyInfo.entryFeeCr || 20;
+
+    if ((userData.credits || 0) < fee) {
+        return { success: false, reason: "credits_insufficient", required: fee, credits: userData.credits || 0 };
     }
 
-    userData.credits -= WEEKLY_TOURNAMENT_DATA.entryFeeCr;
+    userData.credits -= fee;
     userData.enteredWeeklyTournament = true;
+
+    // 5% recuperado por la plataforma añadido a la tesorería
+    const platformShare = Math.round(fee * WEEKLY_TOURNAMENT_CONFIG.platformFeePct);
+    userData.platformTreasuryFees = (userData.platformTreasuryFees || 0) + platformShare;
+
+    // Actualizar participantes en LocalStorage
+    let savedTourney = { registeredPlayers: tourneyInfo.registeredPlayers + 1 };
+    try {
+        localStorage.setItem('dustrac_tournament_state', JSON.stringify(savedTourney));
+    } catch(e) {}
+
     saveNftUserData(userData);
-    return { success: true, tournament: WEEKLY_TOURNAMENT_DATA, remainingCredits: userData.credits };
+    const updatedTourney = getWeeklyTournamentInfo();
+    return {
+        success: true,
+        tournament: updatedTourney,
+        feePaid: fee,
+        platformFeeAccrued: platformShare,
+        remainingCredits: userData.credits
+    };
 }
 
 // =========================================================================
@@ -1773,5 +1954,12 @@ if (typeof window !== 'undefined') {
     window.addNitroWithAd = addNitroWithAd;
     window.buyNitrosWithTokens = buyNitrosWithTokens;
     window.consumeNitroFromInventory = consumeNitroFromInventory;
+    window.VALID_CAR_STATS = VALID_CAR_STATS;
+    window.getCarMilestones = getCarMilestones;
+    window.getCarPendingMilestones = getCarPendingMilestones;
+    window.claimCarMilestoneStat = claimCarMilestoneStat;
+    window.getWeeklyTournamentInfo = getWeeklyTournamentInfo;
+    window.enterWeeklyTournament = enterWeeklyTournament;
+    window.WEEKLY_TOURNAMENT_CONFIG = WEEKLY_TOURNAMENT_CONFIG;
 }
 

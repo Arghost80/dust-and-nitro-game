@@ -6137,7 +6137,11 @@ function endRace() {
 
     let xpText = `⭐ +${xpReward} XP`;
     if (xpResult && xpResult.leveledUp) {
-        xpText = `🔥 ¡NIV. ${xpResult.newLevel}! (+${xpReward} XP)`;
+        if (xpResult.milestoneUnlocked) {
+            xpText = `👑 ¡HITO NIVEL ${xpResult.milestoneUnlocked}! (+1 STAT A ELEGIR EN GARAJE)`;
+        } else {
+            xpText = `🔥 ¡NIV. ${xpResult.newLevel}! (+${xpReward} XP)`;
+        }
     }
 
     raceScene.add.text(480, 268, `💰 +${crReward} $CR  •  💎 +${gemReward} TON  •  ${xpText}`, {

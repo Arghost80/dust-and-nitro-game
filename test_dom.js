@@ -580,23 +580,85 @@ if (!mpModal || !mpModal.innerHTML.includes('MERCADO P2P DE LA COMUNIDAD TELEGRA
 }
 console.log('✓ Mercado P2P de piezas comunitarias probado y operativo');
 
-// 3. Torneo Semanal Oficial
+// 3. Torneo Semanal Oficial (Inscripción 20 $CR, Fondo Casa 200 $CR, Fee 5%, Reparto 95%)
 const tourneyInfo = vm.runInContext('getWeeklyTournamentInfo()', ctx);
-console.log('Torneo Semanal:', tourneyInfo.title, 'Bote en TON:', tourneyInfo.prizeTon, 'Bote en $CR:', tourneyInfo.prizeCr);
-if (!tourneyInfo.title || !tourneyInfo.prizeTon) {
-    throw new Error('La información del torneo semanal debe estar disponible');
+console.log('Torneo Semanal:', tourneyInfo.title, 'Inscripción:', tourneyInfo.entryFeeCr, '$CR | Bote Bruto:', tourneyInfo.grossPotCr, '$CR | Bote Neto (95%):', tourneyInfo.netPrizePotCr, '$CR | Fee 5%:', tourneyInfo.devFeeCr, '$CR');
+if (!tourneyInfo.title || tourneyInfo.entryFeeCr !== 20) {
+    throw new Error('La inscripción del torneo semanal debe ser exactamente 20 $CR');
 }
+if (tourneyInfo.devFeeCr !== Math.round(tourneyInfo.grossPotCr * 0.05)) {
+    throw new Error('La comisión recuperada por la plataforma en el torneo semanal debe ser el 5% del bote bruto');
+}
+if (tourneyInfo.leaderboard.length < 5) {
+    throw new Error('El leaderboard del torneo semanal debe premiar al menos al Top 5 / Top 10');
+}
+const preTourneyFees = vm.runInContext('loadNftUserData().platformTreasuryFees || 0', ctx);
 const enterTourneyRes = vm.runInContext('enterWeeklyTournament()', ctx);
-console.log('Resultado de inscripción en el Torneo Semanal:', enterTourneyRes.success);
-if (!enterTourneyRes.success) {
+console.log('Resultado de inscripción en el Torneo Semanal:', enterTourneyRes.success, 'Fee pagada:', enterTourneyRes.feePaid);
+if (!enterTourneyRes.success || enterTourneyRes.feePaid !== 20) {
     throw new Error('Fallo al inscribirse en el Torneo Semanal Oficial');
+}
+const postTourneyFees = vm.runInContext('loadNftUserData().platformTreasuryFees || 0', ctx);
+if (postTourneyFees <= preTourneyFees) {
+    throw new Error('La inscripción al torneo debe acumular el 5% de fee en la tesorería de la plataforma');
 }
 vm.runInContext('openWeeklyTournamentModal()', ctx);
 const wtModal = doc.getElementById('weekly-tournament-modal');
-if (!wtModal || !wtModal.innerHTML.includes('TORNEO SEMANAL GT GRAND PRIX')) {
-    throw new Error('El modal del Torneo Semanal debe renderizarse');
+if (!wtModal || !wtModal.innerHTML.includes('TORNEO SEMANAL GT GRAND PRIX') || !wtModal.innerHTML.includes('20 $CR')) {
+    throw new Error('El modal del Torneo Semanal debe renderizarse con la cuota de 20 $CR');
 }
-console.log('✓ Torneo Semanal GT Grand Prix verificado con éxito');
+console.log('✓ Torneo Semanal GT Grand Prix verificado con cuota de 20 $CR y comisión del 5%');
+
+// 3.1 Hitos de Maestría por Nivel de Coche (Cada 10 niveles: +1 Stat a elección por $CR)
+console.log('\n--- VERIFICANDO HITOS DE MAESTRÍA POR NIVEL DE COCHE (+1 STAT CADA 10 NIVELES) ---');
+vm.runInContext(`
+    (() => {
+        const u = loadNftUserData();
+        const testCar = u.garage[0];
+        testCar.level = 10;
+        testCar.xp = 0;
+        testCar.claimedMilestones = [];
+        testCar.milestoneStats = {};
+        u.credits = 10000;
+        saveNftUserData(u);
+    })();
+`, ctx);
+
+const milestonesList = vm.runInContext(`getCarMilestones(loadNftUserData().garage[0])`, ctx);
+console.log('Hitos calculados para coche nivel 10:', milestonesList.map(m => ({ level: m.level, cost: m.costCr, unlocked: m.isUnlocked, claimed: m.isClaimed })));
+if (milestonesList.length !== 5) throw new Error('Debe haber 5 hitos (10, 20, 30, 40, 50)');
+if (milestonesList[0].costCr !== 1000 || milestonesList[1].costCr !== 2000 || milestonesList[2].costCr !== 3000) {
+    throw new Error('Los costes de los hitos deben ser 1000, 2000, 3000... $CR');
+}
+if (!milestonesList[0].isUnlocked || milestonesList[1].isUnlocked) {
+    throw new Error('Solo el hito de nivel 10 debe estar desbloqueado para un coche nivel 10');
+}
+
+// Probar asignación de punto de hito a aceleración (+1 por 1000 $CR)
+const carInstId = vm.runInContext(`loadNftUserData().garage[0].instanceId`, ctx);
+const prePerf = vm.runInContext(`calculateCarPerformance(loadNftUserData().garage[0])`, ctx);
+const claimMilestoneRes = vm.runInContext(`claimCarMilestoneStat('${carInstId}', 10, 'aceleracion')`, ctx);
+console.log('Resultado de reclamar Hito Nivel 10 (+1 Aceleración):', claimMilestoneRes.success, 'Coste:', claimMilestoneRes.costCr);
+if (!claimMilestoneRes.success || claimMilestoneRes.costCr !== 1000) {
+    throw new Error('Fallo al reclamar Hito de nivel 10 por 1000 $CR');
+}
+const postPerf = vm.runInContext(`calculateCarPerformance(loadNftUserData().garage[0])`, ctx);
+console.log(`Aceleración previa: ${prePerf.effectiveStats.aceleracion} -> Posterior al hito: ${postPerf.effectiveStats.aceleracion}`);
+if (postPerf.effectiveStats.aceleracion !== prePerf.effectiveStats.aceleracion + 1) {
+    throw new Error('La estadística de aceleración debe aumentar exactamente en +1');
+}
+
+// Probar bloqueo de reclamo duplicado
+const doubleClaimRes = vm.runInContext(`claimCarMilestoneStat('${carInstId}', 10, 'velocidad')`, ctx);
+if (doubleClaimRes.success) throw new Error('No se debe permitir reclamar dos veces el mismo hito');
+
+// Probar renderizado del modal de Hitos
+vm.runInContext(`openCarMilestoneModal('${carInstId}')`, ctx);
+const mModal = doc.getElementById('milestone-modal');
+if (!mModal || !mModal.innerHTML.includes('HITOS DE MAESTRÍA') || !mModal.innerHTML.includes('Aceleración')) {
+    throw new Error('El modal de Hitos de Maestría debe renderizarse con las opciones de estadísticas');
+}
+console.log('✓ Sistema de Hitos de Maestría verificado (+1 stat por cada 10 niveles)');
 
 // 4. Quitamiedos y Barreras Infranqueables (radiator_oval)
 console.log('\n--- VERIFICANDO QUITAMIEDOS METÁLICOS ARMCO Y BARRERAS INFRANQUEABLES ---');
