@@ -379,31 +379,75 @@ function launchStoryMode() {
 let currentStoryMapChapter = 0;
 let selectedStoryTrackId = null;
 
+function generateTrackMiniSvg(trackId, width = 46, height = 36, strokeColor = '#38bdf8') {
+    const allTracks = (typeof window !== 'undefined' && window.DustracTracks) 
+        || (typeof DustracTracks !== 'undefined' ? DustracTracks : null);
+    const trk = allTracks && allTracks[trackId];
+    if (!trk || !trk.nodes || trk.nodes.length < 3) {
+        return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
+            <ellipse cx="${width/2}" cy="${height/2}" rx="${width*0.38}" ry="${height*0.35}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-dasharray="4 2"/>
+        </svg>`;
+    }
+    const nodes = trk.nodes;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < nodes.length; i++) {
+        const nx = nodes[i].x;
+        const ny = nodes[i].y;
+        if (nx < minX) minX = nx;
+        if (nx > maxX) maxX = nx;
+        if (ny < minY) minY = ny;
+        if (ny > maxY) maxY = ny;
+    }
+    const pad = 4;
+    const w = Math.max(1, maxX - minX);
+    const h = Math.max(1, maxY - minY);
+    const scale = Math.min((width - pad * 2) / w, (height - pad * 2) / h);
+    const offX = (width - w * scale) / 2;
+    const offY = (height - h * scale) / 2;
+
+    const pathData = nodes.map((n, idx) => {
+        const px = ((n.x - minX) * scale + offX).toFixed(1);
+        const py = ((n.y - minY) * scale + offY).toFixed(1);
+        return `${idx === 0 ? 'M' : 'L'} ${px} ${py}`;
+    }).join(' ') + ' Z';
+
+    const firstX = ((nodes[0].x - minX) * scale + offX).toFixed(1);
+    const firstY = ((nodes[0].y - minY) * scale + offY).toFixed(1);
+
+    return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="track-mini-svg" style="display: block;">
+        <path d="${pathData}" fill="rgba(0, 245, 212, 0.08)" stroke="${strokeColor}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.35"/>
+        <path d="${pathData}" fill="none" stroke="#050811" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${pathData}" fill="none" stroke="${strokeColor}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${firstX}" cy="${firstY}" r="2.2" fill="#fee440" stroke="#000" stroke-width="0.8"/>
+    </svg>`;
+}
+window.generateTrackMiniSvg = generateTrackMiniSvg;
+
 function getStoryMapChapterCoords(tracksCount) {
     if (tracksCount === 4) {
         return [
-            { x: 24, y: 14 },
-            { x: 74, y: 38 },
-            { x: 26, y: 62 },
-            { x: 74, y: 86 }
+            { x: 22, y: 15 },
+            { x: 78, y: 38 },
+            { x: 22, y: 62 },
+            { x: 78, y: 85 }
         ];
     } else {
         return [
-            { x: 22, y: 10 },
-            { x: 76, y: 25 },
-            { x: 24, y: 40 },
-            { x: 76, y: 55 },
-            { x: 26, y: 70 },
-            { x: 72, y: 87 }
+            { x: 18, y: 10 },
+            { x: 82, y: 26 },
+            { x: 18, y: 42 },
+            { x: 82, y: 58 },
+            { x: 20, y: 74 },
+            { x: 80, y: 90 }
         ];
     }
 }
 
 function getStoryRoadSvgPath(tracksCount) {
     if (tracksCount === 4) {
-        return "M 24 14 C 60 14, 74 24, 74 38 C 74 50, 26 50, 26 62 C 26 74, 74 74, 74 86";
+        return "M 22 15 C 65 15, 78 26, 78 38 C 78 50, 35 50, 22 62 C 22 74, 65 74, 78 85";
     } else {
-        return "M 22 10 C 65 10, 76 17, 76 25 C 76 32, 24 33, 24 40 C 24 47, 76 48, 76 55 C 76 62, 26 63, 26 70 C 26 78, 72 79, 72 87";
+        return "M 20 10 C 65 10, 80 18, 80 26 C 80 34, 35 34, 20 42 C 20 50, 65 50, 80 58 C 80 66, 35 66, 22 74 C 22 82, 65 82, 78 90";
     }
 }
 
@@ -532,7 +576,7 @@ function setStoryMapChapter(chapIndex) {
 }
 window.setStoryMapChapter = setStoryMapChapter;
 
-// Modal de Selección de Circuitos del Modo Historia (Mapa de Campaña)
+// Modal de Selección de Circuitos del Modo Historia (Mapa de Campaña Pro)
 function openTrackSelectModal(targetChapterIdx, targetTrackId) {
     hubAudio.playClick();
     let modal = document.getElementById('track-select-modal');
@@ -592,17 +636,25 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
     const currentChapter = chapters[currentStoryMapChapter] || chapters[0];
     const tracksList = currentChapter.tracks || [];
 
+    // Determinar la pista única que es la siguiente activa en juego (para tener una única baliza "EN DISPUTA")
+    let nextPlayableTrackId = null;
+    for (let t of tracksList) {
+        const isUnl = unlocked.includes(t.id) || progress.designerMode;
+        const st = (progress.stars && progress.stars[t.id]) || 0;
+        if (isUnl && st < 3) {
+            nextPlayableTrackId = t.id;
+            break;
+        }
+    }
+    if (!nextPlayableTrackId && tracksList[0]) {
+        nextPlayableTrackId = tracksList[0].id;
+    }
+
     // Determinar la pista seleccionada dentro del capítulo
     if (targetTrackId && tracksList.some(t => t.id === targetTrackId)) {
         selectedStoryTrackId = targetTrackId;
     } else if (!selectedStoryTrackId || !tracksList.some(t => t.id === selectedStoryTrackId)) {
-        // Primera pista con menos de 3 estrellas en este capítulo, o la primera de la lista
-        const firstIncomplete = tracksList.find(t => {
-            const isUnl = unlocked.includes(t.id) || progress.designerMode;
-            const stars = (progress.stars && progress.stars[t.id]) || 0;
-            return isUnl && stars < 3;
-        });
-        selectedStoryTrackId = firstIncomplete ? firstIncomplete.id : (tracksList[0] ? tracksList[0].id : 'rookie_ring');
+        selectedStoryTrackId = nextPlayableTrackId;
     }
 
     const selectedTrackIdx = Math.max(0, tracksList.findIndex(t => t.id === selectedStoryTrackId));
@@ -620,6 +672,14 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
     const equippedCar = (typeof getEquippedNftCar === 'function')
         ? getEquippedNftCar()
         : ((userData.garage || []).find(c => c.instanceId === userData.equippedInstanceId) || userData.garage[0] || { name: 'Apex Cadet 1.0', level: 1 });
+
+    const shortCarName = (equippedCar.name || 'APEX GT')
+        .replace(/^FERRARI /i, '')
+        .replace(/^LAMBORGHINI /i, '')
+        .replace(/^PORSCHE /i, '')
+        .replace(/^BUGATTI /i, '')
+        .replace(/^MCLAREN /i, '')
+        .slice(0, 14);
 
     const chapterIcons = ['🔰', '🌲', '🏜️', '⚡', '👑'];
 
@@ -669,33 +729,43 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
             <div class="story-map-main-layout">
                 <!-- 1. Contenedor de la Carretera Serpenteante con Casillas y Coche Avanzando -->
                 <div class="story-road-view" id="story-road-container">
-                    <!-- Trazado SVG de la Carretera de Competición con Línea Continua -->
+                    <div class="telemetry-gps-tag">🛰️ SATELLITE GPS • 45°28'N 9°16'E • WORLD GT TOUR</div>
+
+                    <!-- Trazado SVG Multicapa de Carretera Real con Pianos FIA y Asfalto -->
                     <svg class="story-road-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <!-- Asfalto Base -->
-                        <path d="${svgPath}" fill="none" stroke="#090e1a" stroke-width="20" stroke-linecap="round"/>
-                        <!-- Calzada de Asfalto Gris Oscuro -->
-                        <path d="${svgPath}" fill="none" stroke="#172033" stroke-width="15" stroke-linecap="round"/>
-                        <!-- Borde con Pianos FIA -->
-                        <path d="${svgPath}" fill="none" stroke="#334155" stroke-width="13" stroke-linecap="round"/>
-                        <!-- Línea Central Discontinua de Carreras -->
-                        <path d="${svgPath}" fill="none" stroke="#facc15" stroke-width="1.8" stroke-dasharray="3 3"/>
+                        <!-- 1. Base Grava de Escapatoria Exterior -->
+                        <path d="${svgPath}" fill="none" stroke="#141c2c" stroke-width="30" stroke-linecap="round"/>
+                        <!-- 2. Pianos FIA exteriores (Rojo & Blanco) -->
+                        <path d="${svgPath}" fill="none" stroke="#ef4444" stroke-width="24" stroke-linecap="round"/>
+                        <path d="${svgPath}" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-dasharray="3.5 3.5"/>
+                        <!-- 3. Asfalto de Competición (Dark Charcoal Tarmac) -->
+                        <path d="${svgPath}" fill="none" stroke="#080c16" stroke-width="19" stroke-linecap="round"/>
+                        <path d="${svgPath}" fill="none" stroke="#121828" stroke-width="15" stroke-linecap="round"/>
+                        <!-- 4. Racing Groove (Trazada engomada oscura por neumáticos) -->
+                        <path d="${svgPath}" fill="none" stroke="#04060d" stroke-width="8" stroke-linecap="round"/>
+                        <!-- 5. Guía Láser de Telemetría GPS Cyan -->
+                        <path d="${svgPath}" fill="none" stroke="#00f5d4" stroke-width="1.8" stroke-dasharray="5 3" opacity="0.85"/>
                     </svg>
 
-                    <!-- Casillas de Circuito (Stage Nodes) -->
+                    <!-- Casillas de Circuito (Stage Nodes con Silueta Real del Trazado) -->
                     ${tracksList.map((trk, tIdx) => {
                         const coords = coordsList[tIdx] || { x: 50, y: 50 };
                         const isTrkUnlocked = unlocked.includes(trk.id) || progress.designerMode;
                         const stars = (progress.stars && progress.stars[trk.id]) || 0;
                         const isSelected = trk.id === selectedStoryTrackId;
-                        const isCurrentActive = isTrkUnlocked && stars < 3;
+                        const isCurrentActive = (trk.id === nextPlayableTrackId);
 
                         let statusClass = 'locked';
+                        let strokeColor = '#475569';
                         if (isTrkUnlocked) {
-                            if (stars >= 3) statusClass = 'completed-gold';
-                            else if (stars > 0) statusClass = 'completed';
-                            else statusClass = 'unlocked';
+                            if (stars >= 3) { statusClass = 'completed-gold'; strokeColor = '#facc15'; }
+                            else if (stars > 0) { statusClass = 'completed'; strokeColor = '#10b981'; }
+                            else { statusClass = 'unlocked'; strokeColor = '#38bdf8'; }
                         }
-                        if (isCurrentActive) statusClass += ' current';
+                        if (isCurrentActive) {
+                            statusClass += ' current';
+                            strokeColor = '#00f5d4';
+                        }
 
                         const isFinalStage = tIdx === tracksList.length - 1;
 
@@ -705,32 +775,42 @@ function openTrackSelectModal(targetChapterIdx, targetTrackId) {
                                  style="left: ${coords.x}%; top: ${coords.y}%;"
                                  onclick="selectStoryMapTrack('${trk.id}')"
                                  title="${trk.name}">
-                                <div class="node-core">
-                                    ${!isTrkUnlocked ? '🔒' : (isFinalStage ? '👑' : (tIdx + 1))}
-                                </div>
-                                <div class="node-stars-row">
-                                    <span class="star ${stars >= 1 ? 'filled' : 'empty'}">${stars >= 1 ? '⭐' : '☆'}</span>
-                                    <span class="star ${stars >= 2 ? 'filled' : 'empty'}">${stars >= 2 ? '⭐' : '☆'}</span>
-                                    <span class="star ${stars >= 3 ? 'filled' : 'empty'}">${stars >= 3 ? '⭐' : '☆'}</span>
+                                <div class="node-telemetry-dial">
+                                    <span class="stage-pill-top">${isFinalStage ? '👑 FINAL' : `ETAPA ${tIdx + 1}`}</span>
+                                    <div class="stage-mini-track-wrap">
+                                        ${!isTrkUnlocked ? '<div style="font-size: 22px; opacity: 0.6;">🔒</div>' : generateTrackMiniSvg(trk.id, 46, 36, strokeColor)}
+                                    </div>
+                                    <div class="node-stars-row">
+                                        <span class="star ${stars >= 1 ? 'filled' : 'empty'}">${stars >= 1 ? '⭐' : '☆'}</span>
+                                        <span class="star ${stars >= 2 ? 'filled' : 'empty'}">${stars >= 2 ? '⭐' : '☆'}</span>
+                                        <span class="star ${stars >= 3 ? 'filled' : 'empty'}">${stars >= 3 ? '⭐' : '☆'}</span>
+                                    </div>
                                 </div>
                                 <div class="node-name-label">${trk.name}</div>
-                                ${isCurrentActive ? '<div class="node-current-beacon">🏁 ¡AQUÍ!</div>' : ''}
+                                ${isCurrentActive ? '<div class="node-current-beacon">📍 EN DISPUTA</div>' : ''}
                             </div>
                         `;
                     }).join('')}
 
-                    <!-- El Coche "Todo Guapo" del Jugador que Avanza por las Casillas -->
+                    <!-- El Coche del Jugador Avanzando por las Casillas (Silueta Fotorrealista Sin Caja Negra) -->
                     <div id="story-map-player-car" class="story-map-player-car" 
                          style="left: ${carCoords.x}%; top: ${carCoords.y}%;">
                         <div class="player-car-tag">
                             <span>🏎️</span>
-                            <span>${(equippedCar.name || 'APEX GT').toUpperCase()}</span>
+                            <span>${shortCarName.toUpperCase()}</span>
                             <span class="tag-level">NV.${equippedCar.level || 1}</span>
                         </div>
                         <div class="player-car-body">
-                            ${typeof generateCarSvg === 'function' && equippedCar ? generateCarSvg(equippedCar, 96, 48) : '<div style="font-size: 28px;">🏎️</div>'}
+                            <div class="car-asphalt-ground-shadow"></div>
+                            <img src="assets/cars_side/${equippedCar.archetype || 'ferrari_corsa'}.jpg" 
+                                 class="map-car-visual-img" 
+                                 alt="${equippedCar.name}"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                            <div class="map-car-fallback-svg" style="display: none;">
+                                ${typeof generateCarSvg === 'function' && equippedCar ? generateCarSvg(equippedCar, 80, 40) : '<div style="font-size: 24px;">🏎️</div>'}
+                            </div>
+                            <div class="player-car-nitro-glow"></div>
                         </div>
-                        <div class="player-car-nitro-glow"></div>
                     </div>
                 </div>
 
