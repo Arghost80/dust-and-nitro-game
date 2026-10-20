@@ -665,6 +665,7 @@ let raceStartTime = 0;
 let driftCharge = 0;
 let driftBoostTimer = 0;
 let driftSlipAngle = 0; // Ángulo de deslizamiento lateral en derrapes de alta velocidad
+let driftTrajectoryAngle = null; // Inercia de trayectoria estabilizada anti-trompos
 let raceNitrosRemaining = 2; // Máximo 2 por carrera
 let nitroBoostTimer = 0; // Duración 4.0s de extra velocidad N2O
 
@@ -4377,6 +4378,8 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     offTrackTimer = 0;
     driftCharge = 0;
     driftBoostTimer = 0;
+    driftSlipAngle = 0;
+    driftTrajectoryAngle = null;
     raceStartTime = 0;
 
     // Coche del Jugador (Pole Position, colocado detrás de la línea de meta)
@@ -5341,25 +5344,64 @@ function updatePlayer(dt, track) {
             }
         }
 
-        // Giro: el botón de Drift multiplica la capacidad de giro (yaw) a 2.65x para clavar horquillas cerradas
-        const yawMultiplier = handbrake ? 2.65 : 1.0;
-        const steer = cData.handling * yawMultiplier * (playerSpeed > 40 ? 1 : playerSpeed / 40) * (typeof touchSteerAmount === 'number' && touchSteerAmount > 0 ? touchSteerAmount : 1.0);
-        if (left) playerCar.angle -= steer;
-        if (right) playerCar.angle += steer;
+        // Control de Dirección y Drift Estabilizado Arcade (Anti-Trompo)
+        const steerBase = cData.handling * (playerSpeed > 40 ? 1 : playerSpeed / 40) * (typeof touchSteerAmount === 'number' && touchSteerAmount > 0 ? touchSteerAmount : 1.0);
 
-        // Inercia lateral y ángulo de derrape (Slip Angle): el coche apunta al vértice de la curva
-        let targetSlip = 0;
-        if (handbrake && isTurning && Math.abs(playerSpeed) > 60) {
-            targetSlip = left ? 16.0 : -16.0;
+        if (handbrake && Math.abs(playerSpeed) > 60) {
+            // MODO DRIFT ESTABILIZADO (ARCADE POWER-SLIDE CON ASISTENCIA ANTI-SPIN)
+            if (driftTrajectoryAngle === null) {
+                driftTrajectoryAngle = playerCar.angle;
+            }
+
+            // 1. Giro suave y progresivo (1.30x en vez de 2.65x para evitar que el coche gire bruscamente o se descontrole)
+            const yawMultiplier = 1.30;
+            const driftSteer = steerBase * yawMultiplier;
+
+            // 2. La trayectoria de avance sigue la curva de forma limpia y natural
+            if (left) {
+                driftTrajectoryAngle -= steerBase * 0.95;
+                playerCar.angle -= driftSteer;
+            } else if (right) {
+                driftTrajectoryAngle += steerBase * 0.95;
+                playerCar.angle += driftSteer;
+            }
+
+            // 3. BLOQUEO ANTI-TROMPO: El coche JAMÁS puede girar más de 26° respecto a su trayectoria de avance
+            // Esto hace FÍSICAMENTE IMPOSIBLE que el coche haga un trompo o se dé la vuelta (180° / 360°)
+            const MAX_DRIFT_SLIP = 26;
+            const diff = Phaser.Math.Angle.WrapDegrees(playerCar.angle - driftTrajectoryAngle);
+            if (diff > MAX_DRIFT_SLIP) {
+                playerCar.angle = driftTrajectoryAngle + MAX_DRIFT_SLIP;
+            } else if (diff < -MAX_DRIFT_SLIP) {
+                playerCar.angle = driftTrajectoryAngle - MAX_DRIFT_SLIP;
+            }
+
+            driftSlipAngle = Math.abs(Phaser.Math.Angle.WrapDegrees(driftTrajectoryAngle - playerCar.angle));
+            if (driftSlipAngle < 2 && isTurning) driftSlipAngle = 8;
+
+            // La velocidad física de desplazamiento sigue la trayectoria del trazado
+            const velRad = Phaser.Math.DegToRad(driftTrajectoryAngle);
+            playerCar.setVelocity(Math.cos(velRad) * playerSpeed, Math.sin(velRad) * playerSpeed);
+        } else {
+            // Conducción con agarre normal (o salida de derrape)
+            if (driftTrajectoryAngle !== null) {
+                // Al soltar el drift, el coche se alinea suavemente con la dirección de avance
+                playerCar.angle = Phaser.Math.Angle.WrapDegrees(driftTrajectoryAngle);
+                driftTrajectoryAngle = null;
+            }
+            driftSlipAngle = 0;
+
+            if (left) playerCar.angle -= steerBase;
+            if (right) playerCar.angle += steerBase;
+
+            const rad = Phaser.Math.DegToRad(playerCar.angle);
+            playerCar.setVelocity(Math.cos(rad) * playerSpeed, Math.sin(rad) * playerSpeed);
         }
-        driftSlipAngle = Phaser.Math.Linear(driftSlipAngle, targetSlip, Math.min(1.0, dt * 10));
     } else {
         playerSpeed = 0;
         driftSlipAngle = 0;
+        driftTrajectoryAngle = null;
     }
-
-    const velRad = Phaser.Math.DegToRad(playerCar.angle + driftSlipAngle);
-    playerCar.setVelocity(Math.cos(velRad) * playerSpeed, Math.sin(velRad) * playerSpeed);
 
     dustAudio.updateEngine(playerSpeed, cData.speed);
 

@@ -1689,6 +1689,18 @@ if (driftChg <= 0) {
     throw new Error('El derrape no acumuló carga de turbo boost');
 }
 
+// Comprobación Anti-Trompo: Derrapar 60 frames seguidos con giro a fondo no debe hacer que el coche dé la vuelta
+vm.runInContext(`
+    for (let f = 0; f < 60; f++) {
+        dustUpdate.call(window.raceScene, 2000 + f * 16, 16);
+    }
+`, ctx);
+const sustainedDiff = vm.runInContext('Math.abs(Phaser.Math.Angle.WrapDegrees(playerCar.angle - driftTrajectoryAngle))', ctx);
+if (sustainedDiff > 26.01) {
+    throw new Error(`Fallo en el estabilizador anti-trompo: el ángulo excedió los 26° máximos (${sustainedDiff.toFixed(1)}°)`);
+}
+console.log(`✓ Estabilizador Anti-Trompo verificado al 100%: derrape continuo bloqueado a un máximo de ${sustainedDiff.toFixed(1)}° (imposible darse la vuelta)`);
+
 // Soltar el botón de drift tras acumular carga debe disparar el Turbo Boost
 vm.runInContext(`
     driftCharge = 0.6;
