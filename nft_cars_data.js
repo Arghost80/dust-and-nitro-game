@@ -308,11 +308,11 @@ const STAT_UPGRADE_BRANCHES = {
             // Stage 2: Requiere piezas INFRECUENTES (Cap. 2 Clubman)
             { reqs: { cylinders: 2, fuel_injectors_high: 1 }, cr: 1400, gems: 0, rarityRequired: "uncommon" },
             // Stage 3: Requiere piezas RARAS (Cap. 3 Desierto)
-            { reqs: { engine_block: 2, camshaft_racing: 1 }, cr: 2800, gems: 20, rarityRequired: "rare" },
+            { reqs: { engine_block: 2, camshaft_racing: 1 }, cr: 2800, gems: 0, rarityRequired: "rare" },
             // Stage 4: Requiere piezas ÉPICAS (Cap. 4 Pro)
-            { reqs: { turbocharger: 2, motec_ecu_pro: 1 }, cr: 5000, gems: 50, rarityRequired: "epic" },
+            { reqs: { turbocharger: 2, motec_ecu_pro: 1 }, cr: 5000, gems: 0, rarityRequired: "epic" },
             // Stage 5: Requiere piezas LEGENDARIAS (Cap. 5 Leyendas Mundial)
-            { reqs: { billet_engine_v8: 1, water_meth_injection: 1 }, cr: 8000, gems: 100, rarityRequired: "legendary" }
+            { reqs: { billet_engine_v8: 1, water_meth_injection: 1 }, cr: 8000, gems: 0, rarityRequired: "legendary" }
         ]
     },
     braking: {
@@ -329,11 +329,11 @@ const STAT_UPGRADE_BRANCHES = {
             // Stage 2: Infrecuente
             { reqs: { brake_discs: 2, braided_brake_lines: 1 }, cr: 1200, gems: 0, rarityRequired: "uncommon" },
             // Stage 3: Rara
-            { reqs: { brake_calipers: 2, ventilated_floating_discs: 1 }, cr: 2500, gems: 15, rarityRequired: "rare" },
+            { reqs: { brake_calipers: 2, ventilated_floating_discs: 1 }, cr: 2500, gems: 0, rarityRequired: "rare" },
             // Stage 4: Épica
-            { reqs: { carbon_ceramic_calipers: 2, cooling_ducts_brakes: 1 }, cr: 4500, gems: 45, rarityRequired: "epic" },
+            { reqs: { carbon_ceramic_calipers: 2, cooling_ducts_brakes: 1 }, cr: 4500, gems: 0, rarityRequired: "epic" },
             // Stage 5: Legendaria
-            { reqs: { carbon_ceramic_brembo: 1, kers_f1_regen: 1 }, cr: 7500, gems: 90, rarityRequired: "legendary" }
+            { reqs: { carbon_ceramic_brembo: 1, kers_f1_regen: 1 }, cr: 7500, gems: 0, rarityRequired: "legendary" }
         ]
     },
     handling_grip: {
@@ -350,11 +350,11 @@ const STAT_UPGRADE_BRANCHES = {
             // Stage 2: Infrecuente
             { reqs: { suspension_springs: 2, strut_brace_front: 1 }, cr: 1300, gems: 0, rarityRequired: "uncommon" },
             // Stage 3: Rara
-            { reqs: { antiroll_bars: 2, adjustable_coilovers: 1 }, cr: 2600, gems: 15, rarityRequired: "rare" },
+            { reqs: { antiroll_bars: 2, adjustable_coilovers: 1 }, cr: 2600, gems: 0, rarityRequired: "rare" },
             // Stage 4: Épica
-            { reqs: { michelin_cup_slicks: 2, pushrod_suspension: 1 }, cr: 4800, gems: 45, rarityRequired: "epic" },
+            { reqs: { michelin_cup_slicks: 2, pushrod_suspension: 1 }, cr: 4800, gems: 0, rarityRequired: "epic" },
             // Stage 5: Legendaria
-            { reqs: { pirelli_f1_slicks: 1, monocoque_chassis_gt: 1 }, cr: 7800, gems: 90, rarityRequired: "legendary" }
+            { reqs: { pirelli_f1_slicks: 1, monocoque_chassis_gt: 1 }, cr: 7800, gems: 0, rarityRequired: "legendary" }
         ]
     },
     accel_traction: {
@@ -371,11 +371,11 @@ const STAT_UPGRADE_BRANCHES = {
             // Stage 2: Infrecuente
             { reqs: { lsd_differential: 2, light_flywheel_crmo: 1 }, cr: 1400, gems: 0, rarityRequired: "uncommon" },
             // Stage 3: Rara
-            { reqs: { gearbox_cogs: 2, carbon_driveshaft: 1 }, cr: 2800, gems: 20, rarityRequired: "rare" },
+            { reqs: { gearbox_cogs: 2, carbon_driveshaft: 1 }, cr: 2800, gems: 0, rarityRequired: "rare" },
             // Stage 4: Épica
-            { reqs: { sequential_dogbox: 2, triple_plate_clutch: 1 }, cr: 5000, gems: 50, rarityRequired: "epic" },
+            { reqs: { sequential_dogbox: 2, triple_plate_clutch: 1 }, cr: 5000, gems: 0, rarityRequired: "epic" },
             // Stage 5: Legendaria
-            { reqs: { f1_dual_clutch_transaxle: 1, vectoring_ediff: 1 }, cr: 8000, gems: 100, rarityRequired: "legendary" }
+            { reqs: { f1_dual_clutch_transaxle: 1, vectoring_ediff: 1 }, cr: 8000, gems: 0, rarityRequired: "legendary" }
         ]
     },
     aero_lightness: {
@@ -392,11 +392,11 @@ const STAT_UPGRADE_BRANCHES = {
             // Stage 2: Infrecuente
             { reqs: { front_splitter: 1, rear_diffuser_race: 1 }, cr: 1300, gems: 0, rarityRequired: "uncommon" },
             // Stage 3: Rara
-            { reqs: { monocoque_frame: 1, canards_vortex: 1 }, cr: 2600, gems: 15, rarityRequired: "rare" },
+            { reqs: { monocoque_frame: 1, canards_vortex: 1 }, cr: 2600, gems: 0, rarityRequired: "rare" },
             // Stage 4: Épica
-            { reqs: { flat_floor_undertray: 1, polycarbonate_windows: 1 }, cr: 4800, gems: 45, rarityRequired: "epic" },
+            { reqs: { flat_floor_undertray: 1, polycarbonate_windows: 1 }, cr: 4800, gems: 0, rarityRequired: "epic" },
             // Stage 5: Legendaria
-            { reqs: { active_drs_wing: 1, lmp1_aero_body: 1 }, cr: 7800, gems: 90, rarityRequired: "legendary" }
+            { reqs: { active_drs_wing: 1, lmp1_aero_body: 1 }, cr: 7800, gems: 0, rarityRequired: "legendary" }
         ]
     }
 };
@@ -607,7 +607,7 @@ const NFT_CRATES = {
     silver: {
         id: "silver",
         nameKey: "crate_silver_title",
-        cost: 2000,
+        cost: 2500,
         currency: "credits", // $CR
         odds: { common: 0.30, uncommon: 0.45, rare: 0.22, legendary: 0.03 },
         badgeColor: 0xc0c0c0
@@ -615,8 +615,8 @@ const NFT_CRATES = {
     gold: {
         id: "gold",
         nameKey: "crate_gold_title",
-        cost: 500,
-        currency: "gems", // Gemas $TON
+        cost: 15000,
+        currency: "credits", // $CR
         odds: { common: 0.08, uncommon: 0.32, rare: 0.45, legendary: 0.15 },
         badgeColor: 0xffd700
     }
@@ -990,12 +990,13 @@ function buyNitrosWithTokens(amount = 1) {
     const userData = loadNftUserData();
     if (typeof userData.nitros !== 'number') userData.nitros = 2;
     const costPerUnit = 10;
-    const cost = amount === 5 ? 40 : amount * costPerUnit;
+    const cost = amount === 20 ? 150 : (amount === 5 ? 40 : amount * costPerUnit);
     if (userData.credits < cost) {
         return { success: false, reason: "credits_insufficient", cost: cost };
     }
     userData.credits -= cost;
     userData.nitros += amount;
+    userData.burnedTokens = (userData.burnedTokens || 0) + Math.round(cost * 0.20);
     saveNftUserData(userData);
     return {
         success: true,
@@ -1059,6 +1060,7 @@ function openMysteryCrate(crateKey) {
     if (crate.currency === "credits") {
         if (userData.credits < crate.cost) return { success: false, reason: "credits_insufficient" };
         userData.credits -= crate.cost;
+        userData.burnedTokens = (userData.burnedTokens || 0) + Math.round(crate.cost * 0.20);
     } else {
         if (userData.gems < crate.cost) return { success: false, reason: "gems_insufficient" };
         userData.gems -= crate.cost;

@@ -1494,7 +1494,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_gold_rates')}</div>
-                <div class="crate-cost-pill cost-gems">💎 ${t('crate_gold_cost')}</div>
+                <div class="crate-cost-pill">💰 ${t('crate_gold_cost')}</div>
                 <button class="btn-open-box btn-gold-action" onclick="triggerCrateOpening('gold')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1664,6 +1664,33 @@ function renderShopView() {
                     <div class="shop-item-name">Paquete de 1,000 Gemas TON</div>
                     <div class="shop-item-price">GRATIS (TESTING)</div>
                     <button class="btn-buy-item" onclick="addFunds(0, 1000)">${t('shop_buy')}</button>
+                </div>
+            </div>
+
+            <!-- Cápsulas de Nitro N2O con Tokens $CR -->
+            <h3 class="shop-section-title">🧪 CÁPSULAS DE NITRO N₂O DE COMPETICIÓN</h3>
+            <p class="shop-section-subtitle">Aumenta tu stock de Nitro (4.0s de turbo boost) para carreras oficiales exclusivamente con tokens $CR</p>
+            <div class="shop-items-grid">
+                <div class="shop-item-card">
+                    <div class="shop-item-icon">🧪</div>
+                    <div class="shop-item-name">1x Cápsula Nitro N₂O</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual de boost explosivo</div>
+                    <div class="shop-item-price">💰 10 $CR</div>
+                    <button class="btn-buy-item" onclick="handleBuyNitro(1)">🛒 ${t('shop_buy')}</button>
+                </div>
+                <div class="shop-item-card">
+                    <div class="shop-item-icon">🧪🧪</div>
+                    <div class="shop-item-name">5x Pack Nitros N₂O</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens (8 $CR/cápsula)</div>
+                    <div class="shop-item-price">💰 40 $CR</div>
+                    <button class="btn-buy-item" onclick="handleBuyNitro(5)">🛒 ${t('shop_buy')}</button>
+                </div>
+                <div class="shop-item-card">
+                    <div class="shop-item-icon">📦🧪</div>
+                    <div class="shop-item-name">20x Stash Pro Liga</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Pack torneo de alta competición (7.5 $CR/u)</div>
+                    <div class="shop-item-price">💰 150 $CR</div>
+                    <button class="btn-buy-item" onclick="handleBuyNitro(20)">🛒 ${t('shop_buy')}</button>
                 </div>
             </div>
 
