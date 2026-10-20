@@ -316,13 +316,53 @@ if (!withdrawRes.success || withdrawRes.tonGained !== 0.08) {
 }
 console.log('✅ Retiro seguro completado: 1000 $CR -> 0.08 TON transferidos a la wallet');
 
+// Test Anti-Bot 1: Reserva Mínima de Holding (500 $CR)
+const userCr = vm.runInContext('loadNftUserData().credits', ctx);
+const excessiveWithdrawRes = vm.runInContext(`withdrawCrToTon(${userCr - 400})`, ctx);
+if (excessiveWithdrawRes.success || excessiveWithdrawRes.reason !== 'holding_reserve_required') {
+    throw new Error(`Fallo en protección de reserva de holding: ${JSON.stringify(excessiveWithdrawRes)}`);
+}
+console.log('✅ Anti-Bot 1 superado: Reserva de holding de 500 $CR bloqueó el drenaje total');
+
+// Test Anti-Bot 2: Cooldown de 7 días con advertencia de quema
+const cooldownWarningRes = vm.runInContext(`withdrawCrToTon(1000, false)`, ctx);
+if (cooldownWarningRes.success || cooldownWarningRes.reason !== 'early_withdraw_warning') {
+    throw new Error(`Fallo en verificación de cooldown de 7 días: ${JSON.stringify(cooldownWarningRes)}`);
+}
+console.log('✅ Anti-Bot 2 superado: Cooldown de 7 días activo con aviso de penalización del 50%');
+
+// Test Anti-Bot 3: Retiro anticipado con Quema Deflacionaria del 50%
+const earlyWithdrawRes = vm.runInContext(`withdrawCrToTon(1000, true)`, ctx);
+if (!earlyWithdrawRes.success || !earlyWithdrawRes.isEarly || earlyWithdrawRes.burnedCr !== 500 || earlyWithdrawRes.tonGained !== 0.04) {
+    throw new Error(`Fallo en quema deflacionaria del 50%: ${JSON.stringify(earlyWithdrawRes)}`);
+}
+console.log('✅ Anti-Bot 3 superado: Quema deflacionaria ejecutada (500 $CR quemados, 0.04 TON transferidos)');
+
+// Test Anti-Cheat 4: Telemetría Física Imposible (Speedhack / Fast-forward)
+const invalidRaceCheck = vm.runInContext(`validateRaceTelemetry('grand_prix', 3, 5.0, 1.2)`, ctx);
+if (invalidRaceCheck.valid || invalidRaceCheck.reason !== 'impossible_race_time') {
+    throw new Error(`Fallo en validación de telemetría de carrera: ${JSON.stringify(invalidRaceCheck)}`);
+}
+const invalidLapCheck = vm.runInContext(`validateRaceTelemetry('grand_prix', 3, 60.0, 2.0)`, ctx);
+if (invalidLapCheck.valid || invalidLapCheck.reason !== 'impossible_lap_time') {
+    throw new Error(`Fallo en validación de telemetría de vuelta rápida: ${JSON.stringify(invalidLapCheck)}`);
+}
+const validTelemetryCheck = vm.runInContext(`validateRaceTelemetry('grand_prix', 3, 60.0, 18.5)`, ctx);
+if (!validTelemetryCheck.valid) {
+    throw new Error(`Validación de telemetría legítima falló: ${JSON.stringify(validTelemetryCheck)}`);
+}
+console.log('✅ Anti-Cheat 4 superado: Telemetría física validada contra speedhacks y bots');
+
 // Renderizado del Modal de Billetera
 vm.runInContext(`openWeb3WalletModal()`, ctx);
 const walletModalHtml = doc.getElementById('wallet-modal').innerHTML;
 if (!walletModalHtml.includes('BILLETERA WEB3 &amp; TON CONNECT') && !walletModalHtml.includes('BILLETERA WEB3 & TON CONNECT')) {
     throw new Error('El modal de la billetera no se renderizó correctamente');
 }
-console.log('✅ Modal de Billetera Web3 renderizado con éxito');
+if (!walletModalHtml.includes('Holding de Seguridad') || !walletModalHtml.includes('COOLDOWN 7 DÍAS')) {
+    throw new Error('El modal de la billetera no muestra la información de Anti-Bot y Cooldown');
+}
+console.log('✅ Modal de Billetera Web3 renderizado con éxito con protecciones Anti-Bot');
 
 // ===== VERIFICACIÓN DE LAS 12 SILUETAS VECTORIALES DE COCHES =====
 console.log('\n--- VERIFICANDO LAS 12 SILUETAS ARQUITECTÓNICAS DE COCHES ---');

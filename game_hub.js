@@ -4109,24 +4109,54 @@ function openWeb3WalletModal() {
                             </div>
                         </div>
 
-                        <!-- RETIRO A TON (SISTEMA ANTI-DRENAJE SEGURO) -->
-                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 10px; padding: 14px;">
+                        <!-- RETIRO A TON (SISTEMA ANTI-BOT: HOLDING 500 $CR, COOLDOWN 7 DÍAS & 50% BURN) -->
+                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <span style="font-size: 13px; font-weight: 900; color: #f87171;">💸 RETIRAR $CR A TON (CASH-OUT)</span>
-                                <span style="font-size: 10px; color: #94a3b8;">Seguridad Anti-Drenaje</span>
+                                <span style="font-size: 13.5px; font-weight: 900; color: #f87171;">🛡️ RETIRAR $CR A TON (ANTI-BOT SECURE)</span>
+                                <span style="font-size: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; font-weight: 800; padding: 2px 7px; border-radius: 6px;">COOLDOWN 7 DÍAS</span>
                             </div>
-                            <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 10px;">
-                                Requisitos: <strong>Nivel 3+</strong> de piloto y mínimo <strong>1.000 $CR</strong>.
+
+                            ${(() => {
+                                const wStatus = (typeof getWithdrawStatus === 'function') ? getWithdrawStatus() : { isEarly: false, remainingMs: 0 };
+                                if (wStatus.isEarly) {
+                                    const remDays = Math.floor(wStatus.remainingMs / (1000 * 60 * 60 * 24));
+                                    const remHours = Math.ceil((wStatus.remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                    return `
+                                        <div style="background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.35); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">
+                                            <div style="font-size: 11px; font-weight: 800; color: #facc15; display: flex; align-items: center; gap: 6px;">
+                                                <span>⏳</span> Próximo retiro estándar sin comisión: <strong>${remDays}d ${remHours}h</strong>
+                                            </div>
+                                            <div style="font-size: 10px; color: #fde047; margin-top: 4px;">
+                                                🔥 <strong>Aviso Anti-Bot:</strong> Si retiras antes de los 7 días, se aplica una <strong>quema inmediata del 50%</strong> de los tokens retirados para proteger la economía.
+                                            </div>
+                                        </div>
+                                    `;
+                                } else {
+                                    return `
+                                        <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">
+                                            <div style="font-size: 11px; font-weight: 800; color: #34d399; display: flex; align-items: center; gap: 6px;">
+                                                <span>✅</span> Ventana de retiro estándar ACTIVA (Sin quema del 50%)
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                            })()}
+
+                            <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 10px; line-height: 1.4;">
+                                • Mínimo de retiro: <strong>1.000 $CR</strong> (Tasa: 12.500 $CR = 1 TON).<br>
+                                • 🔒 <strong>Holding de Seguridad:</strong> Debes mantener al menos <strong>500 $CR</strong> en tu wallet tras el retiro.<br>
+                                • 📅 <strong>Cooldown Semanal:</strong> 1 retiro cada 7 días. Retiros anticipados sufren <strong>50% de quema deflacionaria</strong>.
                             </div>
+
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(1000)">
-                                    1.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">0.08 TON</span>
+                                    1.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">Hasta 0.08 TON</span>
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(5000)">
-                                    5.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">0.40 TON</span>
+                                    5.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">Hasta 0.40 TON</span>
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(10000)">
-                                    10.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">0.80 TON</span>
+                                    10.000 $CR<br><span style="color: #6ee7b7; font-size: 10px;">Hasta 0.80 TON</span>
                                 </button>
                             </div>
                         </div>
@@ -4192,17 +4222,41 @@ function handleSwapTonToCr(tonAmount) {
 function handleWithdrawCrToTon(crAmount) {
     hubAudio.playClick();
     if (typeof withdrawCrToTon === 'function') {
-        const res = withdrawCrToTon(crAmount);
+        const res = withdrawCrToTon(crAmount, false);
         if (!res.success) {
-            if (res.reason === 'wallet_not_connected') alert('Debes conectar una billetera primero.');
-            else if (res.reason === 'min_withdraw_not_met') alert(`Retiro mínimo: ${res.min} $CR.`);
-            else if (res.reason === 'credits_insufficient') alert('Créditos $CR insuficientes.');
+            if (res.reason === 'wallet_not_connected') {
+                alert('Debes conectar una billetera primero.');
+            } else if (res.reason === 'min_withdraw_not_met') {
+                alert(`Retiro mínimo: ${res.min} $CR.`);
+            } else if (res.reason === 'credits_insufficient') {
+                alert('Créditos $CR insuficientes.');
+            } else if (res.reason === 'holding_reserve_required') {
+                alert(`🔒 Seguridad Anti-Bot: Debes mantener al menos ${res.minHolding} $CR en tu billetera como saldo de reserva tras el retiro (tienes ${res.currentBalance.toLocaleString()} $CR). Máximo retirable: ${res.maxAllowedWithdraw.toLocaleString()} $CR.`);
+            } else if (res.reason === 'early_withdraw_warning') {
+                const remDays = Math.floor(res.remainingMs / (1000 * 60 * 60 * 24));
+                const remHours = Math.ceil((res.remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const confirmMsg = `⚠️ AVISO DE RETIRO ANTICIPADO (COOLDOWN 7 DÍAS)\n\n` +
+                    `Faltan ${remDays} días y ${remHours} horas para tu ventana regular de retiro sin penalización.\n\n` +
+                    `Si decides retirar ahora antes de tiempo:\n` +
+                    `🔥 QUEMA INMEDIATA: Se destruyen ${res.burnCr.toLocaleString()} $CR (el 50% de quema deflacionaria anti-bot).\n` +
+                    `💎 RECIBES EN WALLET: ${res.netTon} TON (equivalente a ${res.netCr.toLocaleString()} $CR netos).\n\n` +
+                    `¿Deseas confirmar el retiro anticipado con el 50% de quema?`;
+                if (confirm(confirmMsg)) {
+                    const finalRes = withdrawCrToTon(crAmount, true);
+                    if (finalRes.success) {
+                        hubAudio.playOpenCrate();
+                        renderHubHeader();
+                        openWeb3WalletModal();
+                        alert(`🔥 ¡Retiro anticipado completado! Se quemaron ${finalRes.burnedCr.toLocaleString()} $CR (50%) y se transfirieron ${finalRes.tonGained} TON a tu billetera.`);
+                    }
+                }
+            }
             return;
         }
         hubAudio.playOpenCrate();
         renderHubHeader();
         openWeb3WalletModal();
-        alert(`✅ ¡Retiro procesado! Transferidos ${res.tonGained} TON a tu billetera (-${res.crSpent.toLocaleString()} $CR).`);
+        alert(`✅ ¡Retiro regular procesado! Transferidos ${res.tonGained} TON a tu billetera (-${res.crSpent.toLocaleString()} $CR).`);
     }
 }
 

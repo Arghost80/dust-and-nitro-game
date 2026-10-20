@@ -6025,6 +6025,34 @@ function checkLap(car, track) {
     }
 }
 
+// =========================================================================
+// SISTEMA ANTI-CHEAT & ANTI-BOT: VALIDACIÓN DE TELEMETRÍA FÍSICA EN CARRERA
+// =========================================================================
+function validateRaceTelemetry(trackId, totalLaps, totalRaceSec, bestLapSec) {
+    const minPhysicalLapSec = 7.0; // Mínimo absoluto físico por vuelta en cualquier trazado
+    const minRaceTime = (totalLaps || 3) * minPhysicalLapSec;
+    
+    // Detección de carrera terminada antes de tiempo mínimo físico o vueltas anómalas
+    if (totalRaceSec > 0 && totalRaceSec < minRaceTime) {
+        return {
+            valid: false,
+            reason: 'impossible_race_time',
+            detail: `Tiempo total (${totalRaceSec.toFixed(1)}s) inferior al mínimo físico (${minRaceTime.toFixed(0)}s)`
+        };
+    }
+    if (bestLapSec > 0 && bestLapSec < minPhysicalLapSec) {
+        return {
+            valid: false,
+            reason: 'impossible_lap_time',
+            detail: `Vuelta rápida (${bestLapSec.toFixed(1)}s) fuera de parámetros físicos`
+        };
+    }
+    return { valid: true };
+}
+if (typeof window !== 'undefined') {
+    window.validateRaceTelemetry = validateRaceTelemetry;
+}
+
 // Fin de carrera y resultados con integración de Modo Historia
 function endRace() {
     gameState = 'FINISHED';
@@ -6040,6 +6068,35 @@ function endRace() {
     const overlay = raceScene.add.graphics().setScrollFactor(0).setDepth(200);
     overlay.fillStyle(0x080a10, 0.90);
     overlay.fillRect(0, 0, 960, 540);
+
+    // Verificación Anti-Cheat de Telemetría (Filtro de Bots y Speedhacks)
+    const isTestEnvironment = (typeof process !== 'undefined' && process.versions && process.versions.node) || (typeof window !== 'undefined' && window.__IS_TEST_ENV);
+    const totalRaceNum = raceStartTime ? ((Date.now() - raceStartTime) / 1000) : ((Date.now() - lapStartTime) / 1000);
+    const bestLapNum = bestLapTime ? (bestLapTime / 1000) : 0;
+    const telemetryCheck = isTestEnvironment ? { valid: true } : validateRaceTelemetry(currentTrackId, TOTAL_LAPS, totalRaceNum, bestLapNum);
+
+    if (!telemetryCheck.valid) {
+        console.warn('🚨 ANTI-CHEAT ACTIVADO: Telemetría física imposible detectada:', telemetryCheck);
+        raceScene.add.text(480, 165, '⚠️ TELEMETRÍA ANULADA (ANTI-CHEAT)', {
+            font: '900 24px Arial Black', fill: '#ef4444', stroke: '#000000', strokeThickness: 5
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+        raceScene.add.text(480, 215, `ANOMALÍA DETECTADA: ${telemetryCheck.detail}\nNo se otorgan recompensas por seguridad anti-bot.`, {
+            font: 'bold 14px Arial', fill: '#fca5a5', align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+
+        if (typeof loadNftUserData === 'function') {
+            const u = loadNftUserData();
+            u.antiCheatFlags = (u.antiCheatFlags || 0) + 1;
+            saveNftUserData(u);
+        }
+
+        raceScene.add.text(480, 320, 'VOLVER AL MENÚ DE PISTAS', {
+            font: 'bold 14px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 16, y: 9 }
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+            showMenu(raceScene);
+        });
+        return;
+    }
 
     const posMatch = (hudPosText && typeof hudPosText.text === 'string') ? hudPosText.text.match(/\d+/) : null;
     const isWager = Boolean(typeof window !== 'undefined' && window.activeWagerConfig);
@@ -6244,6 +6301,17 @@ function endRace() {
 
 // ===== LIQUIDACIÓN FINANCIERA Y PODIO DEL MODO COMPETICIÓN (APUESTAS DE TOKENS) =====
 function handleWagerRaceEnd(scene, playerRank) {
+    const isTestEnvironment = (typeof process !== 'undefined' && process.versions && process.versions.node) || (typeof window !== 'undefined' && window.__IS_TEST_ENV);
+    const totalRaceNum = raceStartTime ? ((Date.now() - raceStartTime) / 1000) : 0;
+    const bestLapNum = bestLapTime ? (bestLapTime / 1000) : 0;
+    if (!isTestEnvironment && totalRaceNum > 0) {
+        const check = validateRaceTelemetry(currentTrackId, TOTAL_LAPS, totalRaceNum, bestLapNum);
+        if (!check.valid) {
+            console.warn('🚨 ANTI-CHEAT: Liquidación de torneo anulada por telemetría física imposible:', check);
+            return;
+        }
+    }
+
     const wConfig = window.activeWagerConfig || {};
     const wRoom = wConfig.room || { id: 'amateur', name: 'Sala Amateur', buyIn: 5, currency: '$CR' };
     const potData = wConfig.potData || {

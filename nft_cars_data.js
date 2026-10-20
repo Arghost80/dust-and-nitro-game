@@ -1657,7 +1657,32 @@ function buyCrWithTon(tonAmount) {
     return { success: true, tonSpent: tonAmount, crGained: crGained, credits: userData.credits, gems: userData.gems };
 }
 
-function withdrawCrToTon(crAmount) {
+// =========================================================================
+// 9. SISTEMA ANTI-BOT DE RETIRO: COOLDOWN 7 DÍAS, 50% BURN Y HOLDING MÍNIMO
+// =========================================================================
+const MIN_HOLDING_BALANCE = 500; // Saldo de seguridad obligatorio que debe quedar en wallet tras retiro
+const WITHDRAW_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 días completos (604.800.000 ms)
+const EARLY_WITHDRAW_BURN_PCT = 0.50; // Quema inmediata del 50% si se retira antes de los 7 días
+
+function getWithdrawStatus() {
+    const userData = loadNftUserData();
+    const lastWithdraw = userData.lastWithdrawTimestamp || 0;
+    const now = Date.now();
+    const elapsed = now - lastWithdraw;
+    const isEarly = lastWithdraw > 0 && elapsed < WITHDRAW_COOLDOWN_MS;
+    const remainingMs = isEarly ? (WITHDRAW_COOLDOWN_MS - elapsed) : 0;
+    
+    return {
+        isEarly,
+        remainingMs,
+        lastWithdraw,
+        cooldownMs: WITHDRAW_COOLDOWN_MS,
+        minHolding: MIN_HOLDING_BALANCE,
+        burnPct: EARLY_WITHDRAW_BURN_PCT
+    };
+}
+
+function withdrawCrToTon(crAmount, forceEarly = false) {
     const userData = loadNftUserData();
     if (!userData.walletConnected) {
         return { success: false, reason: "wallet_not_connected" };
@@ -1669,11 +1694,68 @@ function withdrawCrToTon(crAmount) {
     if ((userData.credits || 0) < crAmount) {
         return { success: false, reason: "credits_insufficient" };
     }
-    const tonGained = Number((crAmount / 12500).toFixed(4));
-    userData.credits -= crAmount;
-    userData.gems += tonGained;
+
+    // 1. REGLA DE SALDO MÍNIMO EN WALLET (HOLDING MÍNIMO DE SEGURIDAD: 500 $CR)
+    // El usuario no puede vaciar su cuenta; deben quedar al menos 500 $CR en la wallet tras el retiro
+    if ((userData.credits - crAmount) < MIN_HOLDING_BALANCE) {
+        return { 
+            success: false, 
+            reason: "holding_reserve_required", 
+            minHolding: MIN_HOLDING_BALANCE,
+            currentBalance: userData.credits,
+            maxAllowedWithdraw: Math.max(0, userData.credits - MIN_HOLDING_BALANCE)
+        };
+    }
+
+    // 2. REGLA DE COOLDOWN DE 7 DÍAS & QUEMA DEL 50% POR RETIRO ANTICIPADO
+    const now = Date.now();
+    const lastWithdraw = userData.lastWithdrawTimestamp || 0;
+    const elapsed = now - lastWithdraw;
+    const isEarly = lastWithdraw > 0 && elapsed < WITHDRAW_COOLDOWN_MS;
+
+    if (isEarly && !forceEarly) {
+        const remainingMs = WITHDRAW_COOLDOWN_MS - elapsed;
+        const burnCr = Math.round(crAmount * EARLY_WITHDRAW_BURN_PCT);
+        const netCr = crAmount - burnCr;
+        const netTon = Number((netCr / 12500).toFixed(4));
+        return {
+            success: false,
+            reason: "early_withdraw_warning",
+            remainingMs: remainingMs,
+            burnRate: EARLY_WITHDRAW_BURN_PCT,
+            burnCr: burnCr,
+            netCr: netCr,
+            netTon: netTon,
+            crAmount: crAmount
+        };
+    }
+
+    // Proceso de Retiro:
+    let burnedCr = 0;
+    let netCrAmount = crAmount;
+    if (isEarly && forceEarly) {
+        // Quema del 50% de los tokens retirados antes de 7 días
+        burnedCr = Math.round(crAmount * EARLY_WITHDRAW_BURN_PCT);
+        netCrAmount = crAmount - burnedCr;
+        userData.totalBurnedTokens = (userData.totalBurnedTokens || 0) + burnedCr;
+    }
+
+    const tonGained = Number((netCrAmount / 12500).toFixed(4));
+    userData.credits -= crAmount; // Se deducen los tokens solicitados
+    userData.gems = (userData.gems || 0) + tonGained;
+    userData.lastWithdrawTimestamp = now;
     saveNftUserData(userData);
-    return { success: true, crSpent: crAmount, tonGained: tonGained, credits: userData.credits, gems: userData.gems };
+
+    return { 
+        success: true, 
+        isEarly: isEarly,
+        crSpent: crAmount, 
+        burnedCr: burnedCr,
+        netCr: netCrAmount,
+        tonGained: tonGained, 
+        credits: userData.credits, 
+        gems: userData.gems 
+    };
 }
 
 // =========================================================================
@@ -1961,5 +2043,10 @@ if (typeof window !== 'undefined') {
     window.getWeeklyTournamentInfo = getWeeklyTournamentInfo;
     window.enterWeeklyTournament = enterWeeklyTournament;
     window.WEEKLY_TOURNAMENT_CONFIG = WEEKLY_TOURNAMENT_CONFIG;
+    window.getWithdrawStatus = getWithdrawStatus;
+    window.withdrawCrToTon = withdrawCrToTon;
+    window.MIN_HOLDING_BALANCE = MIN_HOLDING_BALANCE;
+    window.WITHDRAW_COOLDOWN_MS = WITHDRAW_COOLDOWN_MS;
+    window.EARLY_WITHDRAW_BURN_PCT = EARLY_WITHDRAW_BURN_PCT;
 }
 
