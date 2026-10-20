@@ -1261,12 +1261,12 @@ vm.runInContext('activateNitroBoost()', ctx);
 const timer1 = vm.runInContext('nitroBoostTimer', ctx);
 const rem1 = vm.runInContext('raceNitrosRemaining', ctx);
 const badge1 = vm.runInContext('document.getElementById("nitro-badge-count").textContent', ctx);
-if (timer1 <= 0 || rem1 !== 1 || badge1 !== '1') {
-    throw new Error(`Primer nitro falló: timer=${timer1}, remaining=${rem1}, badge=${badge1}`);
+if (timer1 !== 4.0 || rem1 !== 1 || badge1 !== '1') {
+    throw new Error(`Primer nitro falló: timer=${timer1} (esperado 4.0), remaining=${rem1}, badge=${badge1}`);
 }
-console.log('✓ 1er Nitro activado con éxito: 2.0s de impulso, resta a 1 cápsula y badge "1"');
+console.log('✓ 1er Nitro activado con éxito: 4.0s de impulso, resta a 1 cápsula y badge "1"');
 
-// Simular paso de 2.1 segundos para que termine el boost
+// Simular paso de 4.1 segundos para que termine el boost
 vm.runInContext(`
     nitroBoostTimer = 0;
     activateNitroBoost();
@@ -1577,22 +1577,22 @@ if (redeemOwnRes.success || redeemOwnRes.reason !== 'cannot_invite_self') {
     throw new Error('Debe bloquearse el canjeo del propio código de invitación');
 }
 const redeemFriendRes = vm.runInContext("redeemInviteCode('APEX-AMIGO99')", ctx);
-if (!redeemFriendRes.success || redeemFriendRes.bonusCr !== 500) {
+if (!redeemFriendRes.success || redeemFriendRes.bonusNitros !== 2) {
     throw new Error(`Fallo al canjear código de amigo: ${JSON.stringify(redeemFriendRes)}`);
 }
 const duplicateRedeemRes = vm.runInContext("redeemInviteCode('APEX-OTRO123')", ctx);
 if (duplicateRedeemRes.success || duplicateRedeemRes.reason !== 'already_redeemed') {
     throw new Error('Debe bloquearse el canjeo múltiple de invitaciones');
 }
-console.log('✓ Canjeo de código de invitación verificado (+500 $CR, bloqueo de auto-canje y único uso)');
+console.log('✓ Canjeo de código de invitación verificado (+2 Nitros N₂O, bloqueo de auto-canje y único uso)');
 
 // 4. Verificación de Simulación de Amigo Unido
 const initialInvites = vm.runInContext('loadNftUserData().referralsCount', ctx);
 const simRes = vm.runInContext("simulateFriendJoined('Piloto_Test99')", ctx);
-if (!simRes.success || simRes.referralsCount !== initialInvites + 1 || simRes.bonusCr !== 500) {
+if (!simRes.success || simRes.referralsCount !== initialInvites + 1 || simRes.bonusNitros !== 1) {
     throw new Error(`Fallo en simulación de amigo unido: ${JSON.stringify(simRes)}`);
 }
-console.log(`✓ Incremento de invitaciones verificado: ${simRes.referralsCount} amigos (+500 $CR acreditados)`);
+console.log(`✓ Incremento de invitaciones verificado: ${simRes.referralsCount} amigos (+1 Nitro N₂O acreditado)`);
 
 // 5. Verificación de Vinculación de Correo Electrónico
 const invalidEmailRes = vm.runInContext("linkUserEmail('email_invalido')", ctx);
@@ -1600,14 +1600,14 @@ if (invalidEmailRes.success || invalidEmailRes.reason !== 'invalid_email') {
     throw new Error('Debe rechazar correos con formato inválido');
 }
 const validEmailRes = vm.runInContext("linkUserEmail('piloto@apexchampionship.com')", ctx);
-if (!validEmailRes.success || !validEmailRes.isFirstTime || validEmailRes.bonusCr !== 500) {
+if (!validEmailRes.success || !validEmailRes.isFirstTime || validEmailRes.bonusNitros !== 2) {
     throw new Error(`Fallo al vincular correo por primera vez: ${JSON.stringify(validEmailRes)}`);
 }
 const updateEmailRes = vm.runInContext("linkUserEmail('nuevo_correo@apexchampionship.com')", ctx);
-if (!updateEmailRes.success || updateEmailRes.isFirstTime || updateEmailRes.bonusCr !== 0) {
+if (!updateEmailRes.success || updateEmailRes.isFirstTime || updateEmailRes.bonusNitros !== 0) {
     throw new Error('Actualizar correo existente no debe duplicar el bonus de bienvenida');
 }
-console.log('✓ Vinculación de correo electrónico verificada (validación regex y bonus +500 $CR)');
+console.log('✓ Vinculación de correo electrónico verificada (validación regex y bonus +2 Nitros N₂O)');
 
 // 6. Verificación de Datos del Torneo de 60 Días (2 Meses)
 const tourneyData = vm.runInContext('getReferralTournamentData()', ctx);

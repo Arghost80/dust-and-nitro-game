@@ -3042,7 +3042,7 @@ function openSettingsModal() {
                         </div>
                     </div>
                     <div style="font-size: 10.5px; color: #cbd5e1;">
-                        ¡Los 20 con más invitaciones en los 2 primeros meses ganan <strong>Cofres de Coches</strong>!
+                        ¡Gana <strong>+1 Nitro N₂O</strong> por amigo y compite por los <strong>Cofres de Coches</strong> del Torneo de Lanzamiento!
                     </div>
                 </div>
 
@@ -3052,11 +3052,11 @@ function openSettingsModal() {
                     <div style="display: flex; gap: 8px;">
                         <input type="email" id="setting-input-email" class="pilot-name-input" value="${escapeHtml(userData.email || '')}" placeholder="tu-correo@ejemplo.com">
                         <button class="btn-save-pilot-name" style="background: #0098ea;" onclick="handleLinkEmail(document.getElementById('setting-input-email').value)">
-                            ${userData.email ? 'ACTUALIZAR' : 'VINCULAR (+500 $CR)'}
+                            ${userData.email ? 'ACTUALIZAR' : 'VINCULAR (+2 NITRO N₂O)'}
                         </button>
                     </div>
                     <div style="font-size: 10.5px; color: #94a3b8; margin-top: 5px;">
-                        ${userData.email ? `<span style="color: #34d399; font-weight: 800;">✔ Correo vinculado: ${escapeHtml(userData.email)}</span>` : 'Vincula tu email para asegurar tu cuenta y ganar +500 $CR.'}
+                        ${userData.email ? `<span style="color: #34d399; font-weight: 800;">✔ Correo vinculado: ${escapeHtml(userData.email)}</span>` : 'Vincula tu email para asegurar tu cuenta y ganar +2 Nitro N₂O.'}
                     </div>
                 </div>
 
@@ -4314,7 +4314,7 @@ function openReferralTournamentModal() {
     };
 
     const botUsername = 'argho_racing_test_bot';
-    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=ref_${tData.userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${tData.userCode} para ganar +500 $CR de bienvenida gratis. 🏁🏆`)}`;
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=ref_${tData.userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${tData.userCode} para ganar +2 Nitros N₂O (4s de boost) de bienvenida gratis. 🏁🏆`)}`;
 
     modal.innerHTML = `
         <div class="settings-dialog" style="max-width: 680px; width: 95%;">
@@ -4380,7 +4380,7 @@ function openReferralTournamentModal() {
                 <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(236, 72, 153, 0.35); border-radius: 12px; padding: 14px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="font-size: 12px; font-weight: 900; color: #f472b6;">🔗 TU CÓDIGO DE INVITACIÓN PERSONAL</span>
-                        <span style="font-size: 10px; color: #34d399; font-weight: 800;">+500 $CR POR AMIGO</span>
+                        <span style="font-size: 10px; color: #38bdf8; font-weight: 800;">🧪 +1 NITRO N₂O POR AMIGO</span>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 140px; background: #0b0f19; border: 1px dashed #ec4899; border-radius: 8px; padding: 10px 14px; font-family: monospace; font-size: 16px; font-weight: 900; color: #fde047; text-align: center; letter-spacing: 1.5px;">
@@ -4392,12 +4392,12 @@ function openReferralTournamentModal() {
                         <a href="${tgShareUrl}" target="_blank" style="text-decoration: none; padding: 10px 16px; background: linear-gradient(135deg, #0098ea, #0088cc); border: none; border-radius: 8px; color: #fff; font-size: 11px; font-weight: 900; cursor: pointer; display: flex; align-items: center; gap: 6px;">
                             <span>✈️</span> INVITAR POR TELEGRAM
                         </a>
-                        <button onclick="handleSimulateInvite()" title="Probar incremento de invitaciones y recompensa" style="padding: 10px 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #34d399; font-size: 11px; font-weight: 800; cursor: pointer;">
+                        <button onclick="handleSimulateInvite()" title="Probar incremento de invitaciones y recompensa de Nitro" style="padding: 10px 12px; background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; border-radius: 8px; color: #38bdf8; font-size: 11px; font-weight: 800; cursor: pointer;">
                             🧪 +1 AMIGO (TEST)
                         </button>
                     </div>
                     <p style="font-size: 10.5px; color: #94a3b8; margin: 8px 0 0;">
-                        💡 <strong>¿Cómo funciona?</strong> Comparte tu enlace o código con amigos en Telegram. Cuando inicien el juego, ambos ganáis <strong>+500 $CR</strong> y sumas +1 punto para el Torneo de Lanzamiento.
+                        💡 <strong>¿Cómo funciona?</strong> Comparte tu enlace o código con amigos en Telegram. Tu amigo recibe <strong>+2 Cápsulas de Nitro N₂O (4s de boost)</strong> de bienvenida, y tú recibes <strong>+1 Cápsula de Nitro N₂O</strong> + 1 punto para escalar en el Torneo de Lanzamiento.
                     </p>
                 </div>
 
@@ -4406,13 +4406,13 @@ function openReferralTournamentModal() {
                     <div style="font-size: 12px; font-weight: 800; color: #ffffff; margin-bottom: 6px;">🎁 CANJEAR CÓDIGO DE UN AMIGO</div>
                     ${tData.invitedBy ? `
                         <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #34d399; font-weight: 800;">
-                            ✔ ¡Código canjeado con éxito! Fuiste invitado por: <strong>${escapeHtml(tData.invitedBy)}</strong> (+500 $CR recibidos)
+                            ✔ ¡Código canjeado con éxito! Fuiste invitado por: <strong>${escapeHtml(tData.invitedBy)}</strong> (+2 Nitros N₂O de bienvenida recibidos)
                         </div>
                     ` : `
                         <div style="display: flex; gap: 8px;">
                             <input type="text" id="input-redeem-code" placeholder="Ej. APEX-XXXXXX" maxlength="16" style="flex: 1; padding: 8px 12px; background: #0b0f19; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-family: monospace; font-size: 13px; text-transform: uppercase;">
-                            <button onclick="handleRedeemReferralCode()" style="padding: 8px 16px; background: #f59e0b; border: none; border-radius: 8px; color: #000; font-weight: 900; font-size: 11px; cursor: pointer;">
-                                CANJEAR (+500 $CR)
+                            <button onclick="handleRedeemReferralCode()" style="padding: 8px 16px; background: #38bdf8; border: none; border-radius: 8px; color: #000; font-weight: 900; font-size: 11px; cursor: pointer;">
+                                CANJEAR (+2 NITRO N₂O)
                             </button>
                         </div>
                     `}
@@ -4422,12 +4422,12 @@ function openReferralTournamentModal() {
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 12px; padding: 12px 14px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <span style="font-size: 12px; font-weight: 800; color: #38bdf8;">📧 VINCULAR CORREO ELECTRÓNICO (SEGURIDAD WEB3)</span>
-                        ${tData.email ? `<span style="font-size: 10px; color: #34d399; font-weight: 800;">✔ VINCULADO</span>` : `<span style="font-size: 10px; color: #fde047; font-weight: 800;">+500 $CR DE REGALO</span>`}
+                        ${tData.email ? `<span style="font-size: 10px; color: #34d399; font-weight: 800;">✔ VINCULADO</span>` : `<span style="font-size: 10px; color: #38bdf8; font-weight: 800;">+2 NITRO N₂O DE REGALO</span>`}
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <input type="email" id="input-link-email" value="${escapeHtml(tData.email || '')}" placeholder="tu-correo@ejemplo.com" maxlength="60" style="flex: 1; padding: 8px 12px; background: #0b0f19; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-size: 12px;">
                         <button onclick="handleLinkEmail()" style="padding: 8px 16px; background: #0098ea; border: none; border-radius: 8px; color: #fff; font-weight: 900; font-size: 11px; cursor: pointer;">
-                            ${tData.email ? 'ACTUALIZAR' : 'VINCULAR (+500 $CR)'}
+                            ${tData.email ? 'ACTUALIZAR' : 'VINCULAR (+2 NITRO N₂O)'}
                         </button>
                     </div>
                     <p style="font-size: 10px; color: #94a3b8; margin: 6px 0 0;">
@@ -4510,7 +4510,7 @@ function handleRedeemReferralCode(customCode) {
     hubAudio.playOpenCrate();
     renderHubHeader();
     openReferralTournamentModal();
-    alert(`🎉 ¡Código canjeado con éxito!\nHas recibido +${res.bonusCr} $CR de bienvenida.`);
+    alert(`🎉 ¡Código canjeado con éxito!\nHas recibido +${res.bonusNitros} Cápsulas de Nitro N₂O (4s) de bienvenida.`);
 }
 
 function handleLinkEmail(customEmail) {
@@ -4534,7 +4534,7 @@ function handleLinkEmail(customEmail) {
         openSettingsModal();
     }
     if (res.isFirstTime) {
-        alert(`🎉 ¡Correo vinculado con éxito!\nHas recibido +${res.bonusCr} $CR de bonificación por asegurar tu cuenta.`);
+        alert(`🎉 ¡Correo vinculado con éxito!\nHas recibido +${res.bonusNitros} Cápsulas de Nitro N₂O (4s) por asegurar tu cuenta.`);
     } else {
         alert(`✅ Correo actualizado con éxito: ${res.email}`);
     }
@@ -4547,7 +4547,7 @@ function handleSimulateInvite() {
     hubAudio.playOpenCrate();
     renderHubHeader();
     openReferralTournamentModal();
-    alert(`🚀 ¡Nuevo amigo unido a tu escudería!\n+1 Invitación registrada (${res.referralsCount} en total) y +${res.bonusCr} $CR acreditados.`);
+    alert(`🚀 ¡Nuevo amigo unido a tu escudería!\n+1 Invitación registrada (${res.referralsCount} en total) y +${res.bonusNitros} Nitro N₂O (4s) acreditado.`);
 }
 
 if (typeof window !== 'undefined') {

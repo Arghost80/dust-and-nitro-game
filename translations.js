@@ -108,8 +108,9 @@ const TRANSLATIONS = {
         referral_share_tg: "INVITAR POR TELEGRAM",
         referral_copy_code: "COPIAR CÓDIGO",
         referral_redeem_title: "CANJEAR CÓDIGO DE UN AMIGO",
-        referral_redeem_btn: "CANJEAR (+500 $CR)",
+        referral_redeem_btn: "CANJEAR (+2 NITRO N₂O)",
         referral_redeem_placeholder: "Ej. APEX-XXXXXX",
+        referral_redeem_success: "¡Código canjeado con éxito! Has recibido +2 Cápsulas de Nitro N₂O (4s de impulso).",
         referral_stats_title: "TUS AMIGOS INVITADOS",
         referral_tournament_banner: "🏆 GRAN TORNEO DE LANZAMIENTO (2 PRIMEROS MESES)",
         referral_tournament_desc: "Los 20 pilotos con más invitaciones ganarán cofres de coches exclusivos al terminar los 2 meses.",
@@ -119,9 +120,9 @@ const TRANSLATIONS = {
         email_title: "📧 VINCULAR CORREO ELECTRÓNICO",
         email_desc: "Vincula tu email para proteger tu cuenta Web3, recibir avisos de torneos y premios.",
         email_input_placeholder: "tu-correo@ejemplo.com",
-        email_save_btn: "VINCULAR (+500 $CR)",
+        email_save_btn: "VINCULAR (+2 NITRO N₂O)",
         email_linked_badge: "✔ CORREO VINCULADO",
-        email_success: "¡Correo electrónico vinculado con éxito! Has ganado +500 $CR de bonificación.",
+        email_success: "¡Correo electrónico vinculado con éxito! Has ganado +2 Cápsulas de Nitro N₂O de bonificación.",
         email_invalid: "Por favor, introduce una dirección de correo válida."
     },
     en: {
@@ -232,8 +233,9 @@ const TRANSLATIONS = {
         referral_share_tg: "INVITE VIA TELEGRAM",
         referral_copy_code: "COPY CODE",
         referral_redeem_title: "REDEEM A FRIEND'S CODE",
-        referral_redeem_btn: "REDEEM (+500 $CR)",
+        referral_redeem_btn: "REDEEM (+2 NITRO N₂O)",
         referral_redeem_placeholder: "E.g. APEX-XXXXXX",
+        referral_redeem_success: "Code redeemed successfully! You received +2 Nitro N₂O boosts (4s boost).",
         referral_stats_title: "YOUR INVITED FRIENDS",
         referral_tournament_banner: "🏆 GRAND LAUNCH TOURNAMENT (FIRST 2 MONTHS)",
         referral_tournament_desc: "The top 20 pilots with the most invites win exclusive car chests when the 2 months end.",
@@ -243,9 +245,9 @@ const TRANSLATIONS = {
         email_title: "📧 LINK EMAIL ADDRESS",
         email_desc: "Link your email to protect your Web3 account and receive tournament alerts.",
         email_input_placeholder: "your-email@example.com",
-        email_save_btn: "LINK (+500 $CR)",
+        email_save_btn: "LINK (+2 NITRO N₂O)",
         email_linked_badge: "✔ EMAIL LINKED",
-        email_success: "Email linked successfully! You earned +500 $CR bonus.",
+        email_success: "Email linked successfully! You earned +2 Nitro N₂O bonus boosts.",
         email_invalid: "Please enter a valid email address."
     },
     zh: {
@@ -356,8 +358,9 @@ const TRANSLATIONS = {
         referral_share_tg: "分享至 TELEGRAM",
         referral_copy_code: "复制邀请码",
         referral_redeem_title: "兑换好友邀请码",
-        referral_redeem_btn: "兑换 (+500 金币)",
+        referral_redeem_btn: "兑换 (+2 瓶氮气加速)",
         referral_redeem_placeholder: "输入好友邀请码 (如 APEX-XXXXXX)",
+        referral_redeem_success: "邀请码兑换成功！已获得 +2 瓶氮气加速（4秒狂飙推进）。",
         referral_stats_title: "已成功邀请好友",
         referral_tournament_banner: "🏆 开服前2个月冲榜大赛",
         referral_tournament_desc: "邀请排行榜前 20 名车手将在活动结束时获得专属豪车宝箱！",
@@ -367,9 +370,9 @@ const TRANSLATIONS = {
         email_title: "📧 绑定电子邮箱",
         email_desc: "绑定邮箱保障 Web3 资产安全，及时获取锦标赛与空投通知。",
         email_input_placeholder: "your-email@example.com",
-        email_save_btn: "绑定邮箱 (+500 金币)",
+        email_save_btn: "绑定邮箱 (+2 瓶氮气加速)",
         email_linked_badge: "✔ 邮箱已成功绑定",
-        email_success: "电子邮箱绑定成功！已获得 +500 金币奖励。",
+        email_success: "电子邮箱绑定成功！已获得 +2 瓶氮气加速奖励。",
         email_invalid: "请输入有效的电子邮箱地址。"
     }
 };

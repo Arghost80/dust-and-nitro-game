@@ -2185,30 +2185,30 @@ function redeemInviteCode(inputCode) {
         return { success: false, reason: "already_redeemed", code: userData.invitedBy };
     }
 
-    const bonusCr = 500;
+    const bonusNitros = 2; // +2 Cápsulas de Nitro N2O de bienvenida (4s de boost)
     userData.invitedBy = code;
-    userData.credits = (userData.credits || 0) + bonusCr;
+    userData.nitros = (userData.nitros || 0) + bonusNitros;
     saveNftUserData(userData);
 
     return {
         success: true,
         code: code,
-        bonusCr: bonusCr,
-        newCredits: userData.credits
+        bonusNitros: bonusNitros,
+        totalNitros: userData.nitros
     };
 }
 
 function simulateFriendJoined(friendName) {
     const userData = loadNftUserData();
-    const bonusCr = 500;
+    const bonusNitros = 1; // +1 Nitro N2O por cada amigo invitado
     userData.referralsCount = (userData.referralsCount || 0) + 1;
-    userData.credits = (userData.credits || 0) + bonusCr;
+    userData.nitros = (userData.nitros || 0) + bonusNitros;
     if (!Array.isArray(userData.referralHistory)) userData.referralHistory = [];
     const fName = friendName || (`Piloto_${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
     userData.referralHistory.unshift({
         name: fName,
         joinedAt: Date.now(),
-        rewardCr: bonusCr
+        reward: '+1 NITRO N₂O'
     });
     saveNftUserData(userData);
 
@@ -2216,8 +2216,8 @@ function simulateFriendJoined(friendName) {
         success: true,
         friendName: fName,
         referralsCount: userData.referralsCount,
-        bonusCr: bonusCr,
-        newCredits: userData.credits
+        bonusNitros: bonusNitros,
+        totalNitros: userData.nitros
     };
 }
 
@@ -2230,9 +2230,9 @@ function linkUserEmail(emailInput) {
     }
 
     const isFirstTime = !userData.emailLinkedRewardClaimed;
-    const bonusCr = isFirstTime ? 500 : 0;
+    const bonusNitros = isFirstTime ? 2 : 0; // +2 Nitros N2O por vincular correo
     if (isFirstTime) {
-        userData.credits = (userData.credits || 0) + bonusCr;
+        userData.nitros = (userData.nitros || 0) + bonusNitros;
         userData.emailLinkedRewardClaimed = true;
     }
     userData.email = email;
@@ -2242,8 +2242,8 @@ function linkUserEmail(emailInput) {
         success: true,
         email: email,
         isFirstTime: isFirstTime,
-        bonusCr: bonusCr,
-        newCredits: userData.credits
+        bonusNitros: bonusNitros,
+        totalNitros: userData.nitros
     };
 }
 

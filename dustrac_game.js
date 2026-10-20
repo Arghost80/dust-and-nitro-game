@@ -665,7 +665,7 @@ let raceStartTime = 0;
 let driftCharge = 0;
 let driftBoostTimer = 0;
 let raceNitrosRemaining = 2; // Máximo 2 por carrera
-let nitroBoostTimer = 0; // Duración 2.0s de extra velocidad N2O
+let nitroBoostTimer = 0; // Duración 4.0s de extra velocidad N2O
 
 // ===== PRELOAD: CARGA DE ASSETS ORIGINALES DE DUSTRACING2D =====
 function dustPreload() {
@@ -2767,7 +2767,7 @@ function activateNitroBoost() {
     }
     updateNitroButtonBadge();
 
-    nitroBoostTimer = 2.0; // 2.0s de inyección N2O
+    nitroBoostTimer = 4.0; // 4.0s de inyección N2O
     try {
         dustAudio.init();
         if (typeof dustAudio.playNitro === 'function') {
@@ -2784,7 +2784,7 @@ function activateNitroBoost() {
     }
 
     if (hudDriftBadge) {
-        hudDriftBadge.setText('🔥 ¡NITRO N₂O ACTIVADO! (2.0s)').setFill('#00f5d4').setVisible(true);
+        hudDriftBadge.setText('🔥 ¡NITRO N₂O ACTIVADO! (4.0s)').setFill('#00f5d4').setVisible(true);
     }
 
     if (raceScene && playerCar) {
@@ -5276,7 +5276,7 @@ function updatePlayer(dt, track) {
                 spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', 0x00f5d4);
             }
 
-            // Gestión activa del Nitro N2O (2.0 segundos de velocidad punta extra y aceleración de competición)
+            // Gestión activa del Nitro N2O (4.0 segundos de velocidad punta extra y aceleración de competición)
             if (nitroBoostTimer > 0) {
                 nitroBoostTimer = Math.max(0, nitroBoostTimer - dt);
                 const nitroTopSpeed = topSpeed * 1.35;
