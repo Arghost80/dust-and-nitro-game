@@ -352,7 +352,7 @@ function renderMainHubView() {
 
             <!-- Zona 5: Cofres NFT -->
             <div class="zone-card card-crates" onclick="showHubView('crates')">
-                <div class="zone-icon">🎁</div>
+                <div class="zone-icon">${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 42, 36) : '🧰'}</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_crates')}</h3>
                 </div>
@@ -1459,7 +1459,7 @@ function renderCratesView() {
                     <h3 class="crate-name">${t('crate_bronze_title')}</h3>
                 </div>
                 <div class="crate-visual-chest chest-bronze">
-                    <div class="chest-icon">📦</div>
+                    ${typeof generateChestSvg === 'function' ? generateChestSvg('bronze', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_bronze_rates')}</div>
                 <div class="crate-cost-pill">💰 ${t('crate_bronze_cost')}</div>
@@ -1475,7 +1475,7 @@ function renderCratesView() {
                     <h3 class="crate-name">${t('crate_silver_title')}</h3>
                 </div>
                 <div class="crate-visual-chest chest-silver">
-                    <div class="chest-icon">🧰</div>
+                    ${typeof generateChestSvg === 'function' ? generateChestSvg('silver', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_silver_rates')}</div>
                 <div class="crate-cost-pill">💰 ${t('crate_silver_cost')}</div>
@@ -1491,7 +1491,7 @@ function renderCratesView() {
                     <h3 class="crate-name">${t('crate_gold_title')}</h3>
                 </div>
                 <div class="crate-visual-chest chest-gold">
-                    <div class="chest-icon">👑</div>
+                    ${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_gold_rates')}</div>
                 <div class="crate-cost-pill cost-gems">💎 ${t('crate_gold_cost')}</div>
@@ -1506,7 +1506,7 @@ function renderCratesView() {
             <div class="unboxing-backdrop"></div>
             <div class="unboxing-content">
                 <div id="unboxing-animation" class="unboxing-anim-box">
-                    <div class="crate-shake-icon">🎁</div>
+                    <div class="crate-shake-icon">${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 130, 115) : '🧰'}</div>
                     <div class="crate-rays"></div>
                     <p class="unboxing-status-text">${t('crate_opening')}</p>
                 </div>
@@ -1542,6 +1542,11 @@ function triggerCrateOpening(crateKey) {
     modal.classList.remove('hidden');
     animBox.classList.remove('hidden');
     resultBox.classList.add('hidden');
+
+    const shakeIcon = animBox.querySelector('.crate-shake-icon');
+    if (shakeIcon && typeof generateChestSvg === 'function') {
+        shakeIcon.innerHTML = generateChestSvg(crateKey, 130, 115);
+    }
 
     hubAudio.playOpenCrate();
 
@@ -4357,19 +4362,19 @@ function openReferralTournamentModal() {
                 <!-- PREMIOS DEL TORNEO (COFRES DE COCHES) -->
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
                     <div style="background: rgba(250, 204, 21, 0.08); border: 1px solid #eab308; border-radius: 10px; padding: 10px; text-align: center;">
-                        <div style="font-size: 20px;">👑</div>
+                        <div style="display: flex; justify-content: center; margin-bottom: 2px;">${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 36, 32) : '👑'}</div>
                         <div style="font-size: 11px; font-weight: 900; color: #fde047; margin-top: 2px;">TOP 1 - 3</div>
                         <div style="font-size: 11px; font-weight: 800; color: #ffffff;">COFRE RARO (VIP ORO)</div>
                         <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Superdeportivos Raros y Legendarios</div>
                     </div>
                     <div style="background: rgba(203, 213, 225, 0.08); border: 1px solid #94a3b8; border-radius: 10px; padding: 10px; text-align: center;">
-                        <div style="font-size: 20px;">🧰</div>
+                        <div style="display: flex; justify-content: center; margin-bottom: 2px;">${typeof generateChestSvg === 'function' ? generateChestSvg('silver', 36, 32) : '🧰'}</div>
                         <div style="font-size: 11px; font-weight: 900; color: #e2e8f0; margin-top: 2px;">TOP 4 - 10</div>
                         <div style="font-size: 11px; font-weight: 800; color: #ffffff;">COFRE DE PLATA (CLUBMAN)</div>
                         <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Vehículos Infrecuentes y Raros</div>
                     </div>
                     <div style="background: rgba(217, 119, 6, 0.08); border: 1px solid #b45309; border-radius: 10px; padding: 10px; text-align: center;">
-                        <div style="font-size: 20px;">📦</div>
+                        <div style="display: flex; justify-content: center; margin-bottom: 2px;">${typeof generateChestSvg === 'function' ? generateChestSvg('bronze', 36, 32) : '📦'}</div>
                         <div style="font-size: 11px; font-weight: 900; color: #f59e0b; margin-top: 2px;">TOP 11 - 20</div>
                         <div style="font-size: 11px; font-weight: 800; color: #ffffff;">COFRE COMÚN (ROOKIE)</div>
                         <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Coches de iniciación para el garaje</div>
@@ -4403,7 +4408,7 @@ function openReferralTournamentModal() {
 
                 <!-- CANJEAR CÓDIGO DE UN AMIGO -->
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
-                    <div style="font-size: 12px; font-weight: 800; color: #ffffff; margin-bottom: 6px;">🎁 CANJEAR CÓDIGO DE UN AMIGO</div>
+                    <div style="font-size: 12px; font-weight: 800; color: #ffffff; margin-bottom: 6px;">🔑 CANJEAR CÓDIGO DE UN AMIGO</div>
                     ${tData.invitedBy ? `
                         <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #34d399; font-weight: 800;">
                             ✔ ¡Código canjeado con éxito! Fuiste invitado por: <strong>${escapeHtml(tData.invitedBy)}</strong> (+2 Nitros N₂O de bienvenida recibidos)

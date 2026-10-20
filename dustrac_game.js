@@ -664,6 +664,7 @@ let currentTouchControlMode = 'joystick';
 let raceStartTime = 0;
 let driftCharge = 0;
 let driftBoostTimer = 0;
+let driftSlipAngle = 0; // Ángulo de deslizamiento lateral en derrapes de alta velocidad
 let raceNitrosRemaining = 2; // Máximo 2 por carrera
 let nitroBoostTimer = 0; // Duración 4.0s de extra velocidad N2O
 
@@ -4888,11 +4889,13 @@ function dustUpdate(time, delta) {
         if (nitroBoostTimer > 0) {
             hudDriftBadge.setText(`🔥 ¡NITRO N₂O! ${nitroBoostTimer.toFixed(1)}s (VELOCIDAD +35%)`).setFill('#00f5d4').setVisible(true);
         } else if (driftBoostTimer > 0) {
-            hudDriftBadge.setText(`🚀 ¡BOOST DE DERRAPE ACTIVO!`).setFill('#00f5d4').setVisible(true);
+            hudDriftBadge.setText(`🚀 ¡DRIFT TURBO BOOST!`).setFill('#00f5d4').setVisible(true);
+        } else if (driftCharge >= 0.8) {
+            hudDriftBadge.setText(`⚡ ¡SUPER-TURBO CARGADO! SUELTA PARA BOOST`).setFill('#fee440').setVisible(true);
         } else if (driftCharge >= 0.35) {
-            hudDriftBadge.setText(`⚡ DERRAPE CARGADO • ¡SUELTA PARA TURBO!`).setFill('#fee440').setVisible(true);
+            hudDriftBadge.setText(`💨 DRIFT POWER-SLIDE • ¡MANTÉN ACELERADOR!`).setFill('#00f5d4').setVisible(true);
         } else if (touchHandbrake || (keys && keys.space && keys.space.isDown)) {
-            hudDriftBadge.setText(`💨 DERRAPANDO...`).setFill('#ffffff').setVisible(true);
+            hudDriftBadge.setText(`💨 DRIFT ACTIVADO`).setFill('#ffffff').setVisible(true);
         } else {
             hudDriftBadge.setVisible(false);
         }
@@ -5240,33 +5243,52 @@ function updatePlayer(dt, track) {
     if (gameState === 'RACE') {
         const isTurning = left || right;
 
-        if (handbrake) {
-            // Freno de mano / Derrape activo:
-            // Permite un ángulo de rotación mucho más agresivo en curvas muy cerradas (+85% yaw rate)
-            // Manteniendo la inercia sin clavar las ruedas a 0
-            if (gas) {
-                // Power slide (gas + freno de mano para sostener el derrape en alta velocidad)
-                playerSpeed = Math.max(topSpeed * 0.45, Math.min(topSpeed * 0.92, playerSpeed + accelRate * 0.35 * dt));
+        // Feedback táctil/visual en el botón de Drift
+        const driftBtn = document.getElementById('btn-handbrake');
+        if (driftBtn) {
+            if (handbrake) {
+                if (!driftBtn.classList.contains('active-drift')) driftBtn.classList.add('active-drift');
             } else {
-                // Derrape por inercia
-                playerSpeed = Math.max(topSpeed * 0.30, playerSpeed - accelRate * 0.70 * dt);
+                if (driftBtn.classList.contains('active-drift')) driftBtn.classList.remove('active-drift');
+            }
+        }
+
+        if (handbrake) {
+            // MODO DRIFT / POWER-SLIDE DE ALTA VELOCIDAD:
+            // Permite entrar a fondo en horquillas y curvas muy cerradas sin perder aceleración
+            if (gas) {
+                // Acelerador a fondo durante el derrape: conserva el 100% de la inercia y velocidad de carrera
+                const targetTop = nitroBoostTimer > 0 ? topSpeed * 1.35 : topSpeed;
+                playerSpeed = Math.min(targetTop, Math.max(topSpeed * 0.96, playerSpeed + accelRate * 0.95 * dt));
+            } else {
+                // Derrape por inercia sin pisar gas: desaceleración suave
+                playerSpeed = Math.max(topSpeed * 0.45, playerSpeed - accelRate * 0.35 * dt);
             }
 
             dustAudio.playDrift();
             drawSkid(playerCar.x, playerCar.y, playerCar.angle, playerCar);
             spawnTireSmoke(raceScene, playerCar.x, playerCar.y, playerCar.angle);
 
-            // Cargar impulso de salida del derrape (Mini-Turbo)
-            if (isTurning && playerSpeed > 90) {
-                driftCharge = Math.min(1.5, driftCharge + dt * 1.2);
+            if (isTurning && Math.abs(playerSpeed) > 100 && Math.random() < 0.55) {
+                spawnTitaniumSparks(raceScene, playerCar.x, playerCar.y, playerCar.angle, 3);
+            }
+
+            // Cargar impulso de salida del derrape (Drift Turbo Boost)
+            if (isTurning && playerSpeed > 80) {
+                driftCharge = Math.min(2.0, driftCharge + dt * 1.6);
+                if (driftCharge >= 0.4 && Math.random() < 0.35) {
+                    spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', driftCharge >= 0.8 ? 0xfee440 : 0x00f5d4);
+                }
             }
         } else {
-            // Al soltar el freno de mano tras un derrape sostenido: ¡impulso de salida turbo!
+            // Al soltar el botón de drift tras una curva sostenida: ¡disparo de Turbo Boost!
             if (driftCharge >= 0.35) {
-                const boostPower = Math.min(85, Math.round(driftCharge * 60));
-                playerSpeed = Math.min(topSpeed * 1.15, playerSpeed + boostPower);
-                driftBoostTimer = 0.5;
-                spawnDust(raceScene, playerCar.x, playerCar.y, 'dt_sparkle', 0x00f5d4);
+                const boostPower = Math.min(95, Math.round(driftCharge * 65));
+                playerSpeed = Math.min(topSpeed * 1.25, playerSpeed + boostPower);
+                driftBoostTimer = 0.6;
+                spawnNitroJetFlames(raceScene, playerCar, 4);
+                spawnBackfireFlame(raceScene, playerCar);
+                dustAudio.playBackfire();
                 try { if (dustAudio && typeof dustAudio.playBoost === 'function') dustAudio.playBoost(); } catch(e) {}
             }
             driftCharge = 0;
@@ -5319,17 +5341,25 @@ function updatePlayer(dt, track) {
             }
         }
 
-        // Giro: el freno de mano multiplica la capacidad de giro (yaw) para clavar horquillas
-        const yawMultiplier = handbrake ? 1.85 : 1.0;
+        // Giro: el botón de Drift multiplica la capacidad de giro (yaw) a 2.65x para clavar horquillas cerradas
+        const yawMultiplier = handbrake ? 2.65 : 1.0;
         const steer = cData.handling * yawMultiplier * (playerSpeed > 40 ? 1 : playerSpeed / 40) * (typeof touchSteerAmount === 'number' && touchSteerAmount > 0 ? touchSteerAmount : 1.0);
         if (left) playerCar.angle -= steer;
         if (right) playerCar.angle += steer;
+
+        // Inercia lateral y ángulo de derrape (Slip Angle): el coche apunta al vértice de la curva
+        let targetSlip = 0;
+        if (handbrake && isTurning && Math.abs(playerSpeed) > 60) {
+            targetSlip = left ? 16.0 : -16.0;
+        }
+        driftSlipAngle = Phaser.Math.Linear(driftSlipAngle, targetSlip, Math.min(1.0, dt * 10));
     } else {
         playerSpeed = 0;
+        driftSlipAngle = 0;
     }
 
-    const rad = Phaser.Math.DegToRad(playerCar.angle);
-    playerCar.setVelocity(Math.cos(rad) * playerSpeed, Math.sin(rad) * playerSpeed);
+    const velRad = Phaser.Math.DegToRad(playerCar.angle + driftSlipAngle);
+    playerCar.setVelocity(Math.cos(velRad) * playerSpeed, Math.sin(velRad) * playerSpeed);
 
     dustAudio.updateEngine(playerSpeed, cData.speed);
 

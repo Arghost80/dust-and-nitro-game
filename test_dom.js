@@ -1638,6 +1638,69 @@ if (!settingsModalHtml.includes('TU CÓDIGO DE INVITACIÓN') || !settingsModalHt
 }
 console.log('✓ Modal de Ajustes actualizado con código de invitación y vinculación de correo');
 
+console.log('\n--- VERIFICANDO COFRES REALES EN SVG Y FÍSICA DE DRIFT ARCADE (V79) ---');
+// 9. Verificación de renderizador vectorial de cofres (SVG)
+['bronze', 'silver', 'gold'].forEach(tier => {
+    const chestSvg = vm.runInContext(`generateChestSvg("${tier}", 96, 84)`, ctx);
+    if (!chestSvg || !chestSvg.startsWith('<svg') || !chestSvg.includes(`chest-tier-${tier}`)) {
+        throw new Error(`Fallo al generar SVG para el cofre tier ${tier}`);
+    }
+});
+vm.runInContext('renderCratesView()', ctx);
+const cratesV79Html = doc.getElementById('view-crates').innerHTML;
+if (cratesV79Html.includes('<div class="chest-icon">📦</div>') || cratesV79Html.includes('<div class="crate-shake-icon">🎁</div>')) {
+    throw new Error('view-crates no debe mostrar emojis de cajas de cartón ni paquetes de regalo');
+}
+if (!cratesV79Html.includes('rendered-chest-svg chest-tier-bronze') || !cratesV79Html.includes('rendered-chest-svg chest-tier-gold')) {
+    throw new Error('view-crates debe renderizar los cofres SVG 3D de alta definición');
+}
+vm.runInContext('renderMainHubView()', ctx);
+const mainV79Html = doc.getElementById('view-main').innerHTML;
+if (!mainV79Html.includes('rendered-chest-svg chest-tier-gold')) {
+    throw new Error('La tarjeta card-crates del Hub Principal debe mostrar el cofre SVG 3D');
+}
+console.log('✓ Cofres NFT renderizados con vectores SVG hiperrealistas (Bronce, Plata, Oro) sin cajas de cartón');
+
+// 10. Verificación de físicas de Drift Arcade a fondo (Full Throttle Power-Slide)
+vm.runInContext(`
+    startRace(window.raceScene, 'rookie_ring', 0, 'day', false);
+    gameState = 'RACE';
+    const curTrk = window.DustracTracks['rookie_ring'];
+    const trackTile = (curTrk && curTrk.tiles) ? curTrk.tiles.find(t => t.t === 'finish' || t.t === 'straight') : { i: 2, j: 2 };
+    playerCar.x = trackTile.i * 256 + 128;
+    playerCar.y = trackTile.j * 256 + 128;
+    playerSpeed = 280;
+    touchHandbrake = true;
+    touchGas = true;
+    touchLeft = true;
+    dustUpdate.call(window.raceScene, 2000, 16);
+`, ctx);
+const driftSpd = vm.runInContext('playerSpeed', ctx);
+const slip = vm.runInContext('driftSlipAngle', ctx);
+const driftChg = vm.runInContext('driftCharge', ctx);
+
+if (driftSpd < 240) {
+    throw new Error(`El coche perdió demasiada velocidad en drift con gas a fondo: ${driftSpd}`);
+}
+if (slip <= 0) {
+    throw new Error(`El ángulo de deslizamiento lateral (driftSlipAngle) debe ser positivo al derrapar a la izquierda: ${slip}`);
+}
+if (driftChg <= 0) {
+    throw new Error('El derrape no acumuló carga de turbo boost');
+}
+
+// Soltar el botón de drift tras acumular carga debe disparar el Turbo Boost
+vm.runInContext(`
+    driftCharge = 0.6;
+    touchHandbrake = false;
+    dustUpdate.call(window.raceScene, 2016, 16);
+`, ctx);
+const boostTmr = vm.runInContext('driftBoostTimer', ctx);
+if (boostTmr <= 0) {
+    throw new Error('Soltar el drift tras la curva debe activar el Turbo Boost');
+}
+console.log(`✓ Físicas de Drift Arcade verificadas: velocidad sostenida a fondo (${Math.round(driftSpd)} km/h), inercia lateral (${slip.toFixed(1)}°) y Turbo Boost al salir de la curva`);
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

@@ -1431,6 +1431,131 @@ function getCarPhotorealModelId(car) {
     return (hashString(name || id) % 24) + 1;
 }
 
+// ===== RENDERIZADOR VECTORIAL DE COFRES NFT (SVG DE ALTA DEFINICIÓN) =====
+function generateChestSvg(tier = 'bronze', width = 80, height = 70) {
+    const t = (tier || 'bronze').toLowerCase();
+    const uid = 'c_' + t + '_' + Math.floor(Math.random() * 100000);
+
+    let baseColors, strapColors, lockColors, rimColors, glowColor, coreGlow;
+    if (t === 'gold') {
+        baseColors = ['#1a1005', '#2d1c07', '#452b0b', '#1a1005'];
+        strapColors = ['#fef08a', '#facc15', '#eab308', '#a16207'];
+        rimColors = ['#fde047', '#eab308', '#854d0e'];
+        lockColors = ['#fffbeb', '#facc15', '#b45309'];
+        glowColor = 'rgba(250, 204, 21, 0.45)';
+        coreGlow = '#ffffff';
+    } else if (t === 'silver') {
+        baseColors = ['#0f172a', '#1e293b', '#334155', '#0f172a'];
+        strapColors = ['#ffffff', '#e2e8f0', '#94a3b8', '#475569'];
+        rimColors = ['#f8fafc', '#cbd5e1', '#64748b'];
+        lockColors = ['#ffffff', '#00f5d4', '#0284c7'];
+        glowColor = 'rgba(0, 245, 212, 0.45)';
+        coreGlow = '#00f5d4';
+    } else {
+        // Bronze / Rookie
+        baseColors = ['#2c1407', '#4a230c', '#683312', '#2c1407'];
+        strapColors = ['#fed7aa', '#d97706', '#b45309', '#78350f'];
+        rimColors = ['#fbb77a', '#c26214', '#78350f'];
+        lockColors = ['#fef3c7', '#d97706', '#92400e'];
+        glowColor = 'rgba(217, 119, 6, 0.45)';
+        coreGlow = '#fbbf24';
+    }
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" width="${width}" height="${height}" class="rendered-chest-svg chest-tier-${t}" style="display: inline-block; vertical-align: middle; filter: drop-shadow(0 6px 12px ${glowColor});">
+        <defs>
+            <linearGradient id="baseGrad_${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="${baseColors[2]}"/>
+                <stop offset="40%" stop-color="${baseColors[1]}"/>
+                <stop offset="100%" stop-color="${baseColors[0]}"/>
+            </linearGradient>
+            <linearGradient id="lidGrad_${uid}" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="${baseColors[2]}"/>
+                <stop offset="50%" stop-color="${baseColors[1]}"/>
+                <stop offset="100%" stop-color="${baseColors[0]}"/>
+            </linearGradient>
+            <linearGradient id="strapGrad_${uid}" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="${strapColors[0]}"/>
+                <stop offset="35%" stop-color="${strapColors[1]}"/>
+                <stop offset="75%" stop-color="${strapColors[2]}"/>
+                <stop offset="100%" stop-color="${strapColors[3]}"/>
+            </linearGradient>
+            <linearGradient id="rimGrad_${uid}" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="${rimColors[0]}"/>
+                <stop offset="50%" stop-color="${rimColors[1]}"/>
+                <stop offset="100%" stop-color="${rimColors[2]}"/>
+            </linearGradient>
+            <radialGradient id="lockGrad_${uid}" cx="50%" cy="40%" r="50%">
+                <stop offset="0%" stop-color="${lockColors[0]}"/>
+                <stop offset="60%" stop-color="${lockColors[1]}"/>
+                <stop offset="100%" stop-color="${lockColors[2]}"/>
+            </radialGradient>
+            <radialGradient id="aura_${uid}" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="${coreGlow}" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="${coreGlow}" stop-opacity="0"/>
+            </radialGradient>
+        </defs>
+
+        <!-- Sombra en suelo -->
+        <ellipse cx="60" cy="91" rx="44" ry="7" fill="rgba(0,0,0,0.55)" />
+
+        <!-- Cuerpo inferior del cofre (Base Container) -->
+        <path d="M 18 48 L 22 84 Q 23 88 28 88 L 92 88 Q 97 88 98 84 L 102 48 Z" fill="url(#baseGrad_${uid})" stroke="${baseColors[0]}" stroke-width="1.5" />
+
+        <!-- Ranuras de panel del cuerpo -->
+        <line x1="20" y1="62" x2="100" y2="62" stroke="rgba(0,0,0,0.4)" stroke-width="1.5" />
+        <line x1="21" y1="74" x2="99" y2="74" stroke="rgba(0,0,0,0.4)" stroke-width="1.5" />
+
+        <!-- Tapa abovedada del cofre (Curved Domed Lid) -->
+        <path d="M 15 47 Q 15 16 60 14 Q 105 16 105 47 Z" fill="url(#lidGrad_${uid})" stroke="${baseColors[0]}" stroke-width="1.5" />
+
+        <!-- Reflejo curvo superior de la tapa -->
+        <path d="M 24 43 Q 24 22 60 20 Q 96 22 96 43" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2" stroke-linecap="round" />
+
+        <!-- Borde / Llanta de Cierre Metálica (Lid Rim / Lip) -->
+        <rect x="13" y="44" width="94" height="7" rx="3" fill="url(#rimGrad_${uid})" stroke="rgba(0,0,0,0.45)" stroke-width="1" />
+
+        <!-- Herrajes Verticales Metálicos (Straps) -->
+        <!-- Correa Izquierda -->
+        <path d="M 33 19 Q 31 32 30 44 L 38 44 Q 39 32 41 19 Z" fill="url(#strapGrad_${uid})" stroke="rgba(0,0,0,0.3)" stroke-width="0.8" />
+        <path d="M 30 50 L 32 87 L 39 87 L 38 50 Z" fill="url(#strapGrad_${uid})" stroke="rgba(0,0,0,0.3)" stroke-width="0.8" />
+
+        <!-- Correa Derecha -->
+        <path d="M 79 19 Q 81 32 82 44 L 90 44 Q 89 32 87 19 Z" fill="url(#strapGrad_${uid})" stroke="rgba(0,0,0,0.3)" stroke-width="0.8" />
+        <path d="M 82 50 L 81 87 L 88 87 L 90 50 Z" fill="url(#strapGrad_${uid})" stroke="rgba(0,0,0,0.3)" stroke-width="0.8" />
+
+        <!-- Remaches 3D en correas (Rivets) -->
+        <circle cx="35" cy="27" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="34" cy="38" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="35" cy="57" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="36" cy="71" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="36" cy="82" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+
+        <circle cx="85" cy="27" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="86" cy="38" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="85" cy="57" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="84" cy="71" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+        <circle cx="84" cy="82" r="1.6" fill="${strapColors[0]}" stroke="rgba(0,0,0,0.5)" stroke-width="0.6"/>
+
+        <!-- Esquineras de refuerzo inferiores -->
+        <path d="M 19 76 L 22 84 Q 23 88 28 88 L 32 88 L 30 76 Z" fill="url(#strapGrad_${uid})" opacity="0.9" />
+        <path d="M 101 76 L 98 84 Q 97 88 92 88 L 88 88 L 90 76 Z" fill="url(#strapGrad_${uid})" opacity="0.9" />
+
+        <!-- Cierre Central y Candado / Broche (Central Hasp & Lock) -->
+        <rect x="53" y="38" width="14" height="11" rx="2.5" fill="url(#strapGrad_${uid})" stroke="rgba(0,0,0,0.4)" stroke-width="0.8" />
+        <rect x="50" y="47" width="20" height="20" rx="4" fill="url(#lockGrad_${uid})" stroke="rgba(0,0,0,0.5)" stroke-width="1.2" />
+
+        <!-- Aura de brillo en cerradura -->
+        <circle cx="60" cy="57" r="10" fill="url(#aura_${uid})" />
+
+        <!-- Ojo de cerradura (Keyhole) -->
+        <circle cx="60" cy="55" r="2.8" fill="#090d16" />
+        <polygon points="58.5,55 61.5,55 62.5,62 57.5,62" fill="#090d16" />
+
+        <!-- Destello de energía o gema central -->
+        <circle cx="60" cy="55" r="1.2" fill="${coreGlow}" />
+    </svg>`;
+}
+
 function generateCarSvg(car, width = 240, height = 120) {
     if (!car) return '';
     const archetype = getCarArchetype(car);
@@ -2126,17 +2251,15 @@ function getReferralTournamentData() {
         const rank = idx + 1;
         let prizeTier = 'bronze';
         let prizeName = 'Cofre Común (Rookie)';
-        let prizeIcon = '📦';
 
         if (rank <= 3) {
             prizeTier = 'gold';
             prizeName = 'Cofre Raro (VIP Oro)';
-            prizeIcon = '👑';
         } else if (rank <= 10) {
             prizeTier = 'silver';
             prizeName = 'Cofre de Plata (Clubman)';
-            prizeIcon = '🧰';
         }
+        const prizeIcon = generateChestSvg(prizeTier, 20, 18);
 
         return {
             rank,
@@ -2151,9 +2274,9 @@ function getReferralTournamentData() {
     });
 
     let userPrize = null;
-    if (userRank <= 3) userPrize = { tier: 'gold', name: 'Cofre Raro (VIP Oro)', icon: '👑' };
-    else if (userRank <= 10) userPrize = { tier: 'silver', name: 'Cofre de Plata (Clubman)', icon: '🧰' };
-    else if (userRank <= 20) userPrize = { tier: 'bronze', name: 'Cofre Común (Rookie)', icon: '📦' };
+    if (userRank <= 3) userPrize = { tier: 'gold', name: 'Cofre Raro (VIP Oro)', icon: generateChestSvg('gold', 20, 18) };
+    else if (userRank <= 10) userPrize = { tier: 'silver', name: 'Cofre de Plata (Clubman)', icon: generateChestSvg('silver', 20, 18) };
+    else if (userRank <= 20) userPrize = { tier: 'bronze', name: 'Cofre Común (Rookie)', icon: generateChestSvg('bronze', 20, 18) };
 
     return {
         remainingDays,
@@ -2269,5 +2392,6 @@ if (typeof window !== 'undefined') {
     window.redeemInviteCode = redeemInviteCode;
     window.simulateFriendJoined = simulateFriendJoined;
     window.linkUserEmail = linkUserEmail;
+    window.generateChestSvg = generateChestSvg;
 }
 
