@@ -231,6 +231,10 @@ function renderHubHeader() {
                 <span class="curr-icon">🤝</span>
                 <span class="curr-amount" id="curr-sponsors" style="color: #6ee7b7; font-weight: 800;">SPONSORS</span>
             </div>
+            <div class="currency-pill referral-pill" onclick="openReferralTournamentModal()" title="Gran Torneo de Invitación - Gana Cofres de Coches" style="cursor: pointer; background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25)); border: 1px solid #ec4899;">
+                <span class="curr-icon">👥</span>
+                <span class="curr-amount" id="curr-referral" style="color: #f472b6; font-weight: 800;">INVITAR & TORNEO</span>
+            </div>
             <div class="currency-pill energy-pill" onclick="showHubView('garage')" title="Energía del coche equipado (+1⚡ cada 1h)">
                 <span class="curr-icon">⚡</span>
                 <span class="curr-amount" id="curr-energy">${carEnergy}/${carMaxEnergy}</span>
@@ -346,13 +350,13 @@ function renderMainHubView() {
                 <div class="zone-badge">APUESTAS & GRAND PRIX</div>
             </div>
 
-            <!-- Zona 5: Cajas NFT -->
+            <!-- Zona 5: Cofres NFT -->
             <div class="zone-card card-crates" onclick="showHubView('crates')">
                 <div class="zone-icon">🎁</div>
                 <div class="zone-body">
                     <h3 class="zone-title">${t('zone_crates')}</h3>
                 </div>
-                <div class="zone-badge">WEB3 GACHA</div>
+                <div class="zone-badge">COFRES DE COCHES</div>
             </div>
 
             <!-- Zona 6: Tienda Oficial -->
@@ -3006,6 +3010,8 @@ function openSettingsModal() {
     const controlsType = localStorage.getItem('dustrac_controls') || 'keys';
     const designerMode = localStorage.getItem('dustrac_story_save') ? JSON.parse(localStorage.getItem('dustrac_story_save')).designerMode !== false : true;
 
+    const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : {};
+
     modal.innerHTML = `
         <div class="settings-dialog">
             <div class="settings-header">
@@ -3022,6 +3028,35 @@ function openSettingsModal() {
                         <button class="btn-save-pilot-name" onclick="savePilotNameFromSettings()">
                             ✏️ ${t('btn_save') || 'GUARDAR'}
                         </button>
+                    </div>
+                </div>
+
+                <!-- Código de Invitación & Torneo Viral (2 Meses) -->
+                <div class="setting-group">
+                    <label class="setting-label">👥 ${t('referral_my_code') || 'TU CÓDIGO DE INVITACIÓN'}</label>
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px dashed #ec4899; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <span style="font-family: monospace; font-size: 15px; font-weight: 900; color: #fde047; letter-spacing: 1px;">${escapeHtml(userData.referralCode || 'APEX-CODE')}</span>
+                        <div style="display: flex; gap: 6px;">
+                            <button onclick="handleCopyReferralCode('${userData.referralCode}')" style="padding: 6px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer;">📋 COPIAR</button>
+                            <button onclick="closeSettingsModal(); openReferralTournamentModal();" style="padding: 6px 12px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; border-radius: 6px; color: #fff; font-size: 11px; font-weight: 900; cursor: pointer;">🏆 VER TORNEO</button>
+                        </div>
+                    </div>
+                    <div style="font-size: 10.5px; color: #cbd5e1;">
+                        ¡Los 20 con más invitaciones en los 2 primeros meses ganan <strong>Cofres de Coches</strong>!
+                    </div>
+                </div>
+
+                <!-- Vincular Correo Electrónico -->
+                <div class="setting-group">
+                    <label class="setting-label">📧 ${t('email_title') || 'VINCULAR CORREO ELECTRÓNICO'}</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="email" id="setting-input-email" class="pilot-name-input" value="${escapeHtml(userData.email || '')}" placeholder="tu-correo@ejemplo.com">
+                        <button class="btn-save-pilot-name" style="background: #0098ea;" onclick="handleLinkEmail(document.getElementById('setting-input-email').value)">
+                            ${userData.email ? 'ACTUALIZAR' : 'VINCULAR (+500 $CR)'}
+                        </button>
+                    </div>
+                    <div style="font-size: 10.5px; color: #94a3b8; margin-top: 5px;">
+                        ${userData.email ? `<span style="color: #34d399; font-weight: 800;">✔ Correo vinculado: ${escapeHtml(userData.email)}</span>` : 'Vincula tu email para asegurar tu cuenta y ganar +500 $CR.'}
                     </div>
                 </div>
 
@@ -4260,6 +4295,261 @@ function handleWithdrawCrToTon(crAmount) {
     }
 }
 
+// =========================================================================
+// 8.2 MODAL DE TORNEO DE INVITACIÓN (LANZAMIENTO 2 MESES) & SISTEMA SOCIAL
+// =========================================================================
+function openReferralTournamentModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('referral-tournament-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'referral-tournament-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const tData = (typeof getReferralTournamentData === 'function') ? getReferralTournamentData() : {
+        remainingDays: 59, remainingHours: 12, remainingMinutes: 30, userRank: 21, userInvites: 0,
+        userCode: 'APEX-TEST', invitedBy: null, email: null, leaderboard: []
+    };
+
+    const botUsername = 'argho_racing_test_bot';
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=ref_${tData.userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${tData.userCode} para ganar +500 $CR de bienvenida gratis. 🏁🏆`)}`;
+
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 680px; width: 95%;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25)); border-bottom: 1px solid rgba(236, 72, 153, 0.4);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 28px;">👥</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 18px; color: #f472b6;">${t('referral_title') || 'TORNEO DE INVITACIÓN & CRECIMIENTO VIRAL'}</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Campaña de Lanzamiento Oficial (2 Primeros Meses)</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeReferralTournamentModal()">✖</button>
+            </div>
+
+            <div class="settings-body" style="padding: 16px; max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;">
+                <!-- BANNER DE CUENTA ATRÁS DEL TORNEO DE 2 MESES -->
+                <div style="background: linear-gradient(135deg, #240e36 0%, #17102e 100%); border: 1px solid #c084fc; border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="font-size: 11px; font-weight: 900; color: #f472b6; letter-spacing: 0.5px;">⏳ TIEMPO RESTANTE DE CAMPAÑA (2 MESES)</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #ffffff; font-family: monospace; margin-top: 2px;">
+                            ${tData.remainingDays}d ${tData.remainingHours}h ${tData.remainingMinutes}m
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="background: rgba(236, 72, 153, 0.2); border: 1px solid #ec4899; color: #f472b6; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 900;">
+                            TU RANGO: #${tData.userRank} (${tData.userInvites} INVITADOS)
+                        </span>
+                        ${tData.userPrize ? `
+                            <div style="font-size: 11px; color: #facc15; font-weight: 800; margin-top: 4px;">
+                                Premio provisional: ${tData.userPrize.icon} ${tData.userPrize.name}
+                            </div>
+                        ` : `
+                            <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">
+                                ¡Invita más amigos para entrar al Top 20!
+                            </div>
+                        `}
+                    </div>
+                </div>
+
+                <!-- PREMIOS DEL TORNEO (COFRES DE COCHES) -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                    <div style="background: rgba(250, 204, 21, 0.08); border: 1px solid #eab308; border-radius: 10px; padding: 10px; text-align: center;">
+                        <div style="font-size: 20px;">👑</div>
+                        <div style="font-size: 11px; font-weight: 900; color: #fde047; margin-top: 2px;">TOP 1 - 3</div>
+                        <div style="font-size: 11px; font-weight: 800; color: #ffffff;">COFRE RARO (VIP ORO)</div>
+                        <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Superdeportivos Raros y Legendarios</div>
+                    </div>
+                    <div style="background: rgba(203, 213, 225, 0.08); border: 1px solid #94a3b8; border-radius: 10px; padding: 10px; text-align: center;">
+                        <div style="font-size: 20px;">🧰</div>
+                        <div style="font-size: 11px; font-weight: 900; color: #e2e8f0; margin-top: 2px;">TOP 4 - 10</div>
+                        <div style="font-size: 11px; font-weight: 800; color: #ffffff;">COFRE DE PLATA (CLUBMAN)</div>
+                        <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Vehículos Infrecuentes y Raros</div>
+                    </div>
+                    <div style="background: rgba(217, 119, 6, 0.08); border: 1px solid #b45309; border-radius: 10px; padding: 10px; text-align: center;">
+                        <div style="font-size: 20px;">📦</div>
+                        <div style="font-size: 11px; font-weight: 900; color: #f59e0b; margin-top: 2px;">TOP 11 - 20</div>
+                        <div style="font-size: 11px; font-weight: 800; color: #ffffff;">COFRE COMÚN (ROOKIE)</div>
+                        <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Coches de iniciación para el garaje</div>
+                    </div>
+                </div>
+
+                <!-- TU CÓDIGO DE INVITACIÓN & COMPARTIR -->
+                <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(236, 72, 153, 0.35); border-radius: 12px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 12px; font-weight: 900; color: #f472b6;">🔗 TU CÓDIGO DE INVITACIÓN PERSONAL</span>
+                        <span style="font-size: 10px; color: #34d399; font-weight: 800;">+500 $CR POR AMIGO</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 140px; background: #0b0f19; border: 1px dashed #ec4899; border-radius: 8px; padding: 10px 14px; font-family: monospace; font-size: 16px; font-weight: 900; color: #fde047; text-align: center; letter-spacing: 1.5px;">
+                            ${escapeHtml(tData.userCode)}
+                        </div>
+                        <button onclick="handleCopyReferralCode('${tData.userCode}')" style="padding: 10px 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; color: #fff; font-size: 11px; font-weight: 800; cursor: pointer;">
+                            📋 COPIAR
+                        </button>
+                        <a href="${tgShareUrl}" target="_blank" style="text-decoration: none; padding: 10px 16px; background: linear-gradient(135deg, #0098ea, #0088cc); border: none; border-radius: 8px; color: #fff; font-size: 11px; font-weight: 900; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                            <span>✈️</span> INVITAR POR TELEGRAM
+                        </a>
+                        <button onclick="handleSimulateInvite()" title="Probar incremento de invitaciones y recompensa" style="padding: 10px 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; border-radius: 8px; color: #34d399; font-size: 11px; font-weight: 800; cursor: pointer;">
+                            🧪 +1 AMIGO (TEST)
+                        </button>
+                    </div>
+                    <p style="font-size: 10.5px; color: #94a3b8; margin: 8px 0 0;">
+                        💡 <strong>¿Cómo funciona?</strong> Comparte tu enlace o código con amigos en Telegram. Cuando inicien el juego, ambos ganáis <strong>+500 $CR</strong> y sumas +1 punto para el Torneo de Lanzamiento.
+                    </p>
+                </div>
+
+                <!-- CANJEAR CÓDIGO DE UN AMIGO -->
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #ffffff; margin-bottom: 6px;">🎁 CANJEAR CÓDIGO DE UN AMIGO</div>
+                    ${tData.invitedBy ? `
+                        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #34d399; font-weight: 800;">
+                            ✔ ¡Código canjeado con éxito! Fuiste invitado por: <strong>${escapeHtml(tData.invitedBy)}</strong> (+500 $CR recibidos)
+                        </div>
+                    ` : `
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="input-redeem-code" placeholder="Ej. APEX-XXXXXX" maxlength="16" style="flex: 1; padding: 8px 12px; background: #0b0f19; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-family: monospace; font-size: 13px; text-transform: uppercase;">
+                            <button onclick="handleRedeemReferralCode()" style="padding: 8px 16px; background: #f59e0b; border: none; border-radius: 8px; color: #000; font-weight: 900; font-size: 11px; cursor: pointer;">
+                                CANJEAR (+500 $CR)
+                            </button>
+                        </div>
+                    `}
+                </div>
+
+                <!-- VINCULAR CORREO ELECTRÓNICO -->
+                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 12px; padding: 12px 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 12px; font-weight: 800; color: #38bdf8;">📧 VINCULAR CORREO ELECTRÓNICO (SEGURIDAD WEB3)</span>
+                        ${tData.email ? `<span style="font-size: 10px; color: #34d399; font-weight: 800;">✔ VINCULADO</span>` : `<span style="font-size: 10px; color: #fde047; font-weight: 800;">+500 $CR DE REGALO</span>`}
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="email" id="input-link-email" value="${escapeHtml(tData.email || '')}" placeholder="tu-correo@ejemplo.com" maxlength="60" style="flex: 1; padding: 8px 12px; background: #0b0f19; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-size: 12px;">
+                        <button onclick="handleLinkEmail()" style="padding: 8px 16px; background: #0098ea; border: none; border-radius: 8px; color: #fff; font-weight: 900; font-size: 11px; cursor: pointer;">
+                            ${tData.email ? 'ACTUALIZAR' : 'VINCULAR (+500 $CR)'}
+                        </button>
+                    </div>
+                    <p style="font-size: 10px; color: #94a3b8; margin: 6px 0 0;">
+                        Recibe notificaciones de finalización de torneos, drops exclusivos y seguridad de tu perfil.
+                    </p>
+                </div>
+
+                <!-- TABLA CLASIFICATORIA MUNDIAL DE INVITACIONES (TOP 20) -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 13px; font-weight: 900; color: #ffffff;">🌐 CLASIFICACIÓN MUNDIAL DE INVITACIONES</span>
+                        <span style="font-size: 10.5px; color: #cbd5e1;">Top 20 Pilotos Calificados</span>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 5px; max-height: 240px; overflow-y: auto; padding-right: 4px;">
+                        ${tData.leaderboard.map(r => `
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 8px; background: ${r.isUser ? 'rgba(236, 72, 153, 0.2)' : 'rgba(15, 23, 42, 0.5)'}; border: 1px solid ${r.isUser ? '#ec4899' : (r.rank <= 3 ? 'rgba(250, 204, 21, 0.3)' : 'rgba(255, 255, 255, 0.05)')};">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <span style="font-weight: 900; font-size: 12px; width: 24px; color: ${r.rank === 1 ? '#fee440' : (r.rank === 2 ? '#e2e8f0' : (r.rank === 3 ? '#ff9800' : '#94a3b8'))};">#${r.rank}</span>
+                                    <span style="font-size: 14px;">${r.flag}</span>
+                                    <span style="font-size: 12px; font-weight: ${r.isUser ? '900' : '700'}; color: ${r.isUser ? '#f472b6' : '#ffffff'};">
+                                        ${escapeHtml(r.name)}
+                                    </span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 11px; font-weight: 800; color: #38bdf8;">👥 ${r.invites} invitados</span>
+                                    <span style="font-size: 11px; font-weight: 800; color: ${r.prizeTier === 'gold' ? '#fde047' : (r.prizeTier === 'silver' ? '#e2e8f0' : '#f59e0b')};" title="${r.prizeName}">
+                                        ${r.prizeIcon} ${r.prizeName}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-footer" style="padding: 12px 16px;">
+                <button class="btn-settings-save" onclick="closeReferralTournamentModal()">CERRAR</button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function closeReferralTournamentModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('referral-tournament-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function handleCopyReferralCode(code) {
+    hubAudio.playClick();
+    try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code);
+        }
+    } catch(e) {}
+    alert(`📋 ¡Código copiado al portapapeles!\n\nCódigo: ${code}\nCompártelo con tus amigos.`);
+}
+
+function handleRedeemReferralCode(customCode) {
+    hubAudio.playClick();
+    const input = document.getElementById('input-redeem-code');
+    const code = customCode || (input ? input.value : '');
+    if (typeof redeemInviteCode !== 'function') return;
+
+    const res = redeemInviteCode(code);
+    if (!res.success) {
+        if (res.reason === 'cannot_invite_self') alert('⚠️ No puedes canjear tu propio código de invitación.');
+        else if (res.reason === 'already_redeemed') alert(`⚠️ Ya has canjeado un código anteriormente (${res.code}).`);
+        else alert('⚠️ Código no válido. Debe tener el formato APEX-XXXXXX.');
+        return;
+    }
+
+    hubAudio.playOpenCrate();
+    renderHubHeader();
+    openReferralTournamentModal();
+    alert(`🎉 ¡Código canjeado con éxito!\nHas recibido +${res.bonusCr} $CR de bienvenida.`);
+}
+
+function handleLinkEmail(customEmail) {
+    hubAudio.playClick();
+    const input = document.getElementById('input-link-email') || document.getElementById('setting-input-email');
+    const email = customEmail || (input ? input.value : '');
+    if (typeof linkUserEmail !== 'function') return;
+
+    const res = linkUserEmail(email);
+    if (!res.success) {
+        alert('⚠️ Por favor introduce un correo electrónico válido (ej. usuario@gmail.com).');
+        return;
+    }
+
+    hubAudio.playOpenCrate();
+    renderHubHeader();
+    const modal = document.getElementById('referral-tournament-modal');
+    if (modal && modal.style.display !== 'none' && !modal.classList.contains('hidden')) {
+        openReferralTournamentModal();
+    } else {
+        openSettingsModal();
+    }
+    if (res.isFirstTime) {
+        alert(`🎉 ¡Correo vinculado con éxito!\nHas recibido +${res.bonusCr} $CR de bonificación por asegurar tu cuenta.`);
+    } else {
+        alert(`✅ Correo actualizado con éxito: ${res.email}`);
+    }
+}
+
+function handleSimulateInvite() {
+    hubAudio.playClick();
+    if (typeof simulateFriendJoined !== 'function') return;
+    const res = simulateFriendJoined();
+    hubAudio.playOpenCrate();
+    renderHubHeader();
+    openReferralTournamentModal();
+    alert(`🚀 ¡Nuevo amigo unido a tu escudería!\n+1 Invitación registrada (${res.referralsCount} en total) y +${res.bonusCr} $CR acreditados.`);
+}
+
 if (typeof window !== 'undefined') {
     window.openTrackSelectModal = openTrackSelectModal;
     window.closeTrackSelectModal = closeTrackSelectModal;
@@ -4278,6 +4568,12 @@ if (typeof window !== 'undefined') {
     window.openCarMilestoneModal = openCarMilestoneModal;
     window.closeCarMilestoneModal = closeCarMilestoneModal;
     window.handleClaimCarMilestone = handleClaimCarMilestone;
+    window.openReferralTournamentModal = openReferralTournamentModal;
+    window.closeReferralTournamentModal = closeReferralTournamentModal;
+    window.handleCopyReferralCode = handleCopyReferralCode;
+    window.handleRedeemReferralCode = handleRedeemReferralCode;
+    window.handleLinkEmail = handleLinkEmail;
+    window.handleSimulateInvite = handleSimulateInvite;
 }
 
 // Secuencia de Salida FIA y Animación de Carga de Competición

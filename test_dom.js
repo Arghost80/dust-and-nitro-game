@@ -1552,6 +1552,92 @@ if (!storyModal.classList.contains('hidden') && storyModal.style.display !== 'no
     throw new Error('El modal debe cerrarse correctamente al llamar a closeTrackSelectModal()');
 }
 
+// ===== VERIFICACIÓN DE TORNEO DE INVITACIÓN (2 MESES), CÓDIGO REFERIDO, CORREO Y COFRES =====
+console.log('\n--- VERIFICANDO TORNEO DE INVITACIÓN (2 MESES), SOCIAL, EMAIL Y COFRES (V77) ---');
+
+// 1. Verificación de cambio de nombre Cajas -> Cofres
+const esZoneCrates = vm.runInContext("t('zone_crates')", ctx);
+const esCrateBronze = vm.runInContext("t('crate_bronze_title')", ctx);
+const esBtnOpen = vm.runInContext("t('btn_open_crate')", ctx);
+if (!esZoneCrates.includes('COFRES') || !esCrateBronze.includes('COFRE') || !esBtnOpen.includes('COFRE')) {
+    throw new Error(`Los textos en español deben usar 'COFRE' en vez de 'CAJA': ${esZoneCrates}, ${esCrateBronze}, ${esBtnOpen}`);
+}
+console.log('✓ Nomenclatura oficial verificada: Cofres NFT, Cofre Rookie, Abrir Cofre');
+
+// 2. Verificación de Código de Invitación único del usuario
+const initialUserData = vm.runInContext('loadNftUserData()', ctx);
+if (!initialUserData.referralCode || !initialUserData.referralCode.startsWith('APEX-')) {
+    throw new Error(`Código de invitación inválido: ${initialUserData.referralCode}`);
+}
+console.log('✓ Código de invitación único de usuario generado:', initialUserData.referralCode);
+
+// 3. Verificación de Canjeo de Código de un amigo
+const redeemOwnRes = vm.runInContext(`redeemInviteCode('${initialUserData.referralCode}')`, ctx);
+if (redeemOwnRes.success || redeemOwnRes.reason !== 'cannot_invite_self') {
+    throw new Error('Debe bloquearse el canjeo del propio código de invitación');
+}
+const redeemFriendRes = vm.runInContext("redeemInviteCode('APEX-AMIGO99')", ctx);
+if (!redeemFriendRes.success || redeemFriendRes.bonusCr !== 500) {
+    throw new Error(`Fallo al canjear código de amigo: ${JSON.stringify(redeemFriendRes)}`);
+}
+const duplicateRedeemRes = vm.runInContext("redeemInviteCode('APEX-OTRO123')", ctx);
+if (duplicateRedeemRes.success || duplicateRedeemRes.reason !== 'already_redeemed') {
+    throw new Error('Debe bloquearse el canjeo múltiple de invitaciones');
+}
+console.log('✓ Canjeo de código de invitación verificado (+500 $CR, bloqueo de auto-canje y único uso)');
+
+// 4. Verificación de Simulación de Amigo Unido
+const initialInvites = vm.runInContext('loadNftUserData().referralsCount', ctx);
+const simRes = vm.runInContext("simulateFriendJoined('Piloto_Test99')", ctx);
+if (!simRes.success || simRes.referralsCount !== initialInvites + 1 || simRes.bonusCr !== 500) {
+    throw new Error(`Fallo en simulación de amigo unido: ${JSON.stringify(simRes)}`);
+}
+console.log(`✓ Incremento de invitaciones verificado: ${simRes.referralsCount} amigos (+500 $CR acreditados)`);
+
+// 5. Verificación de Vinculación de Correo Electrónico
+const invalidEmailRes = vm.runInContext("linkUserEmail('email_invalido')", ctx);
+if (invalidEmailRes.success || invalidEmailRes.reason !== 'invalid_email') {
+    throw new Error('Debe rechazar correos con formato inválido');
+}
+const validEmailRes = vm.runInContext("linkUserEmail('piloto@apexchampionship.com')", ctx);
+if (!validEmailRes.success || !validEmailRes.isFirstTime || validEmailRes.bonusCr !== 500) {
+    throw new Error(`Fallo al vincular correo por primera vez: ${JSON.stringify(validEmailRes)}`);
+}
+const updateEmailRes = vm.runInContext("linkUserEmail('nuevo_correo@apexchampionship.com')", ctx);
+if (!updateEmailRes.success || updateEmailRes.isFirstTime || updateEmailRes.bonusCr !== 0) {
+    throw new Error('Actualizar correo existente no debe duplicar el bonus de bienvenida');
+}
+console.log('✓ Vinculación de correo electrónico verificada (validación regex y bonus +500 $CR)');
+
+// 6. Verificación de Datos del Torneo de 60 Días (2 Meses)
+const tourneyData = vm.runInContext('getReferralTournamentData()', ctx);
+if (typeof tourneyData.remainingDays !== 'number' || tourneyData.remainingDays < 0 || tourneyData.remainingDays > 60) {
+    throw new Error(`Temporizador del torneo de 2 meses inválido: ${tourneyData.remainingDays} días`);
+}
+if (!Array.isArray(tourneyData.leaderboard) || tourneyData.leaderboard.length < 20) {
+    throw new Error(`El ranking del torneo de invitación debe contener al menos 20 pilotos: ${tourneyData.leaderboard.length}`);
+}
+if (tourneyData.leaderboard[0].prizeTier !== 'gold' || tourneyData.leaderboard[3].prizeTier !== 'silver' || tourneyData.leaderboard[10].prizeTier !== 'bronze') {
+    throw new Error('Estructura de premios incorrecta en el ranking del torneo');
+}
+console.log(`✓ Torneo de 60 días verificado: ${tourneyData.remainingDays}d restantes, Top 20 con premios de cofres Oro/Plata/Bronce`);
+
+// 7. Verificación del Renderizado del Modal de Torneo de Invitación
+vm.runInContext('openReferralTournamentModal()', ctx);
+const refModal = doc.getElementById('referral-tournament-modal');
+if (!refModal || !refModal.innerHTML.includes('TORNEO DE INVITACIÓN') || !refModal.innerHTML.includes('TOP 1 - 3') || !refModal.innerHTML.includes('COFRE RARO')) {
+    throw new Error('El modal del torneo de invitación no se renderizó correctamente');
+}
+console.log('✓ Modal del Torneo de Invitación renderizado correctamente con tabla de premios y clasificación');
+
+// 8. Verificación de Ajustes (⚙️) con secciones de Referidos y Email
+vm.runInContext('openSettingsModal()', ctx);
+const settingsModalHtml = doc.getElementById('settings-modal').innerHTML;
+if (!settingsModalHtml.includes('TU CÓDIGO DE INVITACIÓN') || !settingsModalHtml.includes('VINCULAR CORREO ELECTRÓNICO')) {
+    throw new Error('El modal de ajustes debe incluir la sección de código de invitación y vincular correo');
+}
+console.log('✓ Modal de Ajustes actualizado con código de invitación y vinculación de correo');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

@@ -757,6 +757,37 @@ function loadNftUserData() {
         };
     }
 
+    // Código de invitación único del usuario y estadísticas de referidos
+    let needsSave = false;
+    if (!data.referralCode || typeof data.referralCode !== 'string') {
+        const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+        data.referralCode = 'APEX-' + randStr;
+        needsSave = true;
+    }
+    if (typeof data.referralsCount !== 'number') {
+        data.referralsCount = 0;
+        needsSave = true;
+    }
+    if (!Array.isArray(data.referralHistory)) {
+        data.referralHistory = [];
+        needsSave = true;
+    }
+    if (typeof data.invitedBy === 'undefined') {
+        data.invitedBy = null;
+        needsSave = true;
+    }
+    if (typeof data.email === 'undefined') {
+        data.email = null;
+        needsSave = true;
+    }
+    if (typeof data.emailLinkedRewardClaimed !== 'boolean') {
+        data.emailLinkedRewardClaimed = false;
+        needsSave = true;
+    }
+    if (needsSave) {
+        saveNftUserData(data);
+    }
+
     return data;
 }
 
@@ -2031,6 +2062,191 @@ function updateSponsorshipProgress(raceData) {
     return completedNow;
 }
 
+// =========================================================================
+// 10. SISTEMA VIRAL DE INVITACIONES, TORNEO DE LANZAMIENTO (2 MESES) Y CORREO
+// =========================================================================
+const REFERRAL_TOURNAMENT_DURATION_MS = 60 * 24 * 60 * 60 * 1000; // 60 días completos (2 meses)
+
+function getReferralTournamentData() {
+    const userData = loadNftUserData();
+    let launchEpoch = 1761000000000;
+    try {
+        const savedLaunch = localStorage.getItem('apex_launch_epoch');
+        if (savedLaunch) launchEpoch = parseInt(savedLaunch);
+        else localStorage.setItem('apex_launch_epoch', launchEpoch.toString());
+    } catch(e) {}
+
+    const now = Date.now();
+    const elapsed = Math.max(0, now - launchEpoch);
+    const remainingMs = Math.max(0, REFERRAL_TOURNAMENT_DURATION_MS - (elapsed % REFERRAL_TOURNAMENT_DURATION_MS));
+    const remainingDays = Math.floor(remainingMs / (24 * 3600 * 1000));
+    const remainingHours = Math.floor((remainingMs % (24 * 3600 * 1000)) / (3600 * 1000));
+    const remainingMinutes = Math.floor((remainingMs % (3600 * 1000)) / (60 * 1000));
+
+    const baseRacers = [
+        { name: "Apex_TurboKing", flag: "🇪🇸", invites: 46 },
+        { name: "Klaus_Weber", flag: "🇩🇪", invites: 41 },
+        { name: "Elena_Rostova", flag: "🇫🇷", invites: 37 },
+        { name: "Marco_Apex99", flag: "🇮🇹", invites: 32 },
+        { name: "Tarek_Mansour", flag: "🇦🇪", invites: 29 },
+        { name: "Sophie_Laurent", flag: "🇨🇭", invites: 26 },
+        { name: "Ayrton_Silva", flag: "🇧🇷", invites: 24 },
+        { name: "Matteo_Fire", flag: "🇪🇸", invites: 21 },
+        { name: "Jean_Cruiser", flag: "🇧🇪", invites: 19 },
+        { name: "Kenji_Drift", flag: "🇯🇵", invites: 17 },
+        { name: "Liam_Racer", flag: "🇬🇧", invites: 15 },
+        { name: "Lucas_GT", flag: "🇦🇷", invites: 13 },
+        { name: "Carlos_Speed", flag: "🇲🇽", invites: 11 },
+        { name: "David_Pro", flag: "🇺🇸", invites: 10 },
+        { name: "Nico_Apex", flag: "🇩🇪", invites: 8 },
+        { name: "Valtteri_Ice", flag: "🇫🇮", invites: 7 },
+        { name: "Hugo_Motorsport", flag: "🇵🇹", invites: 6 },
+        { name: "Pablo_Torque", flag: "🇨🇱", invites: 5 },
+        { name: "Sergio_V8", flag: "🇨🇴", invites: 4 },
+        { name: "Max_Nitro", flag: "🇳🇱", invites: 3 }
+    ];
+
+    const userPilotName = userData.pilotName || 'PILOTO (TÚ)';
+    const userInvites = userData.referralsCount || 0;
+
+    let racersList = [...baseRacers];
+    const userEntry = {
+        name: `${userPilotName} (TÚ)`,
+        flag: "🏁",
+        invites: userInvites,
+        isUser: true
+    };
+    racersList.push(userEntry);
+    racersList.sort((a, b) => b.invites - a.invites);
+
+    const userRank = racersList.findIndex(r => r.isUser) + 1;
+    const top20 = racersList.slice(0, 20);
+
+    const formattedLeaderboard = top20.map((r, idx) => {
+        const rank = idx + 1;
+        let prizeTier = 'bronze';
+        let prizeName = 'Cofre Común (Rookie)';
+        let prizeIcon = '📦';
+
+        if (rank <= 3) {
+            prizeTier = 'gold';
+            prizeName = 'Cofre Raro (VIP Oro)';
+            prizeIcon = '👑';
+        } else if (rank <= 10) {
+            prizeTier = 'silver';
+            prizeName = 'Cofre de Plata (Clubman)';
+            prizeIcon = '🧰';
+        }
+
+        return {
+            rank,
+            name: r.name,
+            flag: r.flag,
+            invites: r.invites,
+            isUser: !!r.isUser,
+            prizeTier,
+            prizeName,
+            prizeIcon
+        };
+    });
+
+    let userPrize = null;
+    if (userRank <= 3) userPrize = { tier: 'gold', name: 'Cofre Raro (VIP Oro)', icon: '👑' };
+    else if (userRank <= 10) userPrize = { tier: 'silver', name: 'Cofre de Plata (Clubman)', icon: '🧰' };
+    else if (userRank <= 20) userPrize = { tier: 'bronze', name: 'Cofre Común (Rookie)', icon: '📦' };
+
+    return {
+        remainingDays,
+        remainingHours,
+        remainingMinutes,
+        remainingMs,
+        userRank,
+        userInvites,
+        userPrize,
+        userCode: userData.referralCode,
+        invitedBy: userData.invitedBy,
+        email: userData.email,
+        emailLinkedRewardClaimed: userData.emailLinkedRewardClaimed,
+        leaderboard: formattedLeaderboard,
+        referralHistory: userData.referralHistory || []
+    };
+}
+
+function redeemInviteCode(inputCode) {
+    const userData = loadNftUserData();
+    const code = (inputCode || '').trim().toUpperCase();
+    if (!code || !code.startsWith('APEX-') || code.length < 8) {
+        return { success: false, reason: "invalid_format" };
+    }
+    if (code === userData.referralCode.toUpperCase()) {
+        return { success: false, reason: "cannot_invite_self" };
+    }
+    if (userData.invitedBy) {
+        return { success: false, reason: "already_redeemed", code: userData.invitedBy };
+    }
+
+    const bonusCr = 500;
+    userData.invitedBy = code;
+    userData.credits = (userData.credits || 0) + bonusCr;
+    saveNftUserData(userData);
+
+    return {
+        success: true,
+        code: code,
+        bonusCr: bonusCr,
+        newCredits: userData.credits
+    };
+}
+
+function simulateFriendJoined(friendName) {
+    const userData = loadNftUserData();
+    const bonusCr = 500;
+    userData.referralsCount = (userData.referralsCount || 0) + 1;
+    userData.credits = (userData.credits || 0) + bonusCr;
+    if (!Array.isArray(userData.referralHistory)) userData.referralHistory = [];
+    const fName = friendName || (`Piloto_${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
+    userData.referralHistory.unshift({
+        name: fName,
+        joinedAt: Date.now(),
+        rewardCr: bonusCr
+    });
+    saveNftUserData(userData);
+
+    return {
+        success: true,
+        friendName: fName,
+        referralsCount: userData.referralsCount,
+        bonusCr: bonusCr,
+        newCredits: userData.credits
+    };
+}
+
+function linkUserEmail(emailInput) {
+    const userData = loadNftUserData();
+    const email = (emailInput || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        return { success: false, reason: "invalid_email" };
+    }
+
+    const isFirstTime = !userData.emailLinkedRewardClaimed;
+    const bonusCr = isFirstTime ? 500 : 0;
+    if (isFirstTime) {
+        userData.credits = (userData.credits || 0) + bonusCr;
+        userData.emailLinkedRewardClaimed = true;
+    }
+    userData.email = email;
+    saveNftUserData(userData);
+
+    return {
+        success: true,
+        email: email,
+        isFirstTime: isFirstTime,
+        bonusCr: bonusCr,
+        newCredits: userData.credits
+    };
+}
+
 if (typeof window !== 'undefined') {
     window.getAvailableNitros = getAvailableNitros;
     window.addNitroWithAd = addNitroWithAd;
@@ -2048,5 +2264,10 @@ if (typeof window !== 'undefined') {
     window.MIN_HOLDING_BALANCE = MIN_HOLDING_BALANCE;
     window.WITHDRAW_COOLDOWN_MS = WITHDRAW_COOLDOWN_MS;
     window.EARLY_WITHDRAW_BURN_PCT = EARLY_WITHDRAW_BURN_PCT;
+    window.REFERRAL_TOURNAMENT_DURATION_MS = REFERRAL_TOURNAMENT_DURATION_MS;
+    window.getReferralTournamentData = getReferralTournamentData;
+    window.redeemInviteCode = redeemInviteCode;
+    window.simulateFriendJoined = simulateFriendJoined;
+    window.linkUserEmail = linkUserEmail;
 }
 
