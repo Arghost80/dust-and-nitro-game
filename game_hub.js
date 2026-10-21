@@ -199,8 +199,8 @@ function renderHubHeader() {
     if (!header) return;
 
     const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
-    const credits = (typeof userData.credits === 'number') ? userData.credits : 1000000;
-    const gems = (typeof userData.gems === 'number') ? userData.gems : 50000;
+    const credits = (typeof userData.credits === 'number') ? userData.credits : (typeof APP_CONFIG !== 'undefined' ? APP_CONFIG.DEFAULT_STARTING_CREDITS : 100);
+    const gems = (typeof userData.gems === 'number') ? userData.gems : (typeof APP_CONFIG !== 'undefined' ? APP_CONFIG.DEFAULT_STARTING_GEMS : 0);
     const equippedCar = typeof getEquippedNftCar === 'function' ? getEquippedNftCar() : null;
     if (equippedCar && typeof refreshCarEnergy === 'function') refreshCarEnergy(equippedCar);
     const carEnergy = equippedCar ? (equippedCar.energy ?? 10) : 10;
@@ -2582,11 +2582,11 @@ function renderCompView() {
         <div class="wager-comp-container">
             <!-- TORNEO OFICIAL SEMANAL GRAND PRIX ASÍNCRONO -->
             <div class="weekly-tournament-hero-banner" onclick="openWeeklyTournamentModal()" style="cursor: pointer;">
-                <div class="wt-badge">🏆 EVENTO ESPECIAL SEMANAL • PREMIOS EN TON REALES 🏆</div>
+                <div class="wt-badge">🏆 EVENTO ESPECIAL SEMANAL • PREMIOS EN TOKENS $CR 🏆</div>
                 <div class="wt-title-row">
                     <div>
                         <h3 class="wt-title">NEO-TOKYO HARBOR BAY GT GRAND PRIX</h3>
-                        <p class="wt-sub">Compite por el podio mundial • Bote acumulado: <strong style="color: #fee440;">750 TON</strong> + <strong style="color: #00f5d4;">500.000 $CR</strong></p>
+                        <p class="wt-sub">Compite por el podio mundial • Bote acumulado: <strong style="color: #00f5d4;">100.000 $CR</strong></p>
                     </div>
                     <button class="btn-enter-tournament" onclick="event.stopPropagation(); openWeeklyTournamentModal();">ENTRAR AL GRAND PRIX ▶</button>
                 </div>
@@ -2701,7 +2701,7 @@ function renderCompView() {
                 <div class="comp-card" onclick="openWeeklyTournamentModal();">
                     <div class="comp-icon">🏆</div>
                     <h3>GRAND PRIX SEMANAL GT</h3>
-                    <p>Torneo oficial con bolsa acumulada comunitaria de 750 TON + 500.000 $CR.</p>
+                    <p>Torneo oficial con bolsa acumulada comunitaria de 100.000 $CR.</p>
                     <div class="comp-action-btn">VER TORNEO ▶</div>
                 </div>
                 <div class="comp-card" onclick="openLeaderboardModal();">
@@ -3099,7 +3099,7 @@ function openLeaderboardModal() {
             </div>
             <div class="settings-body" style="padding: 16px;">
                 <p style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
-                    Ranking en tiempo real de vueltas rápidas en circuitos oficiales. ¡Los 3 mejores pilotos semanales reciben recompensas en $TON!
+                    Ranking en tiempo real de vueltas rápidas en circuitos oficiales. ¡Los 3 mejores pilotos semanales reciben recompensas en tokens $CR y cofres exclusivos!
                 </p>
                 <div class="leaderboard-table-list" style="display: flex; flex-direction: column; gap: 8px;">
                     <div class="lb-row lb-gold" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(254, 228, 64, 0.12); border: 1px solid rgba(254, 228, 64, 0.4); border-radius: 10px;">
@@ -3112,7 +3112,7 @@ function openLeaderboardModal() {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">38.12s</span>
-                            <div style="font-size: 10px; color: #fde047;">🏆 +150 TON</div>
+                            <div style="font-size: 10px; color: #fde047;">🏆 +15.000 $CR</div>
                         </div>
                     </div>
 
@@ -3126,7 +3126,7 @@ function openLeaderboardModal() {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">38.85s</span>
-                            <div style="font-size: 10px; color: #cbd5e1;">🥈 +75 TON</div>
+                            <div style="font-size: 10px; color: #cbd5e1;">🥈 +7.500 $CR</div>
                         </div>
                     </div>
 
@@ -3140,7 +3140,7 @@ function openLeaderboardModal() {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">39.20s</span>
-                            <div style="font-size: 10px; color: #ff9800;">🥉 +35 TON</div>
+                            <div style="font-size: 10px; color: #ff9800;">🥉 +3.500 $CR</div>
                         </div>
                     </div>
 
@@ -3298,7 +3298,7 @@ function openSettingsModal() {
                     </div>
                     <div style="margin-top: 10px; display: flex; gap: 8px;">
                         <button class="btn-primary" style="flex:1; padding: 8px; font-size: 11px; background: linear-gradient(135deg, #00e676, #00b0ff); color: #000; font-weight: 900; border-radius: 8px; border:none; cursor:pointer;" onclick="grantTestingFunds()">
-                            💎 RECARGAR +1,000,000 $CR & +50,000 TON
+                            💰 RECARGAR +1,000,000 $CR (TEST DEV)
                         </button>
                     </div>
                 </div>
@@ -3359,10 +3359,9 @@ function grantTestingFunds() {
     hubAudio.playClick();
     const u = loadNftUserData();
     u.credits = (u.credits || 0) + 1000000;
-    u.gems = (u.gems || 0) + 50000;
     saveNftUserData(u);
     renderHubHeader();
-    alert('💎 ¡Fondos de prueba recargados con éxito! +1,000,000 $CR y +50,000 TON');
+    alert('💰 ¡Fondos de prueba recargados con éxito! +1,000,000 $CR');
 }
 
 function resetAllSaveData() {
@@ -3709,9 +3708,9 @@ function openWeeklyTournamentModal() {
                             <div style="font-size: 9px; color: #64748b;">${((tInfo.registeredPlayers || 124) * 20).toLocaleString()} $CR en entradas</div>
                         </div>
                         <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                            <span style="font-size: 10px; color: #94a3b8;">FONDO CASA + TON:</span>
-                            <div style="font-size: 14px; font-weight: 900; color: #00f5d4;">💎 +${tInfo.prizeTon || 25} TON</div>
-                            <div style="font-size: 9px; color: #64748b;">+${(tInfo.houseBonusCr || 200)} $CR de patrocinio</div>
+                            <span style="font-size: 10px; color: #94a3b8;">PATROCINIO DE LA CASA:</span>
+                            <div style="font-size: 14px; font-weight: 900; color: #00f5d4;">💰 +${(tInfo.houseBonusCr || 200).toLocaleString()} $CR</div>
+                            <div style="font-size: 9px; color: #64748b;">Aportación directa al bote</div>
                         </div>
                         <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
                             <span style="font-size: 10px; color: #94a3b8;">BOTE NETO PREMIOS (95%):</span>
@@ -4009,23 +4008,8 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                 <button class="settings-close-x" onclick="closePartsMarketplaceModal()">✖</button>
             </div>
 
-            <!-- Banner Informativo de Economía Web3 y Desglose de Comisión -->
-            <div style="padding: 10px 18px 0;">
-                <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(0, 245, 212, 0.3); border-radius: 10px; padding: 10px 14px; font-size: 11px; color: #cbd5e1;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 6px;">
-                        <span style="font-weight: 800; color: #00f5d4;">⚖️ COMERCIO 100% ENTRE JUGADORES</span>
-                        <span style="color: #fde047; font-weight: 900;">Comisión Total: 7.5%</span>
-                    </div>
-                    <div style="display: flex; gap: 14px; font-size: 10.5px; color: #94a3b8; flex-wrap: wrap;">
-                        <span>🔥 <strong style="color: #f87171;">2.5% Quema Deflacionaria</strong></span>
-                        <span>🏆 <strong style="color: #6ee7b7;">2.5% Pool de Recompensas</strong></span>
-                        <span>🏛️ <strong style="color: #38bdf8;">2.5% Plataforma / Tesorería</strong></span>
-                    </div>
-                </div>
-            </div>
-
             <!-- Pestañas Principales: Comprar vs Publicar en Venta -->
-            <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.8); margin-top: 10px;">
+            <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.8);">
                 <button style="flex: 1; padding: 12px; background: ${marketplaceActiveTab === 'buy' ? 'rgba(0, 245, 212, 0.18)' : 'transparent'}; border: none; border-bottom: 2px solid ${marketplaceActiveTab === 'buy' ? '#00f5d4' : 'transparent'}; color: ${marketplaceActiveTab === 'buy' ? '#00f5d4' : '#94a3b8'}; font-weight: 900; font-size: 12px; cursor: pointer;" onclick="openPartsMarketplaceModal('buy')">
                     🛍️ COMPRAR EN EL MERCADO (${allListings.length})
                 </button>
@@ -4129,7 +4113,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                         <div style="display: flex; align-items: center; gap: 12px;">
                                             <div style="text-align: right;">
                                                 <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
-                                                <div style="font-size: 9px; color: #94a3b8;">Precio: ${askPrice} $CR (Fee 7.5%: -${totalFee})</div>
+                                                <div style="font-size: 9px; color: #94a3b8;">Precio de venta: ${askPrice} $CR</div>
                                             </div>
                                             <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${partKey}', ${askPrice})">
                                                 🏷️ PUBLICAR 1x
@@ -4167,7 +4151,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                         <div style="display: flex; align-items: center; gap: 12px;">
                                             <div style="text-align: right;">
                                                 <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
-                                                <div style="font-size: 9px; color: #94a3b8;">Precio: ${basePrice.toLocaleString()} $CR (Fee: -${totalFee})</div>
+                                                <div style="font-size: 9px; color: #94a3b8;">Precio de venta: ${basePrice.toLocaleString()} $CR</div>
                                             </div>
                                             <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${car.instanceId}', ${basePrice})">
                                                 🏷️ PUBLICAR

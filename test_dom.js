@@ -677,9 +677,10 @@ const mpModal = doc.getElementById('marketplace-modal');
 if (!mpModal || !mpModal.innerHTML.includes('MERCADO P2P ENTRE JUGADORES')) {
     throw new Error('El modal del Mercado P2P debe renderizarse');
 }
-if (!mpModal.innerHTML.includes('2.5% Quema Deflacionaria') || !mpModal.innerHTML.includes('2.5% Pool de Recompensas')) {
-    throw new Error('El modal del Mercado P2P debe desglosar la comisión en Quema, Pool y Tesorería');
+if (mpModal.innerHTML.includes('Comisión Total: 7.5%') || mpModal.innerHTML.includes('2.5% Quema Deflacionaria')) {
+    throw new Error('El modal del Mercado P2P no debe mostrar carteles alarmantes de comisión');
 }
+console.log('✓ Mercado P2P limpio: Cartel alarmante de comisión retirado de la interfaz para evitar fricción visual');
 
 // Probar pestaña de venta en el modal
 vm.runInContext('openPartsMarketplaceModal("sell")', ctx);
@@ -687,7 +688,7 @@ const mpSellModal = doc.getElementById('marketplace-modal');
 if (!mpSellModal || !mpSellModal.innerHTML.includes('PUBLICAR EN VENTA (P2P)') || !mpSellModal.innerHTML.includes('MIS COCHES NFT')) {
     throw new Error('El modal de venta P2P debe permitir publicar tanto piezas como coches NFT');
 }
-console.log('✓ Mercado P2P completo: Comercio de piezas y coches entre jugadores con triple comisión verificado al 100%');
+console.log('✓ Mercado P2P completo: Comercio de piezas y coches entre jugadores verificado al 100%');
 
 // 3. Torneo Semanal Oficial (Inscripción 20 $CR, Fondo Casa 200 $CR, Fee 5%, Reparto 95%)
 const tourneyInfo = vm.runInContext('getWeeklyTournamentInfo()', ctx);
@@ -716,7 +717,10 @@ const wtModal = doc.getElementById('weekly-tournament-modal');
 if (!wtModal || !wtModal.innerHTML.includes('TORNEO SEMANAL GT GRAND PRIX') || !wtModal.innerHTML.includes('20 $CR')) {
     throw new Error('El modal del Torneo Semanal debe renderizarse con la cuota de 20 $CR');
 }
-console.log('✓ Torneo Semanal GT Grand Prix verificado con cuota de 20 $CR y comisión del 5%');
+if (wtModal.innerHTML.includes('TON')) {
+    throw new Error('El modal del Torneo Semanal no debe prometer ni otorgar TON');
+}
+console.log('✓ Torneo Semanal GT Grand Prix verificado con cuota de 20 $CR y 100% libre de recompensas en TON');
 
 // 3.1 Hitos de Maestría por Nivel de Coche (Cada 10 niveles: +1 Stat a elección por $CR)
 console.log('\n--- VERIFICANDO HITOS DE MAESTRÍA POR NIVEL DE COCHE (+1 STAT CADA 10 NIVELES) ---');
@@ -1486,13 +1490,24 @@ if (mainHtml.includes('btn-compete-now') || mainHtml.includes('btn-comp-banner-c
 }
 console.log('✓ Hub Principal contiene las 6 zonas simétricas (Historia, Garaje, Inventario, Competición, Cajas, Tienda) sin botones redundantes');
 
-// 2. Verificar que el Torneo Semanal está en view-comp
+// 2. Verificar que el Torneo Semanal está en view-comp sin TON
 vm.runInContext('renderCompView()', ctx);
 const compHtml = doc.getElementById('view-comp').innerHTML;
 if (!compHtml.includes('weekly-tournament-hero-banner') || !compHtml.includes('GRAND PRIX') || !compHtml.includes('SEMANAL')) {
     throw new Error('view-comp debe contener el banner destacado del Grand Prix Semanal');
 }
-console.log('✓ Torneo Semanal 750 TON integrado en la cabecera de la sección de Competición');
+if (compHtml.includes('750 TON') || compHtml.includes('PREMIOS EN TON REALES')) {
+    throw new Error('view-comp no debe contener menciones a premios en TON');
+}
+console.log('✓ Torneo Semanal 100% en $CR integrado en la cabecera de la sección de Competición');
+
+// 2.1 Verificar Leaderboard sin premios en TON
+vm.runInContext('openLeaderboardModal()', ctx);
+const lbCleanModal = doc.getElementById('leaderboard-modal');
+if (!lbCleanModal || lbCleanModal.innerHTML.includes('TON')) {
+    throw new Error('El modal de Clasificación (Leaderboard) no debe prometer ni otorgar TON');
+}
+console.log('✓ Clasificación Mundial verificada: Recompensas de podio 100% en tokens $CR sin TON');
 
 // 3. Verificar la nueva vista de Inventario (view-inventory)
 vm.runInContext('renderInventoryView()', ctx);

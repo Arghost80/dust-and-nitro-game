@@ -769,16 +769,16 @@ function loadNftUserData() {
 
     if (!data || typeof data.credits !== 'number' || typeof data.gems !== 'number' || !Array.isArray(data.garage) || data.garage.length === 0) {
         data = {
-            credits: (data && typeof data.credits === 'number') ? data.credits : 100,
-            gems: (data && typeof data.gems === 'number') ? data.gems : 10,
+            credits: (data && typeof data.credits === 'number') ? data.credits : APP_CONFIG.DEFAULT_STARTING_CREDITS,
+            gems: (data && typeof data.gems === 'number') ? data.gems : APP_CONFIG.DEFAULT_STARTING_GEMS,
             equippedInstanceId: (data && data.equippedInstanceId) ? data.equippedInstanceId : starterCar.instanceId,
             garage: (data && Array.isArray(data.garage) && data.garage.length > 0) ? data.garage : [starterCar]
         };
         saveNftUserData(data);
     }
 
-    if (typeof data.credits !== 'number') data.credits = 100;
-    if (typeof data.gems !== 'number') data.gems = 10;
+    if (typeof data.credits !== 'number') data.credits = APP_CONFIG.DEFAULT_STARTING_CREDITS;
+    if (typeof data.gems !== 'number') data.gems = APP_CONFIG.DEFAULT_STARTING_GEMS;
     if (!Array.isArray(data.garage) || data.garage.length === 0) data.garage = [starterCar];
     if (!data.equippedInstanceId && data.garage[0]) data.equippedInstanceId = data.garage[0].instanceId;
     if (typeof data.nitros !== 'number') data.nitros = 2;
@@ -2213,7 +2213,6 @@ const WEEKLY_TOURNAMENT_CONFIG = {
     totalLaps: 3,
     entryFeeCr: 20,       // Inscripción: 20 $CR por piloto
     houseBonusCr: 200,    // Aportación de la casa / patrocinador al bote
-    sponsorTon: 25,       // Bote adicional en TON de sponsors
     endsIn: "2 días 14 horas",
     platformFeePct: 0.05  // 5% comisión recuperada por la plataforma
 };
@@ -2256,7 +2255,6 @@ function getWeeklyTournamentInfo() {
 
     const leaderboard = shareDistribution.map(entry => {
         const prizeCr = Math.round(netPrizePotCr * entry.pct);
-        const prizeTon = Number((WEEKLY_TOURNAMENT_CONFIG.sponsorTon * entry.pct).toFixed(2));
         const medal = entry.rank === 1 ? '🥇' : (entry.rank === 2 ? '🥈' : (entry.rank === 3 ? '🥉' : '⭐'));
         return {
             rank: entry.rank,
@@ -2264,8 +2262,7 @@ function getWeeklyTournamentInfo() {
             car: entry.car,
             lapTime: entry.lapTime,
             prizeCr: prizeCr,
-            prizeTon: prizeTon,
-            rewardText: `${medal} +${prizeCr.toLocaleString()} $CR ${prizeTon > 0 ? `+ ${prizeTon} TON` : ''}`
+            rewardText: `${medal} +${prizeCr.toLocaleString()} $CR`
         };
     });
 
@@ -2277,7 +2274,6 @@ function getWeeklyTournamentInfo() {
         devFeeCr: devFeeCr,
         netPrizePotCr: netPrizePotCr,
         prizeCr: grossPotCr,
-        prizeTon: WEEKLY_TOURNAMENT_CONFIG.sponsorTon,
         leaderboard: leaderboard,
         playerBestTime: playerBestTime,
         isTop10: isTop10

@@ -6245,9 +6245,8 @@ function endRace() {
         font: 'bold 13px Arial', fill: '#90a4ae'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-    // Recompensas Web3 en $CR, Gemas y Piezas Mecánicas por clasificación
+    // Recompensas Web3 en $CR y Piezas Mecánicas por clasificación (Sin TON regalado)
     let crReward = playerRank === 1 ? 1000 : (playerRank === 2 ? 600 : (playerRank === 3 ? 400 : 200));
-    let gemReward = playerRank === 1 ? 25 : (playerRank === 2 ? 15 : (playerRank === 3 ? 10 : 0));
     let xpReward = playerRank === 1 ? 250 : (playerRank === 2 ? 180 : (playerRank === 3 ? 120 : 70));
     let xpResult = null;
     let partsWonSummary = [];
@@ -6255,7 +6254,6 @@ function endRace() {
     if (typeof loadNftUserData === 'function') {
         const u = loadNftUserData();
         u.credits = (u.credits || 0) + crReward;
-        u.gems = (u.gems || 0) + gemReward;
 
         // Botín de piezas mecánicas del taller con drop rate Web3 por circuito y podio
         const droppedPart = (typeof calculateRacePartsDrop === 'function') 
@@ -6282,7 +6280,7 @@ function endRace() {
         }
     }
 
-    raceScene.add.text(480, 268, `💰 +${crReward} $CR  •  💎 +${gemReward} TON  •  ${xpText}`, {
+    raceScene.add.text(480, 268, `💰 +${crReward} $CR  •  ${xpText}`, {
         font: 'bold 13px Arial', fill: '#00f5d4'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
