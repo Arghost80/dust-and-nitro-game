@@ -1451,19 +1451,6 @@ function renderCratesView() {
             <div></div>
         </div>
 
-        <!-- Ticker de Oráculo de Precios Dinámico ($CR / USDT) -->
-        <div class="oracle-live-banner" onclick="openOracleSimulatorModal()" style="cursor: pointer; margin: -10px auto 18px; padding: 8px 18px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15)); border: 1.5px solid #10b981; border-radius: 20px; display: flex; align-items: center; justify-content: space-between; max-width: 680px; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.22); transition: all 0.2s ease;">
-            <div style="display: flex; align-items: center; gap: 9px;">
-                <span class="oracle-pulse-dot" style="display: inline-block; width: 9px; height: 9px; background: #10b981; border-radius: 50%; box-shadow: 0 0 10px #10b981; animation: pulse 1.5s infinite;"></span>
-                <span style="font-size: 12px; font-weight: 800; color: #a7f3d0; letter-spacing: 0.3px;">
-                    ORÁCULO WEB3: <strong>1 $CR = $${typeof getTokenPriceUsd === 'function' ? getTokenPriceUsd().toFixed(4) : '0.0010'} USDT</strong> (Peg Dinámico)
-                </span>
-            </div>
-            <div style="font-size: 11px; color: #6ee7b7; font-weight: 800; background: rgba(16, 185, 129, 0.2); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.4);">
-                ⚙️ SIMULADOR DEX ▶
-            </div>
-        </div>
-
         <div class="crates-grid">
             <!-- Caja Bronce (Rookie) -->
             <div class="crate-box-card crate-bronze">
@@ -1475,7 +1462,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('bronze', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_bronze_rates')}</div>
-                <div class="crate-cost-pill">💰 ${NFT_CRATES.bronze.cost.toLocaleString()} $CR <span style="font-size: 11px; opacity: 0.85; font-weight: 600;">($${NFT_CRATES.bronze.costUsd.toFixed(2)} USDT)</span></div>
+                <div class="crate-cost-pill">💰 ${NFT_CRATES.bronze.cost.toLocaleString()} $CR</div>
                 <button class="btn-open-box btn-bronze-action" onclick="triggerCrateOpening('bronze')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1491,7 +1478,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('silver', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_silver_rates')}</div>
-                <div class="crate-cost-pill">💰 ${NFT_CRATES.silver.cost.toLocaleString()} $CR <span style="font-size: 11px; opacity: 0.85; font-weight: 600;">($${NFT_CRATES.silver.costUsd.toFixed(2)} USDT)</span></div>
+                <div class="crate-cost-pill">💰 ${NFT_CRATES.silver.cost.toLocaleString()} $CR</div>
                 <button class="btn-open-box btn-silver-action" onclick="triggerCrateOpening('silver')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1507,7 +1494,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_gold_rates')}</div>
-                <div class="crate-cost-pill">💰 ${NFT_CRATES.gold.cost.toLocaleString()} $CR <span style="font-size: 11px; opacity: 0.85; font-weight: 600;">($${NFT_CRATES.gold.costUsd.toFixed(2)} USDT)</span></div>
+                <div class="crate-cost-pill">💰 ${NFT_CRATES.gold.cost.toLocaleString()} $CR</div>
                 <button class="btn-open-box btn-gold-action" onclick="triggerCrateOpening('gold')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1680,33 +1667,28 @@ function renderShopView() {
                 </div>
             </div>
 
-            <!-- Cápsulas de Nitro N2O con Tokens $CR Dinámicos anclados a USDT -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px; margin-bottom: 6px;">
-                <h3 class="shop-section-title" style="margin: 0;">🧪 CÁPSULAS DE NITRO N₂O DE COMPETICIÓN</h3>
-                <span style="font-size: 11px; color: #34d399; font-weight: bold; background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                    🟢 Oráculo: 1 $CR = $${typeof getTokenPriceUsd === 'function' ? getTokenPriceUsd().toFixed(4) : '0.0010'}
-                </span>
-            </div>
-            <p class="shop-section-subtitle">Aumenta tu stock de Nitro (4.0s de turbo boost) anclado a precios fijos en USDT calculados automáticamente</p>
+            <!-- Cápsulas de Nitro N2O con Tokens $CR -->
+            <h3 class="shop-section-title">🧪 CÁPSULAS DE NITRO N₂O DE COMPETICIÓN</h3>
+            <p class="shop-section-subtitle">Aumenta tu stock de Nitro (4.0s de turbo boost) para carreras oficiales exclusivamente con tokens $CR</p>
             <div class="shop-items-grid">
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪</div>
                     <div class="shop-item-name">1x Cápsula Nitro N₂O</div>
-                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual (+4.0s boost) ~0.05 USDT</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual (+4.0s boost)</div>
                     <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.05).toLocaleString() : '50'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(1)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪🧪</div>
                     <div class="shop-item-name">5x Pack Nitros N₂O</div>
-                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens (~0.20 USDT total)</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens</div>
                     <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.20).toLocaleString() : '200'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(5)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">📦🧪</div>
                     <div class="shop-item-name">20x Stash Pro Liga</div>
-                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 30% en tokens (~0.70 USDT total)</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Pack torneo (Ahorra 30%)</div>
                     <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.70).toLocaleString() : '700'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(20)">🛒 ${t('shop_buy')}</button>
                 </div>
