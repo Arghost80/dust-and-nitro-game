@@ -3401,7 +3401,7 @@ function openBattlePassModal() {
                     <span style="font-size: 24px;">🏆</span>
                     <div>
                         <h2 style="margin: 0; font-size: 18px; color: #fde047;">PASE DE TEMPORADA: NEON APEX</h2>
-                        <span style="font-size: 11px; color: #cbd5e1;">Temporada 1 • Desbloquea recompensas exclusivas y coches legendarios</span>
+                        <span style="font-size: 11px; color: #cbd5e1;">Temporada 1 • Gana suministros, recargas de energía, nitros y piezas mecánicas</span>
                     </div>
                 </div>
                 <button class="settings-close-x" onclick="closeBattlePassModal()">✖</button>
@@ -3548,7 +3548,7 @@ function openSponsorsModal() {
                     <span style="font-size: 24px;">🤝</span>
                     <div>
                         <h2 style="margin: 0; font-size: 18px; color: #6ee7b7;">CONTRATOS DE PATROCINIO OFICIALES</h2>
-                        <span style="font-size: 11px; color: #cbd5e1;">Firma con patrocinadores de élite y cumple objetivos en carrera para ganar piezas y tokens</span>
+                        <span style="font-size: 11px; color: #cbd5e1;">Firma con patrocinadores de élite y cumple objetivos en carrera para ganar XP, piezas, nitros y energía</span>
                     </div>
                 </div>
                 <button class="settings-close-x" onclick="closeSponsorsModal()">✖</button>
@@ -3597,10 +3597,11 @@ function openSponsorsModal() {
                                     <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
                                         <div style="height: 100%; width: ${pct}%; background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
                                     </div>
-                                    <div style="display: flex; gap: 14px; font-size: 11px; color: #94a3b8;">
-                                        <span>💰 <strong>+${c.rewardCredits} $CR</strong></span>
-                                        <span>💎 <strong>+${c.rewardTon} TON</strong></span>
-                                        <span>📦 <strong>${c.rewardPartName}</strong></span>
+                                    <div style="display: flex; gap: 10px; font-size: 11px; color: #94a3b8; flex-wrap: wrap;">
+                                        <span style="color: #00f5d4; font-weight: 800;">⭐ +${c.rewardXP || 100} XP</span>
+                                        ${c.rewardNitros ? `<span style="color: #ec4899; font-weight: 800;">🧪 +${c.rewardNitros} Nitro</span>` : ''}
+                                        ${c.rewardEnergy ? `<span style="color: #38bdf8; font-weight: 800;">⚡ +${c.rewardEnergy} Energía</span>` : ''}
+                                        <span style="color: #fde047; font-weight: 800;">📦 ${c.rewardPartName}</span>
                                     </div>
                                 </div>
                             </div>
@@ -3637,7 +3638,7 @@ function handleClaimSponsor(id) {
         hubAudio.playOpenCrate();
         renderHubHeader();
         openSponsorsModal();
-        alert(`🎉 ¡Recompensa de patrocinio cobrada! +${res.contract.rewardCredits} $CR y pieza añadida al inventario.`);
+        alert(`🎉 ¡Recompensa de patrocinio cobrada! +${res.contract.rewardXP || 100} XP y ${res.contract.rewardPartName} añadidos a tu cuenta.`);
     }
 }
 

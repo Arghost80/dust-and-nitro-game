@@ -580,6 +580,12 @@ console.log('✓ Huellas de derrape continuas registradas correctamente');
 console.log('\n--- VERIFICANDO ECOSISTEMA WEB3: PASE DE TEMPORADA, MERCADO P2P Y TORNEO SEMANAL ---');
 
 // 1. Pase de Temporada (Battle Pass)
+const tiersHaveMoneyOrTon = vm.runInContext('SEASON_PASS_TIERS.some(t => t.rewardType === "credits" || t.rewardType === "gems" || t.rewardType === "crate")', ctx);
+if (tiersHaveMoneyOrTon) {
+    throw new Error('FALLO DE ECONOMÍA: El Pase de Temporada no debe regalar TON, ni tokens $CR, ni cofres.');
+}
+console.log('✓ Protección de Economía: El Pase de Temporada solo otorga suministros (nitros, energía, piezas), sin TON ni tokens');
+
 const passClaimRes = vm.runInContext('claimSeasonPassTier(2)', ctx);
 console.log('Resultado de reclamar Tier 2 del Pase:', passClaimRes.success);
 if (!passClaimRes.success) {
@@ -594,6 +600,9 @@ vm.runInContext('openBattlePassModal()', ctx);
 const bpModal = doc.getElementById('battle-pass-modal');
 if (!bpModal || !bpModal.innerHTML.includes('PASE DE TEMPORADA: NEON APEX') || !bpModal.innerHTML.includes('TIER 2')) {
     throw new Error('El modal del Pase de Temporada debe renderizarse con misiones y tiers');
+}
+if (bpModal.innerHTML.includes('+25 Tokens TON') || bpModal.innerHTML.includes('+2.500 $CR') || bpModal.innerHTML.includes('Caja de Plata')) {
+    throw new Error('FALLO DE ECONOMÍA: El modal del Pase aún muestra textos de TON, tokens o cajas');
 }
 console.log('✓ Modal y lógica del Pase de Temporada (Neon Apex) funcionando al 100%');
 
@@ -788,6 +797,13 @@ sponsorList.forEach(sp => console.log(`- ${sp.name}: ${sp.goalLabel} [${sp.signe
 if (sponsorList.length < 4) {
     throw new Error('Debe haber al menos 4 contratos de marcas de patrocinio oficiales');
 }
+// Verificar protección de economía en patrocinios
+const sponsorsHaveMoneyOrTon = vm.runInContext('SPONSORSHIP_CONTRACTS_DATA.some(s => (s.rewardCredits && s.rewardCredits > 0) || (s.rewardTon && s.rewardTon > 0))', ctx);
+if (sponsorsHaveMoneyOrTon) {
+    throw new Error('FALLO DE ECONOMÍA: Los patrocinadores no deben regalar TON ni tokens $CR.');
+}
+console.log('✓ Protección de Economía: Los patrocinadores no regalan TON ni tokens (otorgan XP, suministros y piezas)');
+
 const signRes = vm.runInContext("signSponsorshipContract('sp_castrol')", ctx);
 console.log('Firma de contrato con Castrol:', signRes.success);
 if (!signRes.success) {
@@ -801,6 +817,10 @@ const spModal = doc.getElementById('sponsors-modal');
 if (!spModal || !spModal.innerHTML.includes('CONTRATOS DE PATROCINIO')) {
     throw new Error('El modal interactivo de patrocinadores debe renderizarse');
 }
+if (spModal.innerHTML.includes('+650 $CR') || spModal.innerHTML.includes('+0.06 TON') || spModal.innerHTML.includes('+1200 $CR') || spModal.innerHTML.includes('+0.15 TON')) {
+    throw new Error('FALLO DE ECONOMÍA: El modal de Patrocinadores aún contiene textos de TON o $CR');
+}
+console.log('✓ Modal de Patrocinadores verificado sin fuga económica de TON o tokens');
 // 9. Verificando Fin de Carrera y Retorno al Menú de Pistas (showMenu)
 console.log('\n--- VERIFICANDO FIN DE CARRERA Y RETORNO AL MENÚ DE PISTAS ---');
 vm.runInContext(`

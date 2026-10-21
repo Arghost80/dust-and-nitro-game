@@ -1746,11 +1746,11 @@ function generateCarSvg(car, width = 240, height = 120) {
 // 8. PASE DE TEMPORADA WEB3 (SEASON BATTLE PASS - NEON APEX)
 // =========================================================================
 const SEASON_PASS_TIERS = [
-    { tier: 1, xpReq: 0, rewardType: "credits", amount: 2500, label: "💰 +2.500 $CR", icon: "💰" },
+    { tier: 1, xpReq: 0, rewardType: "nitros", count: 2, label: "🧪 +2 Cápsulas Nitro N₂O", icon: "🧪" },
     { tier: 2, xpReq: 100, rewardType: "parts", parts: { brake_pads: 2, spark_plugs: 2 }, label: "⚙️ 2x Pastillas + 2x Bujías", icon: "⚙️" },
-    { tier: 3, xpReq: 250, rewardType: "crate", crateKey: "silver", label: "🧰 Caja de Plata Clubman", icon: "🧰" },
-    { tier: 4, xpReq: 450, rewardType: "gems", amount: 25, label: "💎 +25 Tokens TON", icon: "💎" },
-    { tier: 5, xpReq: 700, rewardType: "exclusive_car", modelId: "leg_04", label: "👑 Valkyrie AMR Pro Neon Edition", icon: "🏎️" }
+    { tier: 3, xpReq: 250, rewardType: "energy", count: 3, label: "⚡ +3 Baterías Extra de Carrera", icon: "⚡" },
+    { tier: 4, xpReq: 450, rewardType: "parts", parts: { oil_filter: 2, ignition_cables: 2 }, label: "🔧 2x Filtros + 2x Cables Racing", icon: "🔧" },
+    { tier: 5, xpReq: 700, rewardType: "combo", nitros: 5, energy: 5, label: "🏆 +5 Nitros N₂O & +5 Recargas de Batería", icon: "🏆" }
 ];
 
 function claimSeasonPassTier(tierNum) {
@@ -1771,39 +1771,33 @@ function claimSeasonPassTier(tierNum) {
 
     userData.seasonPass.claimedTiers.push(tierNum);
 
-    // Otorgar recompensa
-    if (tierDef.rewardType === "credits") {
-        userData.credits += tierDef.amount;
-    } else if (tierDef.rewardType === "gems") {
-        userData.gems += tierDef.amount;
+    // Otorgar recompensa (Sin TON, sin tokens $CR, sin cofres regalados)
+    if (tierDef.rewardType === "nitros") {
+        userData.nitros = (userData.nitros || 0) + (tierDef.count || 1);
+    } else if (tierDef.rewardType === "energy") {
+        if (userData.selectedCarId && Array.isArray(userData.garage)) {
+            const car = userData.garage.find(c => c.instanceId === userData.selectedCarId);
+            if (car) {
+                const maxE = typeof getCarMaxEnergy === 'function' ? getCarMaxEnergy(car) : 5;
+                car.energy = Math.min(maxE, (car.energy || 0) + (tierDef.count || 2));
+            }
+        }
     } else if (tierDef.rewardType === "parts") {
         if (!userData.partsInventory) userData.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
         for (const [pId, cnt] of Object.entries(tierDef.parts)) {
             userData.partsInventory[pId] = (userData.partsInventory[pId] || 0) + cnt;
         }
-    } else if (tierDef.rewardType === "crate") {
-        userData.credits += 3000; // Bono equivalente si no se abre directamente
-    } else if (tierDef.rewardType === "exclusive_car") {
-        const specialCar = {
-            instanceId: "nft_season1_valkyrie_" + Date.now().toString(36),
-            modelId: "leg_04",
-            name: "VALKYRIE AMR PRO NEON EDITION",
-            rarity: "legendary",
-            visualId: 3,
-            stats: makeStats(5,5,4,4,3,3,2,3,3,2),
-            level: 1,
-            xp: 0,
-            xpNeeded: 250,
-            parts: { speed_power: 1, braking: 1, handling_grip: 1, accel_traction: 1, aero_lightness: 1 },
-            colorName: "Verde Neón Oficial",
-            colorHex: "#00f5d4",
-            tint: 0x00f5d4,
-            mintNumber: 1,
-            tokenHash: "0xapex_neon_s1_exclusive",
-            sprite: "car_cyan",
-            obtainedAt: Date.now()
-        };
-        userData.garage.push(specialCar);
+    } else if (tierDef.rewardType === "combo") {
+        if (tierDef.nitros) {
+            userData.nitros = (userData.nitros || 0) + tierDef.nitros;
+        }
+        if (tierDef.energy && userData.selectedCarId && Array.isArray(userData.garage)) {
+            const car = userData.garage.find(c => c.instanceId === userData.selectedCarId);
+            if (car) {
+                const maxE = typeof getCarMaxEnergy === 'function' ? getCarMaxEnergy(car) : 5;
+                car.energy = Math.min(maxE, (car.energy || 0) + tierDef.energy);
+            }
+        }
     }
 
     saveNftUserData(userData);
@@ -2159,8 +2153,9 @@ const SPONSORSHIP_CONTRACTS_DATA = [
         goalType: 'drifts',
         goalTarget: 3,
         goalLabel: 'Realizar 3 derrapes con turbo boost en carrera',
-        rewardCredits: 500,
-        rewardTon: 0.05,
+        rewardXP: 120,
+        rewardNitros: 1,
+        rewardEnergy: 0,
         rewardPartId: 'slick_tires',
         rewardPartName: 'Neumáticos Slick GT3',
         tier: 'PRO'
@@ -2176,8 +2171,9 @@ const SPONSORSHIP_CONTRACTS_DATA = [
         goalType: 'podium',
         goalTarget: 1,
         goalLabel: 'Terminar en el Podio (Top 3) de la clasificación',
-        rewardCredits: 750,
-        rewardTon: 0.08,
+        rewardXP: 180,
+        rewardNitros: 0,
+        rewardEnergy: 2,
         rewardPartId: 'brake_calipers',
         rewardPartName: 'Pinzas Brembo Monobloque',
         tier: 'ELITE'
@@ -2193,8 +2189,9 @@ const SPONSORSHIP_CONTRACTS_DATA = [
         goalType: 'top_speed',
         goalTarget: 360,
         goalLabel: 'Alcanzar más de 360 km/h en recta durante la carrera',
-        rewardCredits: 650,
-        rewardTon: 0.06,
+        rewardXP: 220,
+        rewardNitros: 2,
+        rewardEnergy: 0,
         rewardPartId: 'turbocharger',
         rewardPartName: 'Turbocompresor Garrett Twin-Scroll',
         tier: 'PRO'
@@ -2210,8 +2207,9 @@ const SPONSORSHIP_CONTRACTS_DATA = [
         goalType: 'win',
         goalTarget: 1,
         goalLabel: 'Ganar el 1º Puesto (Victoria Absoluta) en carrera',
-        rewardCredits: 1200,
-        rewardTon: 0.15,
+        rewardXP: 300,
+        rewardNitros: 2,
+        rewardEnergy: 2,
         rewardPartId: 'ecu_chip',
         rewardPartName: 'ECU Stage 3 Racing',
         tier: 'LEGEND'
@@ -2259,16 +2257,40 @@ function claimSponsorshipReward(contractId) {
     if (!def) return { success: false, reason: "Definición no encontrada" };
 
     c.claimed = true;
-    userData.credits = (userData.credits || 0) + def.rewardCredits;
-    userData.gems = (userData.gems || 0) + Math.round(def.rewardTon * 100);
 
+    // Otorgar XP de Pase / Piloto
+    if (def.rewardXP) {
+        if (!userData.seasonPass) userData.seasonPass = { level: 1, xp: 0, xpNeeded: 150, claimedTiers: [], dailyMissions: [] };
+        userData.seasonPass.xp = (userData.seasonPass.xp || 0) + def.rewardXP;
+        while (userData.seasonPass.xp >= userData.seasonPass.xpNeeded && userData.seasonPass.level < 5) {
+            userData.seasonPass.xp -= userData.seasonPass.xpNeeded;
+            userData.seasonPass.level++;
+            userData.seasonPass.xpNeeded = Math.round(userData.seasonPass.xpNeeded * 1.35);
+        }
+    }
+
+    // Otorgar Nitros N2O
+    if (def.rewardNitros) {
+        userData.nitros = (userData.nitros || 0) + def.rewardNitros;
+    }
+
+    // Otorgar Energía Extra de Batería
+    if (def.rewardEnergy && userData.selectedCarId && Array.isArray(userData.garage)) {
+        const car = userData.garage.find(carObj => carObj.instanceId === userData.selectedCarId);
+        if (car) {
+            const maxE = typeof getCarMaxEnergy === 'function' ? getCarMaxEnergy(car) : 5;
+            car.energy = Math.min(maxE, (car.energy || 0) + def.rewardEnergy);
+        }
+    }
+
+    // Otorgar Pieza Mecánica de Patrocinio
     if (def.rewardPartId) {
         if (!userData.partsInventory) userData.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
         userData.partsInventory[def.rewardPartId] = (userData.partsInventory[def.rewardPartId] || 0) + 1;
     }
 
     saveNftUserData(userData);
-    return { success: true, contract: def, credits: userData.credits, gems: userData.gems };
+    return { success: true, contract: def };
 }
 
 function updateSponsorshipProgress(raceData) {
