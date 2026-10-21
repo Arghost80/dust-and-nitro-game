@@ -1645,7 +1645,9 @@ function renderShopView() {
         </div>
 
         <div class="shop-sections-wrap">
-            <h3 class="shop-section-title">💰 ${t('shop_coins_title')}</h3>
+            <!-- Paquetes de fondos de prueba (SOLO VISIBLES EN DESARROLLO, NUNCA EN LANZAMIENTO PÚBLICO) -->
+            ${(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) ? '' : `
+            <h3 class="shop-section-title">💰 ${t('shop_coins_title')} (MODO DESARROLLO)</h3>
             <div class="shop-items-grid">
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🪙</div>
@@ -1666,6 +1668,7 @@ function renderShopView() {
                     <button class="btn-buy-item" onclick="addFunds(0, 1000)">${t('shop_buy')}</button>
                 </div>
             </div>
+            `}
 
             <!-- Cápsulas de Nitro N2O con Tokens $CR -->
             <h3 class="shop-section-title">🧪 CÁPSULAS DE NITRO N₂O DE COMPETICIÓN</h3>
@@ -2343,6 +2346,10 @@ function buyPartsKitShop(kitKey) {
 }
 
 function addFunds(credits, gems) {
+    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) {
+        alert('⚠️ Función de pruebas deshabilitada en la versión pública oficial.');
+        return;
+    }
     hubAudio.playClick();
     const u = loadNftUserData();
     u.credits += credits;
@@ -3182,7 +3189,8 @@ function openSettingsModal() {
     const musicEnabled = localStorage.getItem('dustrac_music') !== 'false';
     const graphicsHigh = localStorage.getItem('dustrac_graphics') !== 'perf';
     const controlsType = localStorage.getItem('dustrac_controls') || 'keys';
-    const designerMode = localStorage.getItem('dustrac_story_save') ? JSON.parse(localStorage.getItem('dustrac_story_save')).designerMode !== false : true;
+    const isProdRelease = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    const designerMode = isProdRelease ? false : (localStorage.getItem('dustrac_story_save') ? JSON.parse(localStorage.getItem('dustrac_story_save')).designerMode !== false : true);
 
     const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : {};
 
@@ -3275,7 +3283,8 @@ function openSettingsModal() {
                     </div>
                 </div>
 
-                <!-- Modo Diseñador & Fondos de Prueba -->
+                <!-- Modo Diseñador & Fondos de Prueba (Oculto completamente en Producción) -->
+                ${(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) ? '' : `
                 <div class="setting-group">
                     <label class="setting-label">🛠️ ${t('settings_designer_mode')}</label>
                     <div class="toggle-row">
@@ -3288,6 +3297,7 @@ function openSettingsModal() {
                         </button>
                     </div>
                 </div>
+                `}
 
                 <!-- Restablecer Datos -->
                 <div class="setting-group" style="border-bottom:none;">
@@ -3328,6 +3338,7 @@ function toggleSetting(key) {
         const cur = localStorage.getItem('dustrac_controls') || 'keys';
         localStorage.setItem('dustrac_controls', cur === 'keys' ? 'touch' : 'keys');
     } else if (key === 'designer') {
+        if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) return;
         const prog = loadStoryProgress ? loadStoryProgress() : {};
         prog.designerMode = !prog.designerMode;
         if (prog.designerMode && typeof ALL_TRACK_IDS !== 'undefined') {
@@ -3339,6 +3350,7 @@ function toggleSetting(key) {
 }
 
 function grantTestingFunds() {
+    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) return;
     hubAudio.playClick();
     const u = loadNftUserData();
     u.credits = (u.credits || 0) + 1000000;

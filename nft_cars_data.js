@@ -1,3 +1,24 @@
+// =========================================================================
+// CONFIGURACIÓN DE LANZAMIENTO OFICIAL & SEGURIDAD DEL JUEGO
+// =========================================================================
+const APP_CONFIG = {
+    // Pon en 'true' para el lanzamiento oficial definitivo:
+    // - Oculta y destruye completamente el botón de Modo Diseñador en Ajustes
+    // - Elimina los botones de "Dinero Gratis" de la Tienda y Ajustes
+    // - Bloquea la progresión estricta desde la Pista 1 (Rookie Ring Speedway)
+    // - Deshabilita cualquier función de inyección de saldo de desarrollo
+    IS_PRODUCTION_RELEASE: false,
+
+    VERSION: '1.0.0-PROD',
+    DEFAULT_TRACK: 'rookie_ring',
+    DEFAULT_STARTING_CREDITS: 100,
+    DEFAULT_STARTING_GEMS: 0
+};
+
+if (typeof window !== 'undefined') {
+    window.APP_CONFIG = APP_CONFIG;
+}
+
 // ===== CATÁLOGO DE 73 VEHÍCULOS NFT WEB3, 10 ESTADÍSTICAS POR PUNTOS, SISTEMA DE NIVELES Y PIEZAS =====
 
 const NFT_CAR_COLORS = [

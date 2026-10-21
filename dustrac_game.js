@@ -601,19 +601,28 @@ function loadStoryProgress() {
         if (raw) data = JSON.parse(raw);
     } catch(e) {}
 
+    const isProd = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+
     if (!data) {
         data = {
-            designerMode: true, // Activado por defecto para el diseñador del juego
-            unlockedTracks: [...ALL_TRACK_IDS],
+            designerMode: isProd ? false : true,
+            unlockedTracks: isProd ? ['rookie_ring'] : [...ALL_TRACK_IDS],
             stars: {},
             bestRanks: {},
             bestTimes: {}
         };
     } else {
-        // Si el modo diseñador está activado, asegurar acceso a los 22 circuitos
-        if (data.designerMode !== false) {
-            data.designerMode = true;
-            data.unlockedTracks = [...ALL_TRACK_IDS];
+        if (isProd) {
+            data.designerMode = false;
+            if (!Array.isArray(data.unlockedTracks) || data.unlockedTracks.length === 0) {
+                data.unlockedTracks = ['rookie_ring'];
+            }
+        } else {
+            // Si el modo diseñador está activado en desarrollo, asegurar acceso a los 22 circuitos
+            if (data.designerMode !== false) {
+                data.designerMode = true;
+                data.unlockedTracks = [...ALL_TRACK_IDS];
+            }
         }
     }
     return data;

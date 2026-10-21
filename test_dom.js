@@ -1841,9 +1841,69 @@ if (vm.runInContext('NFT_CRATES.bronze.cost', ctx) !== 1000) {
 }
 console.log('✓ Restablecimiento del Oráculo a precio base ($0.0010) verificado con éxito');
 
+// =========================================================================
+// TEST DE SEGURIDAD: MODO LANZAMIENTO OFICIAL (APP_CONFIG.IS_PRODUCTION_RELEASE)
+// =========================================================================
+console.log('\n--- Probando Sistema de Seguridad de Lanzamiento Oficial ---');
+
+// 1. Activar Modo Producción
+vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = true', ctx);
+
+// Renderizar modal de Ajustes en modo Producción
+vm.runInContext('openSettingsModal()', ctx);
+const modalHtmlProd = doc.getElementById('settings-modal').innerHTML;
+if (modalHtmlProd.includes('grantTestingFunds') || modalHtmlProd.includes('RECARGAR +1,000,000') || modalHtmlProd.includes('settings_designer_mode')) {
+    throw new Error('FALLO DE SEGURIDAD: En modo producción, el botón de diseñador o recarga de fondos sigue en el HTML de Ajustes.');
+}
+console.log('✓ En Producción: El Modo Diseñador y Recarga de Fondos han sido ELIMINADOS de Ajustes');
+
+// Renderizar Tienda en modo Producción
+vm.runInContext('renderShopView()', ctx);
+const shopHtmlProd = doc.getElementById('view-shop').innerHTML;
+if (shopHtmlProd.includes('GRATIS (TESTING)')) {
+    throw new Error('FALLO DE SEGURIDAD: En modo producción, los paquetes de dinero gratis siguen en la Tienda.');
+}
+console.log('✓ En Producción: Los paquetes de "GRATIS (TESTING)" han sido ELIMINADOS de la Tienda');
+
+// Comprobar que llamar directamente a grantTestingFunds() o addFunds() está bloqueado
+const userCreditsBefore = vm.runInContext('loadNftUserData().credits', ctx);
+vm.runInContext('grantTestingFunds()', ctx);
+vm.runInContext('addFunds(50000, 1000)', ctx);
+const userCreditsAfter = vm.runInContext('loadNftUserData().credits', ctx);
+if (userCreditsBefore !== userCreditsAfter) {
+    throw new Error('FALLO DE SEGURIDAD: Las funciones de inyección de fondos no fueron bloqueadas en Producción.');
+}
+console.log('✓ En Producción: Las funciones internas de inyección de fondos (grantTestingFunds, addFunds) están completamente bloqueadas');
+
+// Comprobar bloqueo de progresión estricta en producción
+vm.runInContext('localStorage.removeItem("dustrac_story_save")', ctx);
+const prodStory = vm.runInContext('loadStoryProgress()', ctx);
+if (prodStory.designerMode !== false || prodStory.unlockedTracks.length !== 1 || prodStory.unlockedTracks[0] !== 'rookie_ring') {
+    throw new Error('FALLO DE SEGURIDAD: En producción, el progreso de la historia debe arrancar estrictamente en rookie_ring con designerMode false.');
+}
+console.log('✓ En Producción: Progresión estricta forzada a Pista 1 (rookie_ring) sin trucos');
+
+// Comprobar que toggleSetting('designer') está bloqueado
+vm.runInContext('toggleSetting("designer")', ctx);
+const prodStoryAfterToggle = vm.runInContext('loadStoryProgress()', ctx);
+if (prodStoryAfterToggle.designerMode === true) {
+    throw new Error('FALLO DE SEGURIDAD: toggleSetting("designer") no debe poder activarse en Producción.');
+}
+console.log('✓ En Producción: toggleSetting("designer") rechazado sin cambios');
+
+// 2. Restaurar a modo desarrollo (false) para que el desarrollador continúe sus pruebas
+vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = false', ctx);
+vm.runInContext('openSettingsModal()', ctx);
+const modalHtmlDev = doc.getElementById('settings-modal').innerHTML;
+if (!modalHtmlDev.includes('grantTestingFunds')) {
+    throw new Error('En modo desarrollo (false), las herramientas de testing deben estar disponibles para pruebas.');
+}
+console.log('✓ En Desarrollo (false): Herramientas de testing disponibles para el creador');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
+
 
 
 
