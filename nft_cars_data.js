@@ -594,29 +594,119 @@ function calculateCarPerformance(car) {
     };
 }
 
-// Cajas Misteriosas NFT (Loot Boxes) calibradas para máxima variedad de entregas
+// =========================================================================
+// ORÁCULO DE PRECIOS DINÁMICO WEB3 ($CR / USDT)
+// Mantiene los precios de la economía (cofres, nitros, mejoras)
+// siempre equivalentes a su valor real en USDT aunque el token suba en DEX/GasPump.
+// Ejemplo: Si el token sube a $0.10, la caja de $1.00 USDT costará 10 $CR en vez de 1.000 $CR.
+// =========================================================================
+const TOKEN_ORACLE = {
+    basePriceUsd: 0.001, // Precio base de salida en curva GasPump ($0.001 USDT / token)
+
+    getPriceUsd() {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const saved = window.localStorage.getItem('apex_token_price_usd');
+                if (saved) {
+                    const parsed = parseFloat(saved);
+                    if (!isNaN(parsed) && parsed > 0) return parsed;
+                }
+            }
+        } catch(e) {}
+        return this.basePriceUsd;
+    },
+
+    setPriceUsd(newPrice) {
+        const parsed = parseFloat(newPrice);
+        if (!isNaN(parsed) && parsed > 0) {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    window.localStorage.setItem('apex_token_price_usd', parsed.toString());
+                }
+            } catch(e) {}
+            if (typeof window !== 'undefined') {
+                if (typeof window.renderHubHeader === 'function') window.renderHubHeader();
+                if (typeof window.renderCratesView === 'function') window.renderCratesView();
+                if (typeof window.renderShopView === 'function') window.renderShopView();
+            }
+            return parsed;
+        }
+        return this.getPriceUsd();
+    },
+
+    resetToDefault() {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.removeItem('apex_token_price_usd');
+            }
+        } catch(e) {}
+        if (typeof window !== 'undefined') {
+            if (typeof window.renderHubHeader === 'function') window.renderHubHeader();
+            if (typeof window.renderCratesView === 'function') window.renderCratesView();
+            if (typeof window.renderShopView === 'function') window.renderShopView();
+        }
+        return this.basePriceUsd;
+    },
+
+    calcTokensForUsd(usdAmount) {
+        const price = this.getPriceUsd();
+        if (!price || price <= 0) return Math.round(usdAmount * 1000);
+        // Calcula tokens dinámicos: usdAmount / precio_del_token (mínimo 1 token)
+        return Math.max(1, Math.round(usdAmount / price));
+    }
+};
+
+function getTokenPriceUsd() {
+    return TOKEN_ORACLE.getPriceUsd();
+}
+
+function setTokenPriceUsd(newPrice) {
+    return TOKEN_ORACLE.setPriceUsd(newPrice);
+}
+
+function calcTokensFromUsdt(usdAmount) {
+    return TOKEN_ORACLE.calcTokensForUsd(usdAmount);
+}
+
+if (typeof window !== 'undefined') {
+    window.TOKEN_ORACLE = TOKEN_ORACLE;
+    window.getTokenPriceUsd = getTokenPriceUsd;
+    window.setTokenPriceUsd = setTokenPriceUsd;
+    window.calcTokensFromUsdt = calcTokensFromUsdt;
+}
+
+// Cajas Misteriosas NFT (Loot Boxes) con Precios Anclados Dinámicamente a USDT
 const NFT_CRATES = {
     bronze: {
         id: "bronze",
         nameKey: "crate_bronze_title",
-        cost: 1000,
-        currency: "credits", // $CR (~1.00 USDT)
+        costUsd: 1.00, // Siempre 1.00 USDT
+        get cost() {
+            return typeof TOKEN_ORACLE !== 'undefined' ? TOKEN_ORACLE.calcTokensForUsd(this.costUsd) : 1000;
+        },
+        currency: "credits", // $CR
         odds: { common: 0.55, uncommon: 0.35, rare: 0.09, legendary: 0.01 },
         badgeColor: 0xcd7f32
     },
     silver: {
         id: "silver",
         nameKey: "crate_silver_title",
-        cost: 5000,
-        currency: "credits", // $CR (~5.00 USDT)
+        costUsd: 5.00, // Siempre 5.00 USDT
+        get cost() {
+            return typeof TOKEN_ORACLE !== 'undefined' ? TOKEN_ORACLE.calcTokensForUsd(this.costUsd) : 5000;
+        },
+        currency: "credits", // $CR
         odds: { common: 0.30, uncommon: 0.45, rare: 0.22, legendary: 0.03 },
         badgeColor: 0xc0c0c0
     },
     gold: {
         id: "gold",
         nameKey: "crate_gold_title",
-        cost: 25000,
-        currency: "credits", // $CR (~25.00 USDT)
+        costUsd: 25.00, // Siempre 25.00 USDT
+        get cost() {
+            return typeof TOKEN_ORACLE !== 'undefined' ? TOKEN_ORACLE.calcTokensForUsd(this.costUsd) : 25000;
+        },
+        currency: "credits", // $CR
         odds: { common: 0.08, uncommon: 0.32, rare: 0.45, legendary: 0.15 },
         badgeColor: 0xffd700
     }
@@ -985,14 +1075,14 @@ function addNitroWithAd() {
     };
 }
 
-// Comprar cápsulas de Nitro con tokens ($CR)
+// Comprar cápsulas de Nitro con tokens ($CR) dinámicos anclados a USDT
 function buyNitrosWithTokens(amount = 1) {
     const userData = loadNftUserData();
     if (typeof userData.nitros !== 'number') userData.nitros = 2;
-    const costPerUnit = 50; // 0.05 USDT
-    const cost = amount === 20 ? 700 : (amount === 5 ? 200 : amount * costPerUnit);
+    const costUsd = amount === 20 ? 0.70 : (amount === 5 ? 0.20 : amount * 0.05);
+    const cost = typeof TOKEN_ORACLE !== 'undefined' ? TOKEN_ORACLE.calcTokensForUsd(costUsd) : (amount === 20 ? 700 : (amount === 5 ? 200 : amount * 50));
     if (userData.credits < cost) {
-        return { success: false, reason: "credits_insufficient", cost: cost };
+        return { success: false, reason: "credits_insufficient", cost: cost, costUsd: costUsd };
     }
     userData.credits -= cost;
     userData.nitros += amount;
@@ -1002,6 +1092,7 @@ function buyNitrosWithTokens(amount = 1) {
         success: true,
         amount: amount,
         cost: cost,
+        costUsd: costUsd,
         newNitros: userData.nitros,
         remainingCredits: userData.credits
     };

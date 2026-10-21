@@ -1451,6 +1451,19 @@ function renderCratesView() {
             <div></div>
         </div>
 
+        <!-- Ticker de Oráculo de Precios Dinámico ($CR / USDT) -->
+        <div class="oracle-live-banner" onclick="openOracleSimulatorModal()" style="cursor: pointer; margin: -10px auto 18px; padding: 8px 18px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15)); border: 1.5px solid #10b981; border-radius: 20px; display: flex; align-items: center; justify-content: space-between; max-width: 680px; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.22); transition: all 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 9px;">
+                <span class="oracle-pulse-dot" style="display: inline-block; width: 9px; height: 9px; background: #10b981; border-radius: 50%; box-shadow: 0 0 10px #10b981; animation: pulse 1.5s infinite;"></span>
+                <span style="font-size: 12px; font-weight: 800; color: #a7f3d0; letter-spacing: 0.3px;">
+                    ORÁCULO WEB3: <strong>1 $CR = $${typeof getTokenPriceUsd === 'function' ? getTokenPriceUsd().toFixed(4) : '0.0010'} USDT</strong> (Peg Dinámico)
+                </span>
+            </div>
+            <div style="font-size: 11px; color: #6ee7b7; font-weight: 800; background: rgba(16, 185, 129, 0.2); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.4);">
+                ⚙️ SIMULADOR DEX ▶
+            </div>
+        </div>
+
         <div class="crates-grid">
             <!-- Caja Bronce (Rookie) -->
             <div class="crate-box-card crate-bronze">
@@ -1462,7 +1475,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('bronze', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_bronze_rates')}</div>
-                <div class="crate-cost-pill">💰 ${t('crate_bronze_cost')}</div>
+                <div class="crate-cost-pill">💰 ${NFT_CRATES.bronze.cost.toLocaleString()} $CR <span style="font-size: 11px; opacity: 0.85; font-weight: 600;">($${NFT_CRATES.bronze.costUsd.toFixed(2)} USDT)</span></div>
                 <button class="btn-open-box btn-bronze-action" onclick="triggerCrateOpening('bronze')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1478,7 +1491,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('silver', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_silver_rates')}</div>
-                <div class="crate-cost-pill">💰 ${t('crate_silver_cost')}</div>
+                <div class="crate-cost-pill">💰 ${NFT_CRATES.silver.cost.toLocaleString()} $CR <span style="font-size: 11px; opacity: 0.85; font-weight: 600;">($${NFT_CRATES.silver.costUsd.toFixed(2)} USDT)</span></div>
                 <button class="btn-open-box btn-silver-action" onclick="triggerCrateOpening('silver')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1494,7 +1507,7 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${t('crate_gold_rates')}</div>
-                <div class="crate-cost-pill">💰 ${t('crate_gold_cost')}</div>
+                <div class="crate-cost-pill">💰 ${NFT_CRATES.gold.cost.toLocaleString()} $CR <span style="font-size: 11px; opacity: 0.85; font-weight: 600;">($${NFT_CRATES.gold.costUsd.toFixed(2)} USDT)</span></div>
                 <button class="btn-open-box btn-gold-action" onclick="triggerCrateOpening('gold')">
                     ${t('btn_open_crate')}
                 </button>
@@ -1667,29 +1680,34 @@ function renderShopView() {
                 </div>
             </div>
 
-            <!-- Cápsulas de Nitro N2O con Tokens $CR -->
-            <h3 class="shop-section-title">🧪 CÁPSULAS DE NITRO N₂O DE COMPETICIÓN</h3>
-            <p class="shop-section-subtitle">Aumenta tu stock de Nitro (4.0s de turbo boost) para carreras oficiales exclusivamente con tokens $CR</p>
+            <!-- Cápsulas de Nitro N2O con Tokens $CR Dinámicos anclados a USDT -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px; margin-bottom: 6px;">
+                <h3 class="shop-section-title" style="margin: 0;">🧪 CÁPSULAS DE NITRO N₂O DE COMPETICIÓN</h3>
+                <span style="font-size: 11px; color: #34d399; font-weight: bold; background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    🟢 Oráculo: 1 $CR = $${typeof getTokenPriceUsd === 'function' ? getTokenPriceUsd().toFixed(4) : '0.0010'}
+                </span>
+            </div>
+            <p class="shop-section-subtitle">Aumenta tu stock de Nitro (4.0s de turbo boost) anclado a precios fijos en USDT calculados automáticamente</p>
             <div class="shop-items-grid">
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪</div>
                     <div class="shop-item-name">1x Cápsula Nitro N₂O</div>
                     <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual (+4.0s boost) ~0.05 USDT</div>
-                    <div class="shop-item-price">💰 50 $CR</div>
+                    <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.05).toLocaleString() : '50'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(1)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪🧪</div>
                     <div class="shop-item-name">5x Pack Nitros N₂O</div>
                     <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens (~0.20 USDT total)</div>
-                    <div class="shop-item-price">💰 200 $CR</div>
+                    <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.20).toLocaleString() : '200'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(5)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">📦🧪</div>
                     <div class="shop-item-name">20x Stash Pro Liga</div>
                     <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 30% en tokens (~0.70 USDT total)</div>
-                    <div class="shop-item-price">💰 700 $CR</div>
+                    <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.70).toLocaleString() : '700'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(20)">🛒 ${t('shop_buy')}</button>
                 </div>
             </div>
@@ -1986,13 +2004,13 @@ function openNitroRefillModal() {
                     <!-- Opción 2: Comprar 1 con Tokens -->
                     <button class="btn-nitro-option btn-nitro-buy-1" onclick="handleBuyNitro(1)" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: 1.5px solid #60a5fa; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);">
                         <span>🪙 COMPRAR 1 CÁPSULA (~0.05 USDT)</span>
-                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">50 $CR</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.05).toLocaleString() : '50'} $CR</span>
                     </button>
 
                     <!-- Opción 3: Pack 5 con Descuento -->
                     <button class="btn-nitro-option btn-nitro-buy-5" onclick="handleBuyNitro(5)" style="background: linear-gradient(135deg, #8b5cf6, #d946ef); border: 1.5px solid #c084fc; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(217, 70, 239, 0.35);">
                         <span>🔥 PACK 5 CÁPSULAS (~0.20 USDT)</span>
-                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">200 $CR</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.20).toLocaleString() : '200'} $CR</span>
                     </button>
                 </div>
             </div>
@@ -2013,6 +2031,148 @@ function closeNitroRefillModal() {
     }
 }
 window.closeNitroRefillModal = closeNitroRefillModal;
+
+// =========================================================================
+// SIMULADOR INTERACTIVO DEL ORÁCULO DE PRECIOS $CR
+// Permite al usuario/admin probar qué pasa cuando el token sube (ej: $0.005, $0.01, $0.10)
+// =========================================================================
+function openOracleSimulatorModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('oracle-simulator-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'oracle-simulator-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const currentPrice = typeof getTokenPriceUsd === 'function' ? getTokenPriceUsd() : 0.001;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+
+    const updatePreviewHtml = (testP) => {
+        const p = parseFloat(testP) || 0.001;
+        const cBronze = Math.max(1, Math.round(1.00 / p));
+        const cSilver = Math.max(1, Math.round(5.00 / p));
+        const cGold = Math.max(1, Math.round(25.00 / p));
+        const cNitro1 = Math.max(1, Math.round(0.05 / p));
+        const cNitro5 = Math.max(1, Math.round(0.20 / p));
+        return `
+            <div style="background: rgba(15, 23, 42, 0.9); border: 1.5px solid #10b981; border-radius: 12px; padding: 12px; margin: 14px 0; text-align: left; font-size: 11.5px; line-height: 1.6;">
+                <div style="color: #6ee7b7; font-weight: 900; margin-bottom: 6px; font-size: 12px;">📊 RESULTADO DINÁMICO A $${p.toFixed(4)} USDT:</div>
+                <div style="color: #e2e8f0;">📦 <strong>Cofre Común ($1.00):</strong> <span style="color: #fde047; font-weight: 800;">${cBronze.toLocaleString()} $CR</span></div>
+                <div style="color: #e2e8f0;">🥈 <strong>Cofre Plata ($5.00):</strong> <span style="color: #fde047; font-weight: 800;">${cSilver.toLocaleString()} $CR</span></div>
+                <div style="color: #e2e8f0;">👑 <strong>Cofre Oro ($25.00):</strong> <span style="color: #fde047; font-weight: 800;">${cGold.toLocaleString()} $CR</span></div>
+                <div style="color: #e2e8f0;">🧪 <strong>1x Nitro ($0.05):</strong> <span style="color: #fde047; font-weight: 800;">${cNitro1.toLocaleString()} $CR</span></div>
+                <div style="color: #e2e8f0;">🔥 <strong>5x Pack Nitros ($0.20):</strong> <span style="color: #fde047; font-weight: 800;">${cNitro5.toLocaleString()} $CR</span></div>
+            </div>
+        `;
+    };
+
+    modal.innerHTML = `
+        <div class="ad-modal-card oracle-modal-card" style="border: 2px solid #10b981; box-shadow: 0 0 35px rgba(16, 185, 129, 0.45); max-width: 460px; text-align: center;">
+            <div class="ad-header-row" style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="ad-badge" style="background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 800;">🟢 ORÁCULO DE COTIZACIÓN WEB3</span>
+                <button class="modal-close-btn" onclick="closeOracleSimulatorModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 2px 6px;">✕</button>
+            </div>
+            <div style="padding: 10px 4px;">
+                <h3 style="color: #34d399; font-size: 17px; margin: 8px 0 4px; font-weight: 900;">PEG ESTABLE $CR / USDT</h3>
+                <p style="color: #94a3b8; font-size: 12px; line-height: 1.45; margin-bottom: 12px;">
+                    Todos los objetos del juego están anclados a su valor real en USDT. Si el token sube de precio en DEX / GasPump, la cantidad de tokens $CR requerida disminuye automáticamente para que a los jugadores siempre les cueste exactamente lo mismo.
+                </p>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px;">
+                    <button onclick="applyOraclePreset(0.001)" style="background: #1e293b; border: 1px solid #10b981; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">🚀 Salida GasPump ($0.001)</button>
+                    <button onclick="applyOraclePreset(0.005)" style="background: #1e293b; border: 1px solid #38bdf8; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">📈 5x ($0.005)</button>
+                    <button onclick="applyOraclePreset(0.010)" style="background: #1e293b; border: 1px solid #f59e0b; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">🔥 10x ($0.010)</button>
+                    <button onclick="applyOraclePreset(0.100)" style="background: linear-gradient(135deg, rgba(236,72,153,0.3), rgba(168,85,247,0.3)); border: 1.5px solid #ec4899; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: 900;">🌕 100x Moon ($0.100)</button>
+                    <button onclick="applyOraclePreset(0.500)" style="background: #1e293b; border: 1px solid #a855f7; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">💎 500x ($0.500)</button>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                    <label style="color: #cbd5e1; font-size: 12px; font-weight: bold;">Precio Manual (USD):</label>
+                    <input type="number" id="oracle-custom-input" step="0.0001" min="0.0001" value="${currentPrice}" style="background: #0f172a; border: 1.5px solid #10b981; color: #fde047; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: bold; width: 110px; text-align: center;" oninput="updateOraclePreview(this.value)">
+                </div>
+
+                <div id="oracle-preview-box">
+                    ${updatePreviewHtml(currentPrice)}
+                </div>
+
+                <div style="display: flex; gap: 8px; justify-content: center; margin-top: 14px;">
+                    <button onclick="saveOracleCustomPrice()" style="background: linear-gradient(135deg, #059669, #10b981); border: none; color: #fff; padding: 10px 18px; border-radius: 10px; font-weight: 900; font-size: 12px; cursor: pointer;">
+                        ✓ APLICAR AL JUEGO
+                    </button>
+                    <button onclick="resetOracleDefaultPrice()" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #94a3b8; padding: 10px 14px; border-radius: 10px; font-weight: bold; font-size: 12px; cursor: pointer;">
+                        🔄 RESTABLECER ($0.001)
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+window.openOracleSimulatorModal = openOracleSimulatorModal;
+
+function closeOracleSimulatorModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('oracle-simulator-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+}
+window.closeOracleSimulatorModal = closeOracleSimulatorModal;
+
+function updateOraclePreview(val) {
+    const box = document.getElementById('oracle-preview-box');
+    if (!box) return;
+    const p = parseFloat(val) || 0.001;
+    const cBronze = Math.max(1, Math.round(1.00 / p));
+    const cSilver = Math.max(1, Math.round(5.00 / p));
+    const cGold = Math.max(1, Math.round(25.00 / p));
+    const cNitro1 = Math.max(1, Math.round(0.05 / p));
+    const cNitro5 = Math.max(1, Math.round(0.20 / p));
+    box.innerHTML = `
+        <div style="background: rgba(15, 23, 42, 0.9); border: 1.5px solid #10b981; border-radius: 12px; padding: 12px; margin: 14px 0; text-align: left; font-size: 11.5px; line-height: 1.6;">
+            <div style="color: #6ee7b7; font-weight: 900; margin-bottom: 6px; font-size: 12px;">📊 RESULTADO DINÁMICO A $${p.toFixed(4)} USDT:</div>
+            <div style="color: #e2e8f0;">📦 <strong>Cofre Común ($1.00):</strong> <span style="color: #fde047; font-weight: 800;">${cBronze.toLocaleString()} $CR</span></div>
+            <div style="color: #e2e8f0;">🥈 <strong>Cofre Plata ($5.00):</strong> <span style="color: #fde047; font-weight: 800;">${cSilver.toLocaleString()} $CR</span></div>
+            <div style="color: #e2e8f0;">👑 <strong>Cofre Oro ($25.00):</strong> <span style="color: #fde047; font-weight: 800;">${cGold.toLocaleString()} $CR</span></div>
+            <div style="color: #e2e8f0;">🧪 <strong>1x Nitro ($0.05):</strong> <span style="color: #fde047; font-weight: 800;">${cNitro1.toLocaleString()} $CR</span></div>
+            <div style="color: #e2e8f0;">🔥 <strong>5x Pack Nitros ($0.20):</strong> <span style="color: #fde047; font-weight: 800;">${cNitro5.toLocaleString()} $CR</span></div>
+        </div>
+    `;
+}
+window.updateOraclePreview = updateOraclePreview;
+
+function applyOraclePreset(price) {
+    hubAudio.playClick();
+    const inp = document.getElementById('oracle-custom-input');
+    if (inp) inp.value = price;
+    updateOraclePreview(price);
+    setTokenPriceUsd(price);
+    alert(`🟢 Oráculo actualizado a $${price} USDT por token. ¡Todos los cofres y nitros se han recalculado automáticamente!`);
+    closeOracleSimulatorModal();
+}
+window.applyOraclePreset = applyOraclePreset;
+
+function saveOracleCustomPrice() {
+    hubAudio.playClick();
+    const inp = document.getElementById('oracle-custom-input');
+    const p = inp ? parseFloat(inp.value) : 0.001;
+    setTokenPriceUsd(p);
+    alert(`🟢 Cotización fijada en $${p.toFixed(4)} USDT. ¡Precios en tokens actualizados en vivo!`);
+    closeOracleSimulatorModal();
+}
+window.saveOracleCustomPrice = saveOracleCustomPrice;
+
+function resetOracleDefaultPrice() {
+    hubAudio.playClick();
+    if (typeof TOKEN_ORACLE !== 'undefined') TOKEN_ORACLE.resetToDefault();
+    alert(`🔄 Oráculo restablecido al precio base de salida ($0.0010 USDT / token).`);
+    closeOracleSimulatorModal();
+}
+window.resetOracleDefaultPrice = resetOracleDefaultPrice;
 
 function handleBuyNitro(amount = 1) {
     hubAudio.playClick();

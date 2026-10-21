@@ -1784,6 +1784,63 @@ if (totalBurned !== 190 + 5000) { // +20% de 25,000 = 5,000 $CR
 }
 console.log('✓ Apertura de Cofre Oro por 25,000 $CR y quema deflacionaria de 5,000 $CR verificada');
 
+console.log('\n--- VERIFICANDO ORÁCULO DINÁMICO Y PEG A USDT ANTE SUBIDA DEL TOKEN (V83) ---');
+// Simular subida del token de $0.001 a $0.10 (100x pump)
+vm.runInContext('setTokenPriceUsd(0.10)', ctx);
+const pricePumped = vm.runInContext('getTokenPriceUsd()', ctx);
+if (pricePumped !== 0.10) {
+    throw new Error(`Precio de oráculo debe ser 0.10: ${pricePumped}`);
+}
+
+// Comprobar recálculo dinámico de cofres
+const pumpedBronze = vm.runInContext('NFT_CRATES.bronze.cost', ctx);
+const pumpedSilver = vm.runInContext('NFT_CRATES.silver.cost', ctx);
+const pumpedGold = vm.runInContext('NFT_CRATES.gold.cost', ctx);
+
+if (pumpedBronze !== 10) { // 1.00 USDT / 0.10 = 10 $CR
+    throw new Error(`A $0.10/token, cofre bronce debe costar 10 $CR (actual: ${pumpedBronze})`);
+}
+if (pumpedSilver !== 50) { // 5.00 USDT / 0.10 = 50 $CR
+    throw new Error(`A $0.10/token, cofre plata debe costar 50 $CR (actual: ${pumpedSilver})`);
+}
+if (pumpedGold !== 250) { // 25.00 USDT / 0.10 = 250 $CR
+    throw new Error(`A $0.10/token, cofre oro debe costar 250 $CR (actual: ${pumpedGold})`);
+}
+console.log('✓ Recálculo dinámico verificado tras pump a $0.10/token:');
+console.log(`   - Cofre Común (1.00 USDT): 1.000 $CR -> ${pumpedBronze} $CR`);
+console.log(`   - Cofre Plata (5.00 USDT): 5.000 $CR -> ${pumpedSilver} $CR`);
+console.log(`   - Cofre Oro (25.00 USDT): 25.000 $CR -> ${pumpedGold} $CR`);
+
+// Comprobar compra de Nitros con token a $0.10
+const resNitroPump = vm.runInContext('buyNitrosWithTokens(1)', ctx);
+if (!resNitroPump.success || resNitroPump.cost !== 1) { // 0.05 USDT / 0.10 = 0.5 -> redondeo = 1 $CR
+    throw new Error(`A $0.10/token, 1 nitro debe costar 1 $CR (actual: ${JSON.stringify(resNitroPump)})`);
+}
+const resNitro5Pump = vm.runInContext('buyNitrosWithTokens(5)', ctx);
+if (!resNitro5Pump.success || resNitro5Pump.cost !== 2) { // 0.20 USDT / 0.10 = 2 $CR
+    throw new Error(`A $0.10/token, 5 nitros deben costar 2 $CR (actual: ${JSON.stringify(resNitro5Pump)})`);
+}
+console.log(`✓ Compra de nitros adaptada a $0.10/token: 1 Nitro=${resNitroPump.cost} $CR, Pack 5=${resNitro5Pump.cost} $CR`);
+
+// Comprobar apertura de cofre común con token a $0.10
+const creditsBeforeOpen = vm.runInContext('loadNftUserData().credits', ctx);
+const resOpenPump = vm.runInContext('openMysteryCrate("bronze")', ctx);
+if (!resOpenPump.success || resOpenPump.car == null) {
+    throw new Error(`Fallo al abrir cofre bronce dinámico: ${JSON.stringify(resOpenPump)}`);
+}
+const creditsAfterOpen = vm.runInContext('loadNftUserData().credits', ctx);
+if (creditsBeforeOpen - creditsAfterOpen !== 10) {
+    throw new Error(`Se debieron descontar exactamente 10 $CR (actual: ${creditsBeforeOpen - creditsAfterOpen})`);
+}
+console.log('✓ Apertura de Cofre Común a $0.10 descontó exactamente 10 $CR (equivalente a 1.00 USDT)');
+
+// Restablecer al precio base
+vm.runInContext('TOKEN_ORACLE.resetToDefault()', ctx);
+if (vm.runInContext('NFT_CRATES.bronze.cost', ctx) !== 1000) {
+    throw new Error('Al restablecer a $0.001, cofre bronce debe volver a 1,000 $CR');
+}
+console.log('✓ Restablecimiento del Oráculo a precio base ($0.0010) verificado con éxito');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');
