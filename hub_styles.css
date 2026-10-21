@@ -3378,6 +3378,53 @@
     font-size: 12px;
 }
 
+/* Botones de Ayuda / Reglas con Interrogante (❓) */
+.btn-comp-help-question {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 245, 212, 0.15);
+    border: 1.5px solid #00f5d4;
+    color: #00f5d4;
+    font-size: 15px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 12px rgba(0, 245, 212, 0.25);
+    flex-shrink: 0;
+}
+
+.btn-comp-help-question:hover {
+    transform: scale(1.12);
+    background: #00f5d4;
+    color: #000;
+    box-shadow: 0 0 18px rgba(0, 245, 212, 0.5);
+}
+
+.btn-comp-help-pill {
+    padding: 6px 14px;
+    background: rgba(0, 245, 212, 0.12);
+    border: 1px solid rgba(0, 245, 212, 0.4);
+    border-radius: 20px;
+    color: #00f5d4;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.btn-comp-help-pill:hover {
+    background: rgba(0, 245, 212, 0.25);
+    border-color: #00f5d4;
+    transform: translateY(-1px);
+}
+
 /* MODAL DE LOBBY & MATCHMAKING */
 .wager-lobby-dialog {
     background: #0d121d;

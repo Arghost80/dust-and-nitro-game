@@ -2572,7 +2572,7 @@ function renderCompView() {
                 <h2 class="view-title">🪙 SALAS DE APUESTAS & COMPETICIÓN</h2>
                 <div class="garage-count-tag">4 JUGADORES POR SALA • APUESTAS 5 A 50 TOKENS • REPARTO 95% BOTE NETO</div>
             </div>
-            <div></div>
+            <button class="btn-comp-help-question" onclick="openWagerRulesModal()" title="¿Cómo funcionan las apuestas y el reparto del bote?">❓</button>
         </div>
 
         <div class="wager-comp-container">
@@ -2620,29 +2620,14 @@ function renderCompView() {
                 </div>
             </div>
 
-            <!-- REGLAS TRANSPARENTES DE COMPETICIÓN -->
-            <div class="wager-rules-card">
-                <div style="font-size: 13px; font-weight: 900; color: #00f5d4; display: flex; align-items: center; gap: 8px;">
-                    <span>⚖️</span> SISTEMA OFICIAL DE APUESTAS Y TOKENOMICS TRANSPARENTE
-                </div>
-                <div class="wager-rules-grid">
-                    <div class="wager-rule-item">
-                        <strong>👥 4 Corredores por Sala</strong>
-                        Parrilla de 4 coches en circuito cerrado. Matchmaking P2P en tiempo real.
-                    </div>
-                    <div class="wager-rule-item">
-                        <strong>⏱️ Relleno Inteligente con IA</strong>
-                        Si la sala no se llena en unos segundos, la IA ocupa las plazas vacantes para no hacerte esperar.
-                    </div>
-                    <div class="wager-rule-item">
-                        <strong>🤖 Aporte Reducido de IA (50%)</strong>
-                        Si compiten bots IA, aportan el 50% de la apuesta, adaptando el bote de forma justa.
-                    </div>
-                    <div class="wager-rule-item">
-                        <strong>📊 Reparto 95% Bote al Podio</strong>
-                        El 95% del bote neto se reparte íntegramente al podio (1º: 70%, 2º: 20%, 3º: 10%), con un 5% destinado a fondo de recompensas comunitarias y quema de tokens 🔥.
-                    </div>
-                </div>
+            <!-- CABECERA DE SALAS DE APUESTAS CON BOTÓN DE INFORMACIÓN (?) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 16px 0 10px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="margin: 0; font-size: 14.5px; font-weight: 900; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+                    <span>🏎️</span> SALAS DE APUESTAS P2P EN VIVO (4 PILOTOS)
+                </h3>
+                <button class="btn-comp-help-pill" onclick="openWagerRulesModal()" title="¿Cómo funcionan las salas, la IA y el reparto?">
+                    ❓ ¿CÓMO FUNCIONA? (REGLAS)
+                </button>
             </div>
 
             <!-- LAS 4 SALAS DE APUESTAS (5, 10, 20 y 50 Tokens) -->
@@ -3781,6 +3766,91 @@ function handleEnterWeeklyTournament() {
 function closeWeeklyTournamentModal() {
     hubAudio.playClick();
     const modal = document.getElementById('weekly-tournament-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+// =========================================================================
+// 8.0 MODAL EXPLICATIVO DE REGLAS DE APUESTAS Y TOKENOMICS (❓)
+// =========================================================================
+function openWagerRulesModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('wager-rules-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'wager-rules-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 540px;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(0, 245, 212, 0.2), rgba(0, 187, 249, 0.2)); border-bottom: 1px solid rgba(0, 245, 212, 0.4);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 26px;">⚖️</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 16.5px; color: #00f5d4;">SISTEMA OFICIAL DE APUESTAS Y TOKENOMICS</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Reglas transparentes de las salas y reparto de premios</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeWagerRulesModal()">✖</button>
+            </div>
+
+            <div class="settings-body" style="padding: 16px 18px; max-height: 480px; overflow-y: auto;">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <strong style="color: #00f5d4; font-size: 13px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span>👥</span> 4 Corredores por Sala
+                        </strong>
+                        <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.45;">
+                            Parrilla de 4 coches en circuito cerrado. Matchmaking P2P en tiempo real entre pilotos de la comunidad.
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <strong style="color: #00f5d4; font-size: 13px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span>⏱️</span> Relleno Inteligente con IA
+                        </strong>
+                        <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.45;">
+                            Si la sala no se llena en unos segundos, la IA ocupa las plazas vacantes para que nunca tengas que esperar para competir.
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <strong style="color: #00f5d4; font-size: 13px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span>🤖</span> Aporte Reducido de IA (50%)
+                        </strong>
+                        <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.45;">
+                            Si compiten bots IA, aportan el 50% de la apuesta establecida, adaptando el bote de forma justa y transparente.
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px;">
+                        <strong style="color: #00f5d4; font-size: 13px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                            <span>📊</span> Reparto 95% Bote al Podio
+                        </strong>
+                        <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.45;">
+                            El 95% del bote neto se reparte íntegramente al podio (1º: 70%, 2º: 20%, 3º: 10%), con un 5% destinado a fondo de recompensas comunitarias (2%), quema deflacionaria de tokens (1%) y tesorería de plataforma (2%) 🔥.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-footer">
+                <button class="btn-settings-save" onclick="closeWagerRulesModal()">ENTENDIDO</button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function closeWagerRulesModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('wager-rules-modal');
     if (modal) {
         modal.style.display = 'none';
         modal.classList.add('hidden');

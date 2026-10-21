@@ -1515,6 +1515,24 @@ if (!lbCleanModal.innerHTML.includes('+300 $CR') || !lbCleanModal.innerHTML.incl
 }
 console.log('✓ Clasificación Mundial verificada: Recompensas de podio sostenibles (+300, +150, +75 $CR) sin desangrar el token');
 
+// 2.2 Verificar que las reglas de apuestas están en el botón de ayuda ❓ y no saturan la pantalla
+if (compHtml.includes('wager-rules-card')) {
+    throw new Error('view-comp no debe contener el bloque gigante de reglas inline, debe estar en el botón ❓');
+}
+if (!compHtml.includes('btn-comp-help-question') || !compHtml.includes('openWagerRulesModal()')) {
+    throw new Error('view-comp debe contener el botón de interrogante ❓ para consultar reglas');
+}
+vm.runInContext('openWagerRulesModal()', ctx);
+const rulesModal = doc.getElementById('wager-rules-modal');
+if (!rulesModal || !rulesModal.innerHTML.includes('SISTEMA OFICIAL DE APUESTAS Y TOKENOMICS') || !rulesModal.innerHTML.includes('4 Corredores por Sala') || !rulesModal.innerHTML.includes('Relleno Inteligente con IA')) {
+    throw new Error('El modal explicativo de reglas debe contener el desglose completo');
+}
+vm.runInContext('closeWagerRulesModal()', ctx);
+if (rulesModal.style.display !== 'none') {
+    throw new Error('Fallo al cerrar el modal explicativo de reglas');
+}
+console.log('✓ Sistema de Apuestas limpio: Explicación de tokenomics trasladada al botón ❓ con modal emergente');
+
 // 3. Verificar la nueva vista de Inventario (view-inventory)
 vm.runInContext('renderInventoryView()', ctx);
 const invHtml = doc.getElementById('view-inventory').innerHTML;
