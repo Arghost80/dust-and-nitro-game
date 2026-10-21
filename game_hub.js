@@ -1674,22 +1674,22 @@ function renderShopView() {
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪</div>
                     <div class="shop-item-name">1x Cápsula Nitro N₂O</div>
-                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual de boost explosivo</div>
-                    <div class="shop-item-price">💰 10 $CR</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual (+4.0s boost) ~0.05 USDT</div>
+                    <div class="shop-item-price">💰 50 $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(1)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪🧪</div>
                     <div class="shop-item-name">5x Pack Nitros N₂O</div>
-                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens (8 $CR/cápsula)</div>
-                    <div class="shop-item-price">💰 40 $CR</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens (~0.20 USDT total)</div>
+                    <div class="shop-item-price">💰 200 $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(5)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">📦🧪</div>
                     <div class="shop-item-name">20x Stash Pro Liga</div>
-                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Pack torneo de alta competición (7.5 $CR/u)</div>
-                    <div class="shop-item-price">💰 150 $CR</div>
+                    <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 30% en tokens (~0.70 USDT total)</div>
+                    <div class="shop-item-price">💰 700 $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(20)">🛒 ${t('shop_buy')}</button>
                 </div>
             </div>
@@ -1963,7 +1963,7 @@ function openNitroRefillModal() {
                 <div style="font-size: 48px; margin-bottom: 8px;">🧪</div>
                 <h3 style="color: #38bdf8; font-size: 18px; margin-bottom: 6px; font-weight: 900; letter-spacing: 0.5px;">CÁPSULAS DE ÓXIDO NITROSO</h3>
                 <p style="color: #94a3b8; font-size: 12px; line-height: 1.45; margin-bottom: 14px;">
-                    Inyecta <strong>2.0 segundos</strong> de velocidad y aceleración extra en carrera. Máximo <strong>2 por carrera</strong>. Consíguelos viendo anuncios o con tokens.
+                    Inyecta <strong>4.0 segundos</strong> de velocidad y aceleración extra en carrera. Máximo <strong>2 por carrera</strong>. Consíguelos viendo anuncios o con tokens.
                 </p>
                 <div style="background: rgba(15, 23, 42, 0.85); border: 1.5px solid #0284c7; border-radius: 12px; padding: 10px; margin-bottom: 16px; display: flex; justify-content: space-around; align-items: center;">
                     <div>
@@ -1985,14 +1985,14 @@ function openNitroRefillModal() {
 
                     <!-- Opción 2: Comprar 1 con Tokens -->
                     <button class="btn-nitro-option btn-nitro-buy-1" onclick="handleBuyNitro(1)" style="background: linear-gradient(135deg, #0284c7, #2563eb); border: 1.5px solid #60a5fa; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);">
-                        <span>🪙 COMPRAR 1 CÁPSULA</span>
-                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">10 $CR</span>
+                        <span>🪙 COMPRAR 1 CÁPSULA (~0.05 USDT)</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">50 $CR</span>
                     </button>
 
                     <!-- Opción 3: Pack 5 con Descuento -->
                     <button class="btn-nitro-option btn-nitro-buy-5" onclick="handleBuyNitro(5)" style="background: linear-gradient(135deg, #8b5cf6, #d946ef); border: 1.5px solid #c084fc; color: #fff; padding: 12px 14px; border-radius: 12px; font-weight: 900; font-size: 12.5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(217, 70, 239, 0.35);">
-                        <span>🔥 PACK 5 CÁPSULAS (-20%)</span>
-                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">40 $CR</span>
+                        <span>🔥 PACK 5 CÁPSULAS (~0.20 USDT)</span>
+                        <span style="background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 8px; color: #fde047; font-size: 11px;">200 $CR</span>
                     </button>
                 </div>
             </div>

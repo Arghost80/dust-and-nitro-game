@@ -1234,10 +1234,10 @@ if (!nitroAdRes.success || nitroAdRes.newNitros !== initNitros + 1) {
 }
 console.log(`✓ Recompensa de anuncio verificada: +1 Nitro (Total: ${nitroAdRes.newNitros})`);
 
-// Comprobar compra de Nitros con Tokens $CR
+// Comprobar compra de Nitros con Tokens $CR (50 $CR = 0.05 USDT)
 const nitroBuyRes = vm.runInContext('buyNitrosWithTokens(1)', ctx);
-if (!nitroBuyRes.success || nitroBuyRes.amount !== 1 || nitroBuyRes.cost !== 10) {
-    throw new Error('buyNitrosWithTokens debe descontar 10 $CR y añadir 1 Nitro');
+if (!nitroBuyRes.success || nitroBuyRes.amount !== 1 || nitroBuyRes.cost !== 50) {
+    throw new Error('buyNitrosWithTokens debe descontar 50 $CR (0.05 USDT) y añadir 1 Nitro');
 }
 console.log(`✓ Compra de Nitro con tokens verificada (Coste: ${nitroBuyRes.cost} $CR | Nuevo total: ${nitroBuyRes.newNitros})`);
 
@@ -1719,16 +1719,16 @@ const crateBronze = vm.runInContext('NFT_CRATES.bronze', ctx);
 const crateSilver = vm.runInContext('NFT_CRATES.silver', ctx);
 const crateGold = vm.runInContext('NFT_CRATES.gold', ctx);
 
-if (crateBronze.cost !== 500 || crateBronze.currency !== 'credits') {
-    throw new Error(`Cofre bronce debe ser 500 credits: ${JSON.stringify(crateBronze)}`);
+if (crateBronze.cost !== 1000 || crateBronze.currency !== 'credits') {
+    throw new Error(`Cofre bronce debe ser 1000 credits: ${JSON.stringify(crateBronze)}`);
 }
-if (crateSilver.cost !== 2500 || crateSilver.currency !== 'credits') {
-    throw new Error(`Cofre plata debe ser 2500 credits: ${JSON.stringify(crateSilver)}`);
+if (crateSilver.cost !== 5000 || crateSilver.currency !== 'credits') {
+    throw new Error(`Cofre plata debe ser 5000 credits: ${JSON.stringify(crateSilver)}`);
 }
-if (crateGold.cost !== 15000 || crateGold.currency !== 'credits') {
-    throw new Error(`Cofre oro debe ser 15000 credits: ${JSON.stringify(crateGold)}`);
+if (crateGold.cost !== 25000 || crateGold.currency !== 'credits') {
+    throw new Error(`Cofre oro debe ser 25000 credits: ${JSON.stringify(crateGold)}`);
 }
-console.log('✓ Calibración de cofres en $CR verificada: Bronce=500 $CR, Plata=2,500 $CR, Oro=15,000 $CR (0 gemas necesarias)');
+console.log('✓ Calibración de cofres en $CR verificada: Bronce=1,000 $CR (~1.00 USDT), Plata=5,000 $CR (~5.00 USDT), Oro=25,000 $CR (~25.00 USDT) (0 gemas necesarias)');
 
 // 2. Verificar que todos los stages de tuning son 0 gemas
 const branches = vm.runInContext('STAT_UPGRADE_BRANCHES', ctx);
@@ -1741,48 +1741,48 @@ for (const [bKey, branch] of Object.entries(branches)) {
 }
 console.log('✓ Modificaciones y tuning al 100% en $CR tokens: 5 ramas x 5 stages con 0 gemas requeridas');
 
-// 3. Verificar compras de Nitros (1 por 10 $CR, 5 por 40 $CR, 20 por 150 $CR) y quema del 20%
+// 3. Verificar compras de Nitros (1 por 50 $CR, 5 por 200 $CR, 20 por 700 $CR) y quema del 20%
 vm.runInContext(`
     const uData = loadNftUserData();
-    uData.credits = 50000;
+    uData.credits = 100000;
     uData.nitros = 2;
     uData.burnedTokens = 0;
     saveNftUserData(uData);
 `, ctx);
 
 const resN1 = vm.runInContext('buyNitrosWithTokens(1)', ctx);
-if (!resN1.success || resN1.cost !== 10 || resN1.newNitros !== 3) {
+if (!resN1.success || resN1.cost !== 50 || resN1.newNitros !== 3) {
     throw new Error(`Error en compra de 1 nitro: ${JSON.stringify(resN1)}`);
 }
 const resN5 = vm.runInContext('buyNitrosWithTokens(5)', ctx);
-if (!resN5.success || resN5.cost !== 40 || resN5.newNitros !== 8) {
+if (!resN5.success || resN5.cost !== 200 || resN5.newNitros !== 8) {
     throw new Error(`Error en compra de 5 nitros: ${JSON.stringify(resN5)}`);
 }
 const resN20 = vm.runInContext('buyNitrosWithTokens(20)', ctx);
-if (!resN20.success || resN20.cost !== 150 || resN20.newNitros !== 28) {
+if (!resN20.success || resN20.cost !== 700 || resN20.newNitros !== 28) {
     throw new Error(`Error en compra de 20 nitros: ${JSON.stringify(resN20)}`);
 }
 const burnedTokens = vm.runInContext('loadNftUserData().burnedTokens', ctx);
-if (burnedTokens !== 40) { // 20% de (10 + 40 + 150) = 20% de 200 = 40 $CR
+if (burnedTokens !== 190) { // 20% de (50 + 200 + 700) = 20% de 950 = 190 $CR
     throw new Error(`Tokens quemados en nitros incorrectos: ${burnedTokens}`);
 }
-console.log('✓ Packs de Nitros en $CR verificados: 1x=10 $CR, 5x=40 $CR, 20x=150 $CR (+20% quema deflacionaria)');
+console.log('✓ Packs de Nitros en $CR verificados: 1x=50 $CR (~0.05 USDT), 5x=200 $CR (~0.20 USDT), 20x=700 $CR (~0.70 USDT) (+20% quema deflacionaria)');
 
-// 4. Apertura de Cofre Oro Apex Pro pagado con 15,000 $CR
+// 4. Apertura de Cofre Oro Apex Pro pagado con 25,000 $CR
 const beforeGoldCredits = vm.runInContext('loadNftUserData().credits', ctx);
 const resGold = vm.runInContext('openMysteryCrate("gold")', ctx);
 if (!resGold.success || resGold.car == null) {
     throw new Error(`Fallo al abrir cofre oro con $CR: ${JSON.stringify(resGold)}`);
 }
 const afterGoldCredits = vm.runInContext('loadNftUserData().credits', ctx);
-if (beforeGoldCredits - afterGoldCredits !== 15000) {
+if (beforeGoldCredits - afterGoldCredits !== 25000) {
     throw new Error(`Deducción de créditos para cofre oro incorrecta: ${beforeGoldCredits - afterGoldCredits}`);
 }
 const totalBurned = vm.runInContext('loadNftUserData().burnedTokens', ctx);
-if (totalBurned !== 40 + 3000) { // +20% de 15,000 = 3,000 $CR
+if (totalBurned !== 190 + 5000) { // +20% de 25,000 = 5,000 $CR
     throw new Error(`Tokens quemados acumulados tras cofre oro incorrectos: ${totalBurned}`);
 }
-console.log('✓ Apertura de Cofre Oro por 15,000 $CR y quema deflacionaria de 3,000 $CR verificada');
+console.log('✓ Apertura de Cofre Oro por 25,000 $CR y quema deflacionaria de 5,000 $CR verificada');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

@@ -599,24 +599,24 @@ const NFT_CRATES = {
     bronze: {
         id: "bronze",
         nameKey: "crate_bronze_title",
-        cost: 500,
-        currency: "credits", // $CR
+        cost: 1000,
+        currency: "credits", // $CR (~1.00 USDT)
         odds: { common: 0.55, uncommon: 0.35, rare: 0.09, legendary: 0.01 },
         badgeColor: 0xcd7f32
     },
     silver: {
         id: "silver",
         nameKey: "crate_silver_title",
-        cost: 2500,
-        currency: "credits", // $CR
+        cost: 5000,
+        currency: "credits", // $CR (~5.00 USDT)
         odds: { common: 0.30, uncommon: 0.45, rare: 0.22, legendary: 0.03 },
         badgeColor: 0xc0c0c0
     },
     gold: {
         id: "gold",
         nameKey: "crate_gold_title",
-        cost: 15000,
-        currency: "credits", // $CR
+        cost: 25000,
+        currency: "credits", // $CR (~25.00 USDT)
         odds: { common: 0.08, uncommon: 0.32, rare: 0.45, legendary: 0.15 },
         badgeColor: 0xffd700
     }
@@ -989,8 +989,8 @@ function addNitroWithAd() {
 function buyNitrosWithTokens(amount = 1) {
     const userData = loadNftUserData();
     if (typeof userData.nitros !== 'number') userData.nitros = 2;
-    const costPerUnit = 10;
-    const cost = amount === 20 ? 150 : (amount === 5 ? 40 : amount * costPerUnit);
+    const costPerUnit = 50; // 0.05 USDT
+    const cost = amount === 20 ? 700 : (amount === 5 ? 200 : amount * costPerUnit);
     if (userData.credits < cost) {
         return { success: false, reason: "credits_insufficient", cost: cost };
     }
