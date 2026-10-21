@@ -1828,53 +1828,231 @@ function claimDailyMission(missionId) {
 // =========================================================================
 // 9. MERCADO P2P DE PIEZAS MECÁNICAS (COMMUNITY PARTS MARKETPLACE)
 // =========================================================================
+// =========================================================================
+// 9. MERCADO P2P COMUNITARIO (COMERCIO DIRECTO DE PIEZAS Y COCHES ENTRE PILOTOS)
+// =========================================================================
 let COMMUNITY_MARKETPLACE_LISTINGS = [
-    { id: "lst_01", seller: "@Phantom_Silva", partId: "turbocharger", name: "Turbocompresor Twin-Scroll", icon: "🌪️", category: "Motor & Turbo", priceCr: 1850, verified: true, timeAgo: "hace 12m" },
-    { id: "lst_02", seller: "@ApexDrift_Tokyo", partId: "slick_tires", name: "Neumáticos Slick GT3", icon: "🏎️", category: "Neumáticos", priceCr: 210, verified: true, timeAgo: "hace 24m" },
-    { id: "lst_03", seller: "@Viper_King_USA", partId: "brake_calipers", name: "Pinzas Brembo Monobloque", icon: "🔴", category: "Frenos", priceCr: 950, verified: true, timeAgo: "hace 45m" },
-    { id: "lst_04", seller: "@Klaus_Precision", partId: "engine_block", name: "Bloque Motor V8 Bóxer", icon: "⚙️", category: "Motor & Turbo", priceCr: 1050, verified: true, timeAgo: "hace 1h" },
-    { id: "lst_05", seller: "@Sophie_Laurent", partId: "carbon_splitter", name: "Splitter de Fibra de Carbono", icon: "📐", category: "Aerodinámica", priceCr: 450, verified: true, timeAgo: "hace 2h" },
-    { id: "lst_06", seller: "@Tarek_Mansour", partId: "spark_plugs", name: "Bujías de Iridio (x2)", icon: "🔌", category: "Encendido", priceCr: 190, verified: true, timeAgo: "hace 3h" }
+    { id: "lst_01", type: "part", seller: "@Phantom_Silva", sellerIsMe: false, partId: "turbocharger", name: "Turbocompresor Twin-Scroll", icon: "🌪️", category: "Motor & Turbo", rarity: "rare", priceCr: 1850, verified: true, timeAgo: "hace 12m" },
+    { id: "lst_02", type: "part", seller: "@ApexDrift_Tokyo", sellerIsMe: false, partId: "slick_tires", name: "Neumáticos Slick GT3", icon: "🏎️", category: "Neumáticos", rarity: "uncommon", priceCr: 210, verified: true, timeAgo: "hace 24m" },
+    { id: "lst_03", type: "car", seller: "@Viper_King_USA", sellerIsMe: false, carModelId: "rare_03", name: "VIPER GTS COUPE ACR", icon: "🏎️", category: "Vehículo NFT", rarity: "rare", priceCr: 7500, verified: true, timeAgo: "hace 35m", carData: { modelId: "rare_03", name: "VIPER GTS COUPE ACR", rarity: "rare", visualId: 2, level: 3, xp: 80, xpNeeded: 180, parts: { speed_power: 2, braking: 2, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Rosso Corsa", colorHex: "#e53935", tint: 0xe53935, mintNumber: 142 } },
+    { id: "lst_04", type: "part", seller: "@Brembo_Official", sellerIsMe: false, partId: "brake_calipers", name: "Pinzas Brembo Monobloque", icon: "🔴", category: "Frenos", rarity: "rare", priceCr: 950, verified: true, timeAgo: "hace 45m" },
+    { id: "lst_05", type: "car", seller: "@Sophie_Laurent", sellerIsMe: false, carModelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", icon: "🏎️", category: "Vehículo NFT", rarity: "uncommon", priceCr: 2800, verified: true, timeAgo: "hace 1h", carData: { modelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", rarity: "uncommon", visualId: 1, level: 1, xp: 0, xpNeeded: 120, parts: { speed_power: 1, braking: 1, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Miami Blue GT", colorHex: "#0284c7", tint: 0x0284c7, mintNumber: 388 } },
+    { id: "lst_06", type: "part", seller: "@Klaus_Precision", sellerIsMe: false, partId: "engine_block", name: "Bloque Motor V8 Bóxer", icon: "⚙️", category: "Motor & Turbo", rarity: "rare", priceCr: 1050, verified: true, timeAgo: "hace 1h" },
+    { id: "lst_07", type: "part", seller: "@Tarek_Mansour", sellerIsMe: false, partId: "spark_plugs", name: "Bujías de Iridio (x2)", icon: "🔌", category: "Encendido", rarity: "common", priceCr: 190, verified: true, timeAgo: "hace 3h" }
 ];
 
 function getMarketplaceListings() {
     return COMMUNITY_MARKETPLACE_LISTINGS;
 }
 
-function buyMarketplacePart(listingId) {
+// 1. Publicar Pieza en el Mercado P2P (NO compra la plataforma)
+function listPartOnMarketplace(partId, priceCr) {
+    const userData = loadNftUserData();
+    if (!userData.partsInventory || (userData.partsInventory[partId] || 0) <= 0) {
+        return { success: false, reason: "No posees unidades de esta pieza en tu inventario" };
+    }
+    const safePrice = Math.max(10, Math.round(Number(priceCr) || 100));
+
+    userData.partsInventory[partId]--;
+
+    const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partId]) || { name: partId, icon: '🔧', category: 'General', rarity: 'common' };
+    const playerName = (typeof getPlayerName === 'function') ? getPlayerName() : 'TuPiloto';
+
+    const listing = {
+        id: "lst_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+        type: "part",
+        partId: partId,
+        name: pDef.name,
+        icon: pDef.icon,
+        category: pDef.category,
+        rarity: pDef.rarity,
+        seller: "@" + playerName.replace(/\s+/g, '_'),
+        sellerIsMe: true,
+        priceCr: safePrice,
+        verified: true,
+        timeAgo: "justo ahora"
+    };
+
+    COMMUNITY_MARKETPLACE_LISTINGS.unshift(listing);
+    saveNftUserData(userData);
+    return { success: true, listing };
+}
+
+// 2. Publicar Coche NFT en el Mercado P2P (NO compra la plataforma)
+function listCarOnMarketplace(instanceId, priceCr) {
+    const userData = loadNftUserData();
+    if (!userData.garage || !Array.isArray(userData.garage)) {
+        return { success: false, reason: "Garaje no disponible" };
+    }
+
+    const carIndex = userData.garage.findIndex(c => c.instanceId === instanceId);
+    if (carIndex === -1) {
+        return { success: false, reason: "Coche no encontrado en tu garaje" };
+    }
+
+    const car = userData.garage[carIndex];
+    if (car.rarity === 'starter') {
+        return { success: false, reason: "El coche inicial F2P (Apex Cadet) no es transferible ni vendible" };
+    }
+
+    if (userData.garage.length <= 1) {
+        return { success: false, reason: "Debes conservar al menos 1 vehículo en tu garaje para poder correr" };
+    }
+
+    const safePrice = Math.max(100, Math.round(Number(priceCr) || 2000));
+
+    // Si estaba equipado, equipar otro coche del garaje
+    if (userData.equippedInstanceId === instanceId) {
+        const remainingCar = userData.garage.find(c => c.instanceId !== instanceId);
+        if (remainingCar) userData.equippedInstanceId = remainingCar.instanceId;
+    }
+
+    userData.garage.splice(carIndex, 1);
+
+    const playerName = (typeof getPlayerName === 'function') ? getPlayerName() : 'TuPiloto';
+
+    const listing = {
+        id: "lst_car_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+        type: "car",
+        carModelId: car.modelId,
+        carData: car,
+        name: car.name,
+        icon: "🏎️",
+        category: "Vehículo NFT",
+        rarity: car.rarity,
+        seller: "@" + playerName.replace(/\s+/g, '_'),
+        sellerIsMe: true,
+        priceCr: safePrice,
+        verified: true,
+        timeAgo: "justo ahora"
+    };
+
+    COMMUNITY_MARKETPLACE_LISTINGS.unshift(listing);
+    saveNftUserData(userData);
+    return { success: true, listing };
+}
+
+// 3. Cancelar Listado y recuperar la pieza o el coche
+function cancelMarketplaceListing(listingId) {
+    const idx = COMMUNITY_MARKETPLACE_LISTINGS.findIndex(l => l.id === listingId);
+    if (idx === -1) return { success: false, reason: "Oferta no encontrada" };
+
+    const listing = COMMUNITY_MARKETPLACE_LISTINGS[idx];
+    if (!listing.sellerIsMe) {
+        return { success: false, reason: "Solo puedes cancelar tus propios listados" };
+    }
+
+    const userData = loadNftUserData();
+    if (listing.type === 'part') {
+        if (!userData.partsInventory) userData.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
+        userData.partsInventory[listing.partId] = (userData.partsInventory[listing.partId] || 0) + 1;
+    } else if (listing.type === 'car') {
+        if (!userData.garage) userData.garage = [];
+        userData.garage.push(listing.carData);
+    }
+
+    COMMUNITY_MARKETPLACE_LISTINGS.splice(idx, 1);
+    saveNftUserData(userData);
+    return { success: true, listing };
+}
+
+// 4. Comprar un artículo P2P (Pieza o Coche) de otro piloto
+function buyMarketplaceItem(listingId) {
     const userData = loadNftUserData();
     const idx = COMMUNITY_MARKETPLACE_LISTINGS.findIndex(l => l.id === listingId);
     if (idx === -1) return { success: false, reason: "Oferta no disponible o ya adquirida" };
 
     const listing = COMMUNITY_MARKETPLACE_LISTINGS[idx];
+    if (listing.sellerIsMe) {
+        return { success: false, reason: "own_listing" };
+    }
+
     if (userData.credits < listing.priceCr) {
         return { success: false, reason: "credits_insufficient" };
     }
 
-    userData.credits -= listing.priceCr;
-    if (!userData.partsInventory) userData.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
-    userData.partsInventory[listing.partId] = (userData.partsInventory[listing.partId] || 0) + 1;
+    // Reparto de la comisión del 7.5%:
+    // 2.5% Plataforma (Nosotros)
+    // 2.5% Quema Deflacionaria
+    // 2.5% Pool de Recompensas de Carreras
+    const totalFee = Math.round(listing.priceCr * 0.075);
+    const devFee = Math.round(listing.priceCr * 0.025);
+    const burnFee = Math.round(listing.priceCr * 0.025);
+    const rewardsFee = Math.max(0, totalFee - devFee - burnFee);
+    const netCr = listing.priceCr - totalFee;
 
-    // Retirar del tablón comunitario
+    // Descontar tokens al comprador
+    userData.credits -= listing.priceCr;
+
+    // Registrar contabilidad Web3 del ecosistema
+    userData.platformTreasuryFees = (userData.platformTreasuryFees || 0) + devFee;
+    if (!userData.wagerStats) {
+        userData.wagerStats = { totalRaces: 0, wins: 0, podiums: 0, totalWon: 0, burnedTokens: 0, devFees: 0, rewardsFees: 0 };
+    }
+    userData.wagerStats.burnedTokens = (userData.wagerStats.burnedTokens || 0) + burnFee;
+    userData.wagerStats.devFees = (userData.wagerStats.devFees || 0) + devFee;
+    userData.wagerStats.rewardsFees = (userData.wagerStats.rewardsFees || 0) + rewardsFee;
+
+    // Entregar artículo adquirido al comprador
+    if (listing.type === 'part') {
+        if (!userData.partsInventory) userData.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
+        userData.partsInventory[listing.partId] = (userData.partsInventory[listing.partId] || 0) + 1;
+    } else if (listing.type === 'car') {
+        if (!userData.garage) userData.garage = [];
+        const newCarInstance = {
+            ...listing.carData,
+            instanceId: "nft_p2p_" + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+            obtainedAt: Date.now()
+        };
+        userData.garage.push(newCarInstance);
+    }
+
+    // Retirar del mercado comunitario
     COMMUNITY_MARKETPLACE_LISTINGS.splice(idx, 1);
 
     saveNftUserData(userData);
-    return { success: true, listing: listing, remainingCredits: userData.credits };
+    return {
+        success: true,
+        listing: listing,
+        grossCr: listing.priceCr,
+        netCr: netCr,
+        royaltyFee: totalFee,
+        devFee: devFee,
+        burnFee: burnFee,
+        rewardsFee: rewardsFee,
+        remainingCredits: userData.credits
+    };
 }
 
+// Alias retrocompatible
+function buyMarketplacePart(listingId) {
+    return buyMarketplaceItem(listingId);
+}
+
+// Función de venta P2P ejecutada (con liquidación del 7.5% exacto entre plataforma, quema y pool)
 function sellPartToMarketplace(partId, priceCr) {
     const userData = loadNftUserData();
     if (!userData.partsInventory || (userData.partsInventory[partId] || 0) <= 0) {
         return { success: false, reason: "No posees unidades de esta pieza en tu inventario" };
     }
 
-    const feeRate = 0.075; // 7.5% comisión de plataforma / royalty para los creadores
+    const feeRate = 0.075; // 7.5% comisión total
     const royaltyFee = Math.round(priceCr * feeRate);
+    const devFee = Math.round(priceCr * 0.025);
+    const burnFee = Math.round(priceCr * 0.025);
+    const rewardsFee = Math.max(0, royaltyFee - devFee - burnFee);
     const netCr = Math.max(1, priceCr - royaltyFee);
 
     userData.partsInventory[partId]--;
     userData.credits += netCr;
     userData.platformTreasuryFees = (userData.platformTreasuryFees || 0) + royaltyFee;
+
+    if (!userData.wagerStats) {
+        userData.wagerStats = { totalRaces: 0, wins: 0, podiums: 0, totalWon: 0, burnedTokens: 0, devFees: 0, rewardsFees: 0 };
+    }
+    userData.wagerStats.burnedTokens = (userData.wagerStats.burnedTokens || 0) + burnFee;
+    userData.wagerStats.devFees = (userData.wagerStats.devFees || 0) + devFee;
+    userData.wagerStats.rewardsFees = (userData.wagerStats.rewardsFees || 0) + rewardsFee;
 
     saveNftUserData(userData);
     return {
@@ -1882,6 +2060,9 @@ function sellPartToMarketplace(partId, priceCr) {
         partId: partId,
         grossCr: priceCr,
         royaltyFee: royaltyFee,
+        devFee: devFee,
+        burnFee: burnFee,
+        rewardsFee: rewardsFee,
         earnedCr: netCr,
         newCredits: userData.credits
     };

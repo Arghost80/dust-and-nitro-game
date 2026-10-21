@@ -1179,6 +1179,11 @@ function renderGarageView() {
                             <button class="btn-tune-open" onclick="openTuningModal('${car.instanceId}')">
                                 🔧 ${t('btn_tune')}
                             </button>
+                            ${(car.rarity !== 'starter' && cars.length > 1) ? `
+                                <button class="btn-tune-open" style="background: rgba(236, 72, 153, 0.2); border: 1px solid #ec4899; color: #f472b6;" onclick="openPartsMarketplaceModal('sell', 'cars')" title="Vender vehículo en el Mercado P2P">
+                                    🏷️ VENDER P2P
+                                </button>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -3948,10 +3953,25 @@ function handleClaimCarMilestone(instanceId, mLevel, statKey) {
 // 9. MODAL DE MERCADO P2P DE PIEZAS DE LA COMUNIDAD TELEGRAM
 // -------------------------------------------------------------
 let marketplaceActiveTab = 'buy';
+let marketplaceFilterType = 'all'; // 'all', 'parts', 'cars'
+let marketplaceSellType = 'parts'; // 'parts', 'cars'
 
-function openPartsMarketplaceModal(activeTab = 'buy') {
+function setMarketplaceFilter(filter) {
+    hubAudio.playClick();
+    marketplaceFilterType = filter;
+    openPartsMarketplaceModal('buy');
+}
+
+function setMarketplaceSellType(sellType) {
+    hubAudio.playClick();
+    marketplaceSellType = sellType;
+    openPartsMarketplaceModal('sell');
+}
+
+function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
     hubAudio.playClick();
     marketplaceActiveTab = activeTab;
+    if (sellType) marketplaceSellType = sellType;
 
     let modal = document.getElementById('marketplace-modal');
     if (!modal) {
@@ -3962,94 +3982,201 @@ function openPartsMarketplaceModal(activeTab = 'buy') {
     }
 
     const userData = loadNftUserData();
-    const listings = (typeof getMarketplaceListings === 'function') ? getMarketplaceListings() : [];
+    const allListings = (typeof getMarketplaceListings === 'function') ? getMarketplaceListings() : [];
     const inv = userData.partsInventory || {};
+    const garage = userData.garage || [];
+
+    // Filtrar listings por tipo
+    const listings = allListings.filter(l => {
+        if (marketplaceFilterType === 'parts') return l.type === 'part';
+        if (marketplaceFilterType === 'cars') return l.type === 'car';
+        return true;
+    });
+
+    const partsCount = allListings.filter(l => l.type === 'part').length;
+    const carsCount = allListings.filter(l => l.type === 'car').length;
 
     modal.innerHTML = `
-        <div class="settings-dialog" style="max-width: 640px;">
+        <div class="settings-dialog" style="max-width: 680px;">
             <div class="settings-header" style="background: linear-gradient(135deg, rgba(0, 245, 212, 0.18), rgba(0, 187, 249, 0.18)); border-bottom: 1px solid rgba(0, 245, 212, 0.35);">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 26px;">🛒</span>
+                    <span style="font-size: 26px;">🤝</span>
                     <div>
-                        <h2 style="margin: 0; font-size: 18px; color: #00f5d4;">MERCADO P2P DE LA COMUNIDAD TELEGRAM</h2>
-                        <span style="font-size: 11px; color: #cbd5e1;">Intercambia y vende componentes mecánicos sobrantes por tokens $CR</span>
+                        <h2 style="margin: 0; font-size: 18px; color: #00f5d4;">MERCADO P2P ENTRE JUGADORES DE LA COMUNIDAD TELEGRAM</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Comercio directo entre usuarios • La plataforma NO compra piezas ni coches</span>
                     </div>
                 </div>
                 <button class="settings-close-x" onclick="closePartsMarketplaceModal()">✖</button>
             </div>
 
-            <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.8);">
+            <!-- Banner Informativo de Economía Web3 y Desglose de Comisión -->
+            <div style="padding: 10px 18px 0;">
+                <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(0, 245, 212, 0.3); border-radius: 10px; padding: 10px 14px; font-size: 11px; color: #cbd5e1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 6px;">
+                        <span style="font-weight: 800; color: #00f5d4;">⚖️ COMERCIO 100% ENTRE JUGADORES</span>
+                        <span style="color: #fde047; font-weight: 900;">Comisión Total: 7.5%</span>
+                    </div>
+                    <div style="display: flex; gap: 14px; font-size: 10.5px; color: #94a3b8; flex-wrap: wrap;">
+                        <span>🔥 <strong style="color: #f87171;">2.5% Quema Deflacionaria</strong></span>
+                        <span>🏆 <strong style="color: #6ee7b7;">2.5% Pool de Recompensas</strong></span>
+                        <span>🏛️ <strong style="color: #38bdf8;">2.5% Plataforma / Tesorería</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestañas Principales: Comprar vs Publicar en Venta -->
+            <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.8); margin-top: 10px;">
                 <button style="flex: 1; padding: 12px; background: ${marketplaceActiveTab === 'buy' ? 'rgba(0, 245, 212, 0.18)' : 'transparent'}; border: none; border-bottom: 2px solid ${marketplaceActiveTab === 'buy' ? '#00f5d4' : 'transparent'}; color: ${marketplaceActiveTab === 'buy' ? '#00f5d4' : '#94a3b8'}; font-weight: 900; font-size: 12px; cursor: pointer;" onclick="openPartsMarketplaceModal('buy')">
-                    🛍️ COMPRAR PIEZAS COMUNITARIAS (${listings.length})
+                    🛍️ COMPRAR EN EL MERCADO (${allListings.length})
                 </button>
                 <button style="flex: 1; padding: 12px; background: ${marketplaceActiveTab === 'sell' ? 'rgba(0, 245, 212, 0.18)' : 'transparent'}; border: none; border-bottom: 2px solid ${marketplaceActiveTab === 'sell' ? '#00f5d4' : 'transparent'}; color: ${marketplaceActiveTab === 'sell' ? '#00f5d4' : '#94a3b8'}; font-weight: 900; font-size: 12px; cursor: pointer;" onclick="openPartsMarketplaceModal('sell')">
-                    💰 VENDER MIS PIEZAS SOBRANTES
+                    🏷️ PUBLICAR EN VENTA (P2P)
                 </button>
             </div>
 
-            <div class="settings-body" style="padding: 18px; max-height: 440px; overflow-y: auto;">
+            <div class="settings-body" style="padding: 16px 18px; max-height: 440px; overflow-y: auto;">
                 ${marketplaceActiveTab === 'buy' ? `
+                    <!-- Filtros por tipo en Comprar -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                        <button style="padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 6px; border: 1px solid ${marketplaceFilterType === 'all' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceFilterType === 'all' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceFilterType === 'all' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceFilter('all')">
+                            🌐 TODOS (${allListings.length})
+                        </button>
+                        <button style="padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 6px; border: 1px solid ${marketplaceFilterType === 'parts' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceFilterType === 'parts' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceFilterType === 'parts' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceFilter('parts')">
+                            📦 PIEZAS (${partsCount})
+                        </button>
+                        <button style="padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 6px; border: 1px solid ${marketplaceFilterType === 'cars' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceFilterType === 'cars' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceFilterType === 'cars' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceFilter('cars')">
+                            🏎️ COCHES NFT (${carsCount})
+                        </button>
+                    </div>
+
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         ${listings.length === 0 ? `
-                            <div style="text-align: center; padding: 30px; color: #94a3b8;">
-                                No hay piezas a la venta en este momento. ¡Vuelve pronto o lista una tú!
+                            <div style="text-align: center; padding: 36px 20px; color: #94a3b8; background: rgba(15, 23, 42, 0.4); border-radius: 12px; border: 1px dashed rgba(255,255,255,0.1);">
+                                <span style="font-size: 32px; display: block; margin-bottom: 8px;">📭</span>
+                                No hay ofertas en esta categoría en este momento.<br>
+                                ¡Sé el primero en publicar una pieza o un coche en la pestaña de venta!
                             </div>
                         ` : listings.map(lst => `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 24px;">${lst.icon}</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.65); border: 1px solid ${lst.sellerIsMe ? '#10b981' : 'rgba(255,255,255,0.08)'}; border-radius: 10px; gap: 12px;">
+                                <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                                    <span style="font-size: 26px;">${lst.icon}</span>
                                     <div>
-                                        <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${lst.name}</div>
-                                        <div style="font-size: 11px; color: #94a3b8;">Vendedor: <strong style="color: #00f5d4;">${lst.seller}</strong> • ${lst.timeAgo}</div>
+                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                            <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${lst.name}</div>
+                                            <span class="badge-rarity badge-rarity-${lst.rarity}">${(lst.rarity || 'common').toUpperCase()}</span>
+                                            ${lst.sellerIsMe ? `
+                                                <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; padding: 2px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 900;">⭐ TU ANUNCIO</span>
+                                            ` : ''}
+                                        </div>
+                                        <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                                            Vendedor: <strong style="color: ${lst.sellerIsMe ? '#10b981' : '#00f5d4'};">${lst.seller}</strong> • ${lst.category} • ${lst.timeAgo}
+                                        </div>
                                     </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 14px;">
-                                    <span style="font-size: 14px; font-weight: 900; color: #fde047;">💰 ${lst.priceCr.toLocaleString()} $CR</span>
-                                    <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #00f5d4, #00bbf9); border:none; color:#000; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer;" onclick="handleBuyMarketplacePart('${lst.id}')">
-                                        COMPRAR
-                                    </button>
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 14px; font-weight: 900; color: #fde047; white-space: nowrap;">💰 ${lst.priceCr.toLocaleString()} $CR</span>
+                                    ${lst.sellerIsMe ? `
+                                        <button class="btn-secondary" style="padding: 7px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; white-space: nowrap;" onclick="handleCancelMarketplaceListing('${lst.id}')">
+                                            ❌ RETIRAR
+                                        </button>
+                                    ` : `
+                                        <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #00f5d4, #00bbf9); border:none; color:#000; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleBuyMarketplaceItem('${lst.id}')">
+                                            COMPRAR
+                                        </button>
+                                    `}
                                 </div>
                             </div>
                         `).join('')}
                     </div>
                 ` : `
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <div style="background: rgba(0, 245, 212, 0.08); border: 1px solid rgba(0, 245, 212, 0.25); border-radius: 8px; padding: 10px 14px; font-size: 11px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
-                            <span>🤝 <strong>MERCADO P2P DE JUGADORES</strong>: Vende tus piezas sobrantes a otros pilotos.</span>
-                            <span style="color: #00f5d4; font-weight: 800;">Comisión / Royalty de plataforma: 7.5%</span>
+                    <!-- Pestaña de Publicar en Venta -->
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Selector de lo que el jugador desea vender -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                            <button style="flex: 1; padding: 8px; font-size: 11px; font-weight: 900; border-radius: 6px; border: 1px solid ${marketplaceSellType === 'parts' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceSellType === 'parts' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceSellType === 'parts' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceSellType('parts')">
+                                📦 MIS PIEZAS SOBRANTES
+                            </button>
+                            <button style="flex: 1; padding: 8px; font-size: 11px; font-weight: 900; border-radius: 6px; border: 1px solid ${marketplaceSellType === 'cars' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceSellType === 'cars' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceSellType === 'cars' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceSellType('cars')">
+                                🏎️ MIS COCHES NFT (${garage.filter(c => c.rarity !== 'starter').length})
+                            </button>
                         </div>
-                        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 6px;">
-                            Selecciona una pieza mecánica de tu inventario para listarla y venderla al instante:
-                        </p>
-                        ${Object.entries(inv).filter(([k, v]) => v > 0).map(([partKey, count]) => {
-                            const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey, icon: '🔧', costCr: 300, rarity: 'common' };
-                            const sellPrice = Math.round((pDef.costCr || 300) * 0.75);
-                            const royaltyFee = Math.round(sellPrice * 0.075);
-                            const netCr = Math.max(1, sellPrice - royaltyFee);
-                            return `
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <span style="font-size: 24px;">${pDef.icon}</span>
-                                        <div>
-                                            <div style="display: flex; align-items: center; gap: 6px;">
-                                                <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${pDef.name}</div>
-                                                <span class="badge-rarity badge-rarity-${pDef.rarity}">${(pDef.rarity || 'common').toUpperCase()}</span>
-                                            </div>
-                                            <div style="font-size: 11px; color: #00f5d4;">En inventario: ${count} unidad${count > 1 ? 'es' : ''}</div>
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 14px;">
-                                        <div style="text-align: right;">
-                                            <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
-                                            <div style="font-size: 9px; color: #94a3b8;">Precio: ${sellPrice} (Royalty 7.5%: -${royaltyFee})</div>
-                                        </div>
-                                        <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer;" onclick="handleSellMarketplacePart('${partKey}', ${sellPrice})">
-                                            VENDER 1x
-                                        </button>
-                                    </div>
+
+                        ${marketplaceSellType === 'parts' ? `
+                            <p style="font-size: 12px; color: #94a3b8; margin: 0 0 6px;">
+                                Publica una pieza en el libro de órdenes P2P para que otro piloto te la compre:
+                            </p>
+                            ${Object.entries(inv).filter(([k, v]) => v > 0).length === 0 ? `
+                                <div style="text-align: center; padding: 30px; color: #94a3b8; background: rgba(15, 23, 42, 0.4); border-radius: 10px;">
+                                    No tienes piezas en tu inventario para vender. ¡Gana piezas en carreras o con los sponsors!
                                 </div>
-                            `;
-                        }).join('')}
+                            ` : Object.entries(inv).filter(([k, v]) => v > 0).map(([partKey, count]) => {
+                                const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey, icon: '🔧', costCr: 300, rarity: 'common' };
+                                const askPrice = Math.round((pDef.costCr || 300) * 0.85);
+                                const totalFee = Math.round(askPrice * 0.075);
+                                const netCr = Math.max(1, askPrice - totalFee);
+                                return `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; gap: 12px;">
+                                        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                                            <span style="font-size: 24px;">${pDef.icon}</span>
+                                            <div>
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${pDef.name}</div>
+                                                    <span class="badge-rarity badge-rarity-${pDef.rarity}">${(pDef.rarity || 'common').toUpperCase()}</span>
+                                                </div>
+                                                <div style="font-size: 11px; color: #00f5d4;">En inventario: ${count} unidad${count > 1 ? 'es' : ''}</div>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
+                                                <div style="font-size: 9px; color: #94a3b8;">Precio: ${askPrice} $CR (Fee 7.5%: -${totalFee})</div>
+                                            </div>
+                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${partKey}', ${askPrice})">
+                                                🏷️ PUBLICAR 1x
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        ` : `
+                            <p style="font-size: 12px; color: #94a3b8; margin: 0 0 6px;">
+                                Publica un vehículo NFT de tu garaje para que otro jugador te lo compre:
+                            </p>
+                            ${garage.filter(c => c.rarity !== 'starter').length === 0 ? `
+                                <div style="text-align: center; padding: 30px; color: #94a3b8; background: rgba(15, 23, 42, 0.4); border-radius: 10px;">
+                                    No tienes coches transferibles para vender. El coche inicial F2P (Apex Cadet) no es transferible. ¡Abre un cofre o desbloquea coches para comerciar!
+                                </div>
+                            ` : garage.filter(c => c.rarity !== 'starter').map(car => {
+                                const basePrice = car.rarity === 'common' ? 1000 : (car.rarity === 'uncommon' ? 2500 : (car.rarity === 'rare' ? 6000 : 25000));
+                                const totalFee = Math.round(basePrice * 0.075);
+                                const netCr = Math.max(1, basePrice - totalFee);
+                                const isEquipped = (userData.equippedInstanceId === car.instanceId);
+                                return `
+                                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; gap: 12px;">
+                                        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                                            <span style="font-size: 26px;">🏎️</span>
+                                            <div>
+                                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                    <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${car.name}</div>
+                                                    <span class="badge-rarity badge-rarity-${car.rarity}">${(car.rarity || 'common').toUpperCase()}</span>
+                                                    ${isEquipped ? `<span style="font-size: 9px; color: #fde047; font-weight: 800;">[EQUIPADO]</span>` : ''}
+                                                </div>
+                                                <div style="font-size: 11px; color: #94a3b8;">Nivel ${car.level || 1} • Color: ${car.colorName || 'Oficial'}</div>
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
+                                                <div style="font-size: 9px; color: #94a3b8;">Precio: ${basePrice.toLocaleString()} $CR (Fee: -${totalFee})</div>
+                                            </div>
+                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${car.instanceId}', ${basePrice})">
+                                                🏷️ PUBLICAR
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        `}
                     </div>
                 `}
             </div>
@@ -4064,30 +4191,77 @@ function openPartsMarketplaceModal(activeTab = 'buy') {
     modal.classList.remove('hidden');
 }
 
-function handleBuyMarketplacePart(listingId) {
+function handleBuyMarketplaceItem(listingId) {
     hubAudio.playClick();
-    if (typeof buyMarketplacePart !== 'function') return;
-    const res = buyMarketplacePart(listingId);
+    if (typeof buyMarketplaceItem !== 'function') return;
+    const res = buyMarketplaceItem(listingId);
     if (!res.success) {
-        alert(res.reason === 'credits_insufficient' ? t('shop_not_enough') : 'Oferta no disponible.');
+        if (res.reason === 'own_listing') {
+            alert('No puedes comprar tu propia oferta. Puedes retirarla pulsando en "RETIRAR".');
+        } else if (res.reason === 'credits_insufficient') {
+            alert(t('shop_not_enough') || '¡Fondos insuficientes!');
+        } else {
+            alert('Oferta no disponible.');
+        }
+        return;
+    }
+    hubAudio.playOpenCrate();
+    renderHubHeader();
+    renderGarageView();
+    openPartsMarketplaceModal('buy');
+    alert(`🎉 ¡Compraste ${res.listing.name} por ${res.listing.priceCr.toLocaleString()} $CR!\n\nReparto de comisión 7.5%:\n🔥 Quema: -${res.burnFee} $CR\n🏆 Pool de Recompensas: -${res.rewardsFee} $CR\n🏛️ Plataforma: -${res.devFee} $CR`);
+}
+
+function handleBuyMarketplacePart(listingId) {
+    return handleBuyMarketplaceItem(listingId);
+}
+
+function handleListMarketplacePart(partKey, priceCr) {
+    hubAudio.playClick();
+    if (typeof listPartOnMarketplace !== 'function') return;
+    const res = listPartOnMarketplace(partKey, priceCr);
+    if (!res.success) {
+        alert(res.reason || 'No se pudo publicar la pieza.');
         return;
     }
     hubAudio.playOpenCrate();
     renderHubHeader();
     openPartsMarketplaceModal('buy');
-    alert(`🎉 ¡Compraste ${res.listing.name} por ${res.listing.priceCr} $CR! Añadida a tu taller.`);
+    alert(`🏷️ ¡Pieza publicada con éxito en el Mercado P2P por ${priceCr} $CR!\n\nAhora está visible para que otros pilotos la compren. La plataforma no compra con fondos propios; tus tokens se acreditarán cuando otro jugador la adquiera.`);
+}
+
+function handleListMarketplaceCar(instanceId, priceCr) {
+    hubAudio.playClick();
+    if (typeof listCarOnMarketplace !== 'function') return;
+    const res = listCarOnMarketplace(instanceId, priceCr);
+    if (!res.success) {
+        alert(res.reason || 'No se pudo publicar el coche.');
+        return;
+    }
+    hubAudio.playOpenCrate();
+    renderHubHeader();
+    renderGarageView();
+    openPartsMarketplaceModal('buy');
+    alert(`🏷️ ¡Vehículo NFT publicado en el Mercado P2P por ${priceCr.toLocaleString()} $CR!\n\nEl coche está ahora en el catálogo comunitario para que otros usuarios puedan adquirirlo.`);
+}
+
+function handleCancelMarketplaceListing(listingId) {
+    hubAudio.playClick();
+    if (typeof cancelMarketplaceListing !== 'function') return;
+    const res = cancelMarketplaceListing(listingId);
+    if (!res.success) {
+        alert(res.reason || 'No se pudo retirar el listado.');
+        return;
+    }
+    hubAudio.playClick();
+    renderHubHeader();
+    renderGarageView();
+    openPartsMarketplaceModal(marketplaceActiveTab);
+    alert(`✅ ¡Listado retirado! ${res.listing.name} ha sido devuelto a tu inventario/garaje.`);
 }
 
 function handleSellMarketplacePart(partKey, priceCr) {
-    hubAudio.playClick();
-    if (typeof sellPartToMarketplace !== 'function') return;
-    const res = sellPartToMarketplace(partKey, priceCr);
-    if (res.success) {
-        hubAudio.playOpenCrate();
-        renderHubHeader();
-        openPartsMarketplaceModal('sell');
-        alert(`💰 ¡Pieza NFT vendida! Recibiste +${res.earnedCr} $CR netos en tu balance (-${res.royaltyFee} $CR de royalty 7.5% a la plataforma).`);
-    }
+    return handleListMarketplacePart(partKey, priceCr);
 }
 
 function closePartsMarketplaceModal() {
@@ -4221,7 +4395,13 @@ if (typeof window !== 'undefined') {
     window.setInventoryRarity = setInventoryRarity;
     window.openPartsMarketplaceModal = openPartsMarketplaceModal;
     window.closePartsMarketplaceModal = closePartsMarketplaceModal;
+    window.setMarketplaceFilter = setMarketplaceFilter;
+    window.setMarketplaceSellType = setMarketplaceSellType;
+    window.handleBuyMarketplaceItem = handleBuyMarketplaceItem;
     window.handleBuyMarketplacePart = handleBuyMarketplacePart;
+    window.handleListMarketplacePart = handleListMarketplacePart;
+    window.handleListMarketplaceCar = handleListMarketplaceCar;
+    window.handleCancelMarketplaceListing = handleCancelMarketplaceListing;
     window.handleSellMarketplacePart = handleSellMarketplacePart;
 }
 

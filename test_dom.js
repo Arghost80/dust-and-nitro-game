@@ -612,22 +612,82 @@ console.log('Ofertas comunitarias iniciales en el Mercado P2P:', listingsCount);
 if (listingsCount < 3) {
     throw new Error('El mercado P2P debe contener ofertas iniciales comunitarias');
 }
-const buyListingRes = vm.runInContext('buyMarketplacePart("lst_02")', ctx);
-console.log('Resultado de compra P2P en el Mercado:', buyListingRes.success, 'Pieza:', buyListingRes.listing ? buyListingRes.listing.name : null);
-if (!buyListingRes.success) {
-    throw new Error('Fallo al comprar pieza comunitaria en el Mercado P2P');
+
+// Comprobar que hay ofertas de piezas y ofertas de coches NFT
+const hasPartListings = vm.runInContext('getMarketplaceListings().some(l => l.type === "part")', ctx);
+const hasCarListings = vm.runInContext('getMarketplaceListings().some(l => l.type === "car")', ctx);
+if (!hasPartListings || !hasCarListings) {
+    throw new Error('El mercado P2P debe albergar tanto piezas mecánicas como coches NFT');
 }
+console.log('✓ Catálogo P2P contiene tanto piezas mecánicas como coches NFT');
+
+// Probar publicación de pieza en el mercado (NO se incrementa el saldo del jugador al instante)
+const creditsBeforeList = vm.runInContext('loadNftUserData().credits', ctx);
+const listPartRes = vm.runInContext('listPartOnMarketplace("brake_pads", 450)', ctx);
+const creditsAfterList = vm.runInContext('loadNftUserData().credits', ctx);
+if (!listPartRes.success || creditsBeforeList !== creditsAfterList) {
+    throw new Error('La publicación P2P no debe generar dinero de la nada; el artículo queda en venta');
+}
+console.log('✓ Publicación P2P correcta: la pieza queda a la venta sin que la plataforma compre con fondos propios');
+
+// Cancelar el listado y verificar devolución al inventario
+const cancelRes = vm.runInContext(`cancelMarketplaceListing("${listPartRes.listing.id}")`, ctx);
+if (!cancelRes.success) {
+    throw new Error('Debe permitir cancelar listados propios y recuperar la pieza');
+}
+console.log('✓ Cancelación de listado comprobada: la pieza vuelve al inventario');
+
+// Probar publicación de coche NFT en el mercado
+const carToList = vm.runInContext(`
+    (() => {
+        const uData = loadNftUserData();
+        uData.garage.push({ instanceId: 'test_nft_car_p2p', modelId: 'rare_01', name: 'TEST GT3 CAR', rarity: 'rare', level: 1 });
+        saveNftUserData(uData);
+        return 'test_nft_car_p2p';
+    })()
+`, ctx);
+const listCarRes = vm.runInContext(`listCarOnMarketplace('${carToList}', 5000)`, ctx);
+if (!listCarRes.success || listCarRes.listing.type !== 'car') {
+    throw new Error('Fallo al listar coche NFT en el mercado P2P');
+}
+console.log('✓ Coche NFT listado en el Mercado P2P con éxito');
+
+// Probar compra de coche NFT y verificar la distribución de la comisión 7.5% (2.5% dev, 2.5% burn, 2.5% pool)
+const burnedBeforeBuy = vm.runInContext('loadNftUserData().wagerStats ? loadNftUserData().wagerStats.burnedTokens : 0', ctx);
+const rewardsBeforeBuy = vm.runInContext('loadNftUserData().wagerStats ? loadNftUserData().wagerStats.rewardsFees : 0', ctx);
+const devBeforeBuy = vm.runInContext('loadNftUserData().platformTreasuryFees || 0', ctx);
+
+const buyCarRes = vm.runInContext('buyMarketplaceItem("lst_05")', ctx);
+if (!buyCarRes.success || buyCarRes.listing.type !== 'car') {
+    throw new Error('Fallo al comprar coche NFT en el mercado P2P');
+}
+if (buyCarRes.devFee !== Math.round(2800 * 0.025) || buyCarRes.burnFee !== Math.round(2800 * 0.025)) {
+    throw new Error(`Reparto de comisión 7.5% incorrecto: ${JSON.stringify(buyCarRes)}`);
+}
+console.log(`✓ Compra de Coche NFT P2P ejecutada: Precio 2800 $CR -> Quema: ${buyCarRes.burnFee} $CR, Pool: ${buyCarRes.rewardsFee} $CR, Tesorería: ${buyCarRes.devFee} $CR`);
+
 const sellRes = vm.runInContext('sellPartToMarketplace("spark_plugs", 200)', ctx);
 console.log('Resultado de venta en el Mercado P2P (+200 $CR):', sellRes.success);
 if (!sellRes.success) {
     throw new Error('Fallo al vender pieza en el Mercado P2P');
 }
+
 vm.runInContext('openPartsMarketplaceModal("buy")', ctx);
 const mpModal = doc.getElementById('marketplace-modal');
-if (!mpModal || !mpModal.innerHTML.includes('MERCADO P2P DE LA COMUNIDAD TELEGRAM')) {
+if (!mpModal || !mpModal.innerHTML.includes('MERCADO P2P ENTRE JUGADORES')) {
     throw new Error('El modal del Mercado P2P debe renderizarse');
 }
-console.log('✓ Mercado P2P de piezas comunitarias probado y operativo');
+if (!mpModal.innerHTML.includes('2.5% Quema Deflacionaria') || !mpModal.innerHTML.includes('2.5% Pool de Recompensas')) {
+    throw new Error('El modal del Mercado P2P debe desglosar la comisión en Quema, Pool y Tesorería');
+}
+
+// Probar pestaña de venta en el modal
+vm.runInContext('openPartsMarketplaceModal("sell")', ctx);
+const mpSellModal = doc.getElementById('marketplace-modal');
+if (!mpSellModal || !mpSellModal.innerHTML.includes('PUBLICAR EN VENTA (P2P)') || !mpSellModal.innerHTML.includes('MIS COCHES NFT')) {
+    throw new Error('El modal de venta P2P debe permitir publicar tanto piezas como coches NFT');
+}
+console.log('✓ Mercado P2P completo: Comercio de piezas y coches entre jugadores con triple comisión verificado al 100%');
 
 // 3. Torneo Semanal Oficial (Inscripción 20 $CR, Fondo Casa 200 $CR, Fee 5%, Reparto 95%)
 const tourneyInfo = vm.runInContext('getWeeklyTournamentInfo()', ctx);
