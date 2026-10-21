@@ -223,6 +223,18 @@ function renderHubHeader() {
         </div>
 
         <div class="hub-header-center">
+            <div class="currency-pill credits-pill">
+                <span class="curr-icon">💰</span>
+                <span class="curr-amount" id="curr-credits">${credits.toLocaleString()} $CR</span>
+            </div>
+            <div class="currency-pill energy-pill" onclick="showHubView('garage')" title="Energía del coche equipado (+1⚡ cada 1h)" style="cursor: pointer;">
+                <span class="curr-icon">⚡</span>
+                <span class="curr-amount" id="curr-energy">${carEnergy}/${carMaxEnergy}</span>
+            </div>
+            <div class="currency-pill nitro-pill" onclick="openNitroRefillModal()" title="Cápsulas de Nitro N₂O (Click para conseguir más con anuncio o $CR)" style="cursor: pointer; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.25)); border: 1px solid #38bdf8;">
+                <span class="curr-icon">🧪</span>
+                <span class="curr-amount" id="curr-nitros" style="color: #38bdf8; font-weight: 800;">${(typeof userData.nitros === 'number') ? userData.nitros : 2} NITRO</span>
+            </div>
             <div class="currency-pill season-pill" onclick="openBattlePassModal()" title="Pase de Temporada Neon Apex" style="cursor: pointer; background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(239, 68, 68, 0.25)); border: 1px solid #fbbf24;">
                 <span class="curr-icon">🏆</span>
                 <span class="curr-amount" id="curr-season-pass" style="color: #fde047; font-weight: 800;">PASE NIV. ${(userData.seasonPass && userData.seasonPass.level) || 1}</span>
@@ -233,23 +245,7 @@ function renderHubHeader() {
             </div>
             <div class="currency-pill referral-pill" onclick="openReferralTournamentModal()" title="Gran Torneo de Invitación - Gana Cofres de Coches" style="cursor: pointer; background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25)); border: 1px solid #ec4899;">
                 <span class="curr-icon">👥</span>
-                <span class="curr-amount" id="curr-referral" style="color: #f472b6; font-weight: 800;">INVITAR & TORNEO</span>
-            </div>
-            <div class="currency-pill energy-pill" onclick="showHubView('garage')" title="Energía del coche equipado (+1⚡ cada 1h)">
-                <span class="curr-icon">⚡</span>
-                <span class="curr-amount" id="curr-energy">${carEnergy}/${carMaxEnergy}</span>
-            </div>
-            <div class="currency-pill nitro-pill" onclick="openNitroRefillModal()" title="Cápsulas de Nitro N₂O (Click para conseguir más con anuncio o $CR)" style="cursor: pointer; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.25)); border: 1px solid #38bdf8;">
-                <span class="curr-icon">🧪</span>
-                <span class="curr-amount" id="curr-nitros" style="color: #38bdf8; font-weight: 800;">${(typeof userData.nitros === 'number') ? userData.nitros : 2} NITRO</span>
-            </div>
-            <div class="currency-pill credits-pill">
-                <span class="curr-icon">💰</span>
-                <span class="curr-amount" id="curr-credits">${credits.toLocaleString()} $CR</span>
-            </div>
-            <div class="currency-pill gems-pill">
-                <span class="curr-icon">💎</span>
-                <span class="curr-amount" id="curr-gems">${gems.toLocaleString()} TON</span>
+                <span class="curr-amount" id="curr-referral" style="color: #f472b6; font-weight: 800;">INVITAR</span>
             </div>
         </div>
 
@@ -2586,7 +2582,7 @@ function renderCompView() {
                 <div class="wt-title-row">
                     <div>
                         <h3 class="wt-title">NEO-TOKYO HARBOR BAY GT GRAND PRIX</h3>
-                        <p class="wt-sub">Compite por el podio mundial • Bote acumulado: <strong style="color: #00f5d4;">100.000 $CR</strong></p>
+                        <p class="wt-sub">Compite por el podio mundial • Bote acumulado de inscripciones: <strong style="color: #00f5d4;">~2.500 $CR</strong></p>
                     </div>
                     <button class="btn-enter-tournament" onclick="event.stopPropagation(); openWeeklyTournamentModal();">ENTRAR AL GRAND PRIX ▶</button>
                 </div>
@@ -2701,7 +2697,7 @@ function renderCompView() {
                 <div class="comp-card" onclick="openWeeklyTournamentModal();">
                     <div class="comp-icon">🏆</div>
                     <h3>GRAND PRIX SEMANAL GT</h3>
-                    <p>Torneo oficial con bolsa acumulada comunitaria de 100.000 $CR.</p>
+                    <p>Torneo oficial con bolsa acumulada comunitaria de inscripciones (~2.500 $CR).</p>
                     <div class="comp-action-btn">VER TORNEO ▶</div>
                 </div>
                 <div class="comp-card" onclick="openLeaderboardModal();">
@@ -3099,7 +3095,7 @@ function openLeaderboardModal() {
             </div>
             <div class="settings-body" style="padding: 16px;">
                 <p style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
-                    Ranking en tiempo real de vueltas rápidas en circuitos oficiales. ¡Los 3 mejores pilotos semanales reciben recompensas en tokens $CR y cofres exclusivos!
+                    Ranking semanal de vueltas rápidas en circuitos oficiales. ¡Los 3 mejores pilotos reciben tokens $CR y suministros para su garaje!
                 </p>
                 <div class="leaderboard-table-list" style="display: flex; flex-direction: column; gap: 8px;">
                     <div class="lb-row lb-gold" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(254, 228, 64, 0.12); border: 1px solid rgba(254, 228, 64, 0.4); border-radius: 10px;">
@@ -3112,7 +3108,7 @@ function openLeaderboardModal() {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">38.12s</span>
-                            <div style="font-size: 10px; color: #fde047;">🏆 +15.000 $CR</div>
+                            <div style="font-size: 10px; color: #fde047;">🏆 +300 $CR + 2 Nitros</div>
                         </div>
                     </div>
 
@@ -3126,7 +3122,7 @@ function openLeaderboardModal() {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">38.85s</span>
-                            <div style="font-size: 10px; color: #cbd5e1;">🥈 +7.500 $CR</div>
+                            <div style="font-size: 10px; color: #cbd5e1;">🥈 +150 $CR + 1 Nitro</div>
                         </div>
                     </div>
 
@@ -3140,7 +3136,7 @@ function openLeaderboardModal() {
                         </div>
                         <div style="text-align: right;">
                             <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">39.20s</span>
-                            <div style="font-size: 10px; color: #ff9800;">🥉 +3.500 $CR</div>
+                            <div style="font-size: 10px; color: #ff9800;">🥉 +75 $CR + Pieza</div>
                         </div>
                     </div>
 

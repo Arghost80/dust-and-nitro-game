@@ -1496,18 +1496,24 @@ const compHtml = doc.getElementById('view-comp').innerHTML;
 if (!compHtml.includes('weekly-tournament-hero-banner') || !compHtml.includes('GRAND PRIX') || !compHtml.includes('SEMANAL')) {
     throw new Error('view-comp debe contener el banner destacado del Grand Prix Semanal');
 }
-if (compHtml.includes('750 TON') || compHtml.includes('PREMIOS EN TON REALES')) {
-    throw new Error('view-comp no debe contener menciones a premios en TON');
+if (compHtml.includes('750 TON') || compHtml.includes('PREMIOS EN TON REALES') || compHtml.includes('100.000 $CR')) {
+    throw new Error('view-comp no debe contener menciones a premios exagerados o en TON');
 }
-console.log('✓ Torneo Semanal 100% en $CR integrado en la cabecera de la sección de Competición');
+if (!compHtml.includes('~2.500 $CR')) {
+    throw new Error('view-comp debe mostrar el bote dinámico y sostenible (~2.500 $CR)');
+}
+console.log('✓ Torneo Semanal sostenible (~2.500 $CR) integrado en la cabecera de la sección de Competición');
 
-// 2.1 Verificar Leaderboard sin premios en TON
+// 2.1 Verificar Leaderboard con recompensas calibradas y sin TON
 vm.runInContext('openLeaderboardModal()', ctx);
 const lbCleanModal = doc.getElementById('leaderboard-modal');
-if (!lbCleanModal || lbCleanModal.innerHTML.includes('TON')) {
-    throw new Error('El modal de Clasificación (Leaderboard) no debe prometer ni otorgar TON');
+if (!lbCleanModal || lbCleanModal.innerHTML.includes('TON') || lbCleanModal.innerHTML.includes('15.000 $CR')) {
+    throw new Error('El modal de Clasificación (Leaderboard) no debe prometer TON ni premios inflados');
 }
-console.log('✓ Clasificación Mundial verificada: Recompensas de podio 100% en tokens $CR sin TON');
+if (!lbCleanModal.innerHTML.includes('+300 $CR') || !lbCleanModal.innerHTML.includes('+150 $CR') || !lbCleanModal.innerHTML.includes('+75 $CR')) {
+    throw new Error('El modal de Clasificación debe otorgar premios calibrados (+300, +150, +75 $CR)');
+}
+console.log('✓ Clasificación Mundial verificada: Recompensas de podio sostenibles (+300, +150, +75 $CR) sin desangrar el token');
 
 // 3. Verificar la nueva vista de Inventario (view-inventory)
 vm.runInContext('renderInventoryView()', ctx);
