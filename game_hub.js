@@ -3088,7 +3088,7 @@ function openLeaderboardModal() {
                             <span style="font-size: 18px;">🥇</span>
                             <div>
                                 <strong style="color: #fee440; font-size: 14px;">Phantom_Silva</strong>
-                                <div style="font-size: 11px; color: #cbd5e1;">Bugatti Chiron Pur Sport W16</div>
+                                <div style="font-size: 11px; color: #cbd5e1;">Molsheim Chiron Pur Sport W16</div>
                             </div>
                         </div>
                         <div style="text-align: right;">
@@ -3102,7 +3102,7 @@ function openLeaderboardModal() {
                             <span style="font-size: 18px;">🥈</span>
                             <div>
                                 <strong style="color: #e2e8f0; font-size: 14px;">Torque_Viper</strong>
-                                <div style="font-size: 11px; color: #cbd5e1;">Dodge Viper ACR Extreme</div>
+                                <div style="font-size: 11px; color: #cbd5e1;">Viper ACR Extreme V10</div>
                             </div>
                         </div>
                         <div style="text-align: right;">
@@ -3116,7 +3116,7 @@ function openLeaderboardModal() {
                             <span style="font-size: 18px;">🥉</span>
                             <div>
                                 <strong style="color: #ff9800; font-size: 14px;">Grello_Manthey</strong>
-                                <div style="font-size: 11px; color: #cbd5e1;">Porsche 911 GT3-RS Manthey</div>
+                                <div style="font-size: 11px; color: #cbd5e1;">Stuttgart 911 GT3-RS Manthey</div>
                             </div>
                         </div>
                         <div style="text-align: right;">

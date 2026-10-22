@@ -148,23 +148,23 @@ const NFT_CAR_MODELS = [
     { id: "leg_09", name: "SARTHE HYPERCAR LMH-01", rarity: "legendary", sprite: "car_yellow", visualId: 12, desc: "Prototipo de la categoría reina de Le Mans", stats: makeStats(4,4,3,3,3,3,2,2,3,1) },
     { id: "leg_10", name: "VENOM F5 ABSOLUTE AERO", rarity: "legendary", sprite: "car_cyan", visualId: 10, desc: "Bólido récord mundial con aerodinámica extrema", stats: makeStats(5,4,3,2,3,2,3,2,3,1) },
 
-    // --- 16 NUEVAS LEYENDAS MOTORSPORT (LAMBORGHINI, FERRARI, PORSCHE, VIPER, MITSUBISHI, TOYOTA, BUGATTI, BENTLEY) ---
-    { id: "leg_lambo_svj", name: "LAMBORGHINI AVENTADOR SVJ", rarity: "legendary", sprite: "car_yellow", visualId: 10, desc: "Monstruo V12 de 770 CV con aerodinámica activa ALA 2.0 y tracción integral", stats: makeStats(5,4,3,3,3,3,2,2,3,1) },
-    { id: "r_lambo_huracan", name: "LAMBORGHINI HURACÁN GT3 EVO2", rarity: "rare", sprite: "car_green", visualId: 6, desc: "V10 atmosférico de competición GT3 con toma de aire superior hexagonal", stats: makeStats(3,3,3,2,2,2,2,2,2,1) },
-    { id: "leg_ferrari_sp3", name: "FERRARI DAYTONA SP3 ICONA", rarity: "legendary", sprite: "car_red", visualId: 2, desc: "Homenaje de 840 CV a los prototipos de Daytona de 1967 con V12 a 9.500 RPM", stats: makeStats(5,4,3,3,3,3,2,2,3,1) },
-    { id: "r_ferrari_f40", name: "FERRARI F40 LM COMPETIZIONE", rarity: "rare", sprite: "car_red", visualId: 2, desc: "El mito del V8 Twin-Turbo con alerón ajustable y peso pluma de 1.050 kg", stats: makeStats(4,3,3,2,2,2,2,1,2,1) },
-    { id: "leg_porsche_gt3rs", name: "PORSCHE 911 GT3 RS WEISSACH", rarity: "legendary", sprite: "car_yellow", visualId: 1, desc: "Aero DRS activo y chasis de carreras matriculado de Nürburgring Nordschleife", stats: makeStats(4,4,3,3,3,3,2,3,2,1) },
-    { id: "r_porsche_cgt", name: "PORSCHE CARRERA GT V10", rarity: "rare", sprite: "car_grey", visualId: 1, desc: "Motor V10 atmosférico derivado de Le Mans con chasis monocasco de carbono", stats: makeStats(4,3,2,2,2,2,2,1,2,2) },
-    { id: "r_viper_acr", name: "DODGE VIPER ACR EXTREME", rarity: "rare", sprite: "car_red", visualId: 24, desc: "Monstruo V10 de 8.4L con paquete Extreme Aero y 1.000 kg de downforce", stats: makeStats(4,3,2,2,2,2,2,2,2,1) },
-    { id: "u_viper_gts", name: "DODGE VIPER GTS AMERICAN V10", rarity: "uncommon", sprite: "car_blue", visualId: 24, desc: "Carrocería cupé con techo de doble burbuja y par motor devastador", stats: makeStats(3,2,2,1,1,1,1,1,2,1) },
-    { id: "r_mitsu_evo6", name: "MITSUBISHI LANCER EVO VI TME", rarity: "rare", sprite: "car_red", visualId: 17, desc: "Edición Tommi Mäkinen con turbina de titanio y tracción total 4WD activa", stats: makeStats(3,3,2,2,2,2,2,1,3,1) },
-    { id: "u_mitsu_evo10", name: "MITSUBISHI LANCER EVO X FQ-440", rarity: "uncommon", sprite: "car_grey", visualId: 17, desc: "S-AWC Super All Wheel Control con 440 CV y turbo de doble entrada", stats: makeStats(2,2,2,2,1,2,1,1,2,1) },
-    { id: "r_toyota_supra_mk4", name: "TOYOTA SUPRA MK4 TWIN-TURBO", rarity: "rare", sprite: "car_orange", visualId: 14, desc: "El legendario motor 2JZ-GTE biturbo icono indiscutible del tuning JDM", stats: makeStats(4,3,2,2,2,2,2,1,2,1) },
-    { id: "u_toyota_gr_yaris", name: "TOYOTA GR YARIS RALLY1 HYBRID", rarity: "uncommon", sprite: "car_cyan", visualId: 21, desc: "Nacido del Campeonato Mundial de Rallyes con tracción GR-FOUR y techo de carbono", stats: makeStats(2,2,2,2,1,2,1,1,2,1) },
-    { id: "leg_bugatti_bolide", name: "BUGATTI BOLIDE TRACK W16", rarity: "legendary", sprite: "car_blue", visualId: 11, desc: "Hypercar de circuito con 1.850 CV y relación peso-potencia de 0,67 kg/CV", stats: makeStats(5,4,3,2,3,2,3,2,3,1) },
-    { id: "r_bugatti_veyron_ss", name: "BUGATTI VEYRON SUPER SPORT", rarity: "rare", sprite: "car_orange", visualId: 11, desc: "1.200 CV y aerodinámica optimizada récord de velocidad con cuatro turbos", stats: makeStats(4,3,2,2,2,1,2,2,2,1) },
-    { id: "r_bentley_cont_gt3", name: "BENTLEY CONTINENTAL GT3 SPEED", rarity: "rare", sprite: "car_green", visualId: 5, desc: "V8 Twin-Turbo de 4.0L con carrocería ensanchada y alerón de fibra de carbono", stats: makeStats(3,3,2,3,2,2,2,2,2,1) },
-    { id: "leg_bentley_speed8", name: "BENTLEY SPEED 8 LE MANS", rarity: "legendary", sprite: "car_green", visualId: 12, desc: "El mítico prototipo británico ganador absoluto de las 24 Horas de Le Mans", stats: makeStats(4,4,3,3,3,3,2,2,3,1) }
+    // --- 16 NUEVAS LEYENDAS MOTORSPORT (TAURO, CORSA, STUTTGART, VIPER, OSAKA, FUJI, MOLSHEIM, CREWE) ---
+    { id: "leg_lambo_svj", name: "TAURO AVENTUS SVJ V12", rarity: "legendary", sprite: "car_yellow", visualId: 10, desc: "Monstruo V12 de 770 CV con aerodinámica activa ALA 2.0 y tracción integral", stats: makeStats(5,4,3,3,3,3,2,2,3,1) },
+    { id: "r_lambo_huracan", name: "TAURO HURACÁN GT3 EVO2", rarity: "rare", sprite: "car_green", visualId: 6, desc: "V10 atmosférico de competición GT3 con toma de aire superior hexagonal", stats: makeStats(3,3,3,2,2,2,2,2,2,1) },
+    { id: "leg_ferrari_sp3", name: "CORSA DAYTONA SP3 ICONA", rarity: "legendary", sprite: "car_red", visualId: 2, desc: "Homenaje de 840 CV a los prototipos de Daytona de 1967 con V12 a 9.500 RPM", stats: makeStats(5,4,3,3,3,3,2,2,3,1) },
+    { id: "r_ferrari_f40", name: "CORSA F40 LM COMPETIZIONE", rarity: "rare", sprite: "car_red", visualId: 2, desc: "El mito del V8 Twin-Turbo con alerón ajustable y peso pluma de 1.050 kg", stats: makeStats(4,3,3,2,2,2,2,1,2,1) },
+    { id: "leg_porsche_gt3rs", name: "STUTTGART 911 RS WEISS", rarity: "legendary", sprite: "car_yellow", visualId: 1, desc: "Aero DRS activo y chasis de carreras matriculado de Nürburgring Nordschleife", stats: makeStats(4,4,3,3,3,3,2,3,2,1) },
+    { id: "r_porsche_cgt", name: "STUTTGART CARRERA GT V10", rarity: "rare", sprite: "car_grey", visualId: 1, desc: "Motor V10 atmosférico derivado de Le Mans con chasis monocasco de carbono", stats: makeStats(4,3,2,2,2,2,2,1,2,2) },
+    { id: "r_viper_acr", name: "VIPER ACR EXTREME V10", rarity: "rare", sprite: "car_red", visualId: 24, desc: "Monstruo V10 de 8.4L con paquete Extreme Aero y 1.000 kg de downforce", stats: makeStats(4,3,2,2,2,2,2,2,2,1) },
+    { id: "u_viper_gts", name: "VIPER GTS AMERICAN V10", rarity: "uncommon", sprite: "car_blue", visualId: 24, desc: "Carrocería cupé con techo de doble burbuja y par motor devastador", stats: makeStats(3,2,2,1,1,1,1,1,2,1) },
+    { id: "r_mitsu_evo6", name: "OSAKA LANCER EVO VI TME", rarity: "rare", sprite: "car_red", visualId: 17, desc: "Edición Tommi Mäkinen con turbina de titanio y tracción total 4WD activa", stats: makeStats(3,3,2,2,2,2,2,1,3,1) },
+    { id: "u_mitsu_evo10", name: "OSAKA LANCER EVO X FQ-440", rarity: "uncommon", sprite: "car_grey", visualId: 17, desc: "S-AWC Super All Wheel Control con 440 CV y turbo de doble entrada", stats: makeStats(2,2,2,2,1,2,1,1,2,1) },
+    { id: "r_toyota_supra_mk4", name: "FUJI SUPRA MK4 TWIN-TURBO", rarity: "rare", sprite: "car_orange", visualId: 14, desc: "El legendario motor 2JZ-GTE biturbo icono indiscutible del tuning JDM", stats: makeStats(4,3,2,2,2,2,2,1,2,1) },
+    { id: "u_toyota_gr_yaris", name: "FUJI YARIS RALLY1 HYBRID", rarity: "uncommon", sprite: "car_cyan", visualId: 21, desc: "Nacido del Campeonato Mundial de Rallyes con tracción GR-FOUR y techo de carbono", stats: makeStats(2,2,2,2,1,2,1,1,2,1) },
+    { id: "leg_bugatti_bolide", name: "MOLSHEIM BOLIDE TRACK W16", rarity: "legendary", sprite: "car_blue", visualId: 11, desc: "Hypercar de circuito con 1.850 CV y relación peso-potencia de 0,67 kg/CV", stats: makeStats(5,4,3,2,3,2,3,2,3,1) },
+    { id: "r_bugatti_veyron_ss", name: "MOLSHEIM VEYRON SUPER SPORT", rarity: "rare", sprite: "car_orange", visualId: 11, desc: "1.200 CV y aerodinámica optimizada récord de velocidad con cuatro turbos", stats: makeStats(4,3,2,2,2,1,2,2,2,1) },
+    { id: "r_bentley_cont_gt3", name: "CREWE CONTINENTAL GT3 SPEED", rarity: "rare", sprite: "car_green", visualId: 5, desc: "V8 Twin-Turbo de 4.0L con carrocería ensanchada y alerón de fibra de carbono", stats: makeStats(3,3,2,3,2,2,2,2,2,1) },
+    { id: "leg_bentley_speed8", name: "CREWE SPEED 8 LE MANS", rarity: "legendary", sprite: "car_green", visualId: 12, desc: "El mítico prototipo británico ganador absoluto de las 24 Horas de Le Mans", stats: makeStats(4,4,3,3,3,3,2,2,3,1) }
 ];
 
 // Catálogo Extendido de 65 Piezas de Mecánica y Recambios de Taller Motorsport (5 Niveles de Rareza)
@@ -1491,28 +1491,28 @@ function getCarArchetype(car) {
     const id = (car.modelId || car.id || '').toLowerCase();
 
     // 1. Marcas y modelos específicos:
-    if (name.includes('lambo') || name.includes('aventador') || name.includes('hurac') || name.includes('svj') || name.includes('venom')) {
+    if (name.includes('lambo') || name.includes('tauro') || name.includes('aventador') || name.includes('aventus') || name.includes('hurac') || name.includes('svj') || name.includes('venom')) {
         return 'lambo_wedge';
     }
-    if (name.includes('ferrari') || name.includes('f40') || name.includes('sp3') || name.includes('daytona') || name.includes('488') || name.includes('corsa rosso') || name.includes('scuderia') || name.includes('la corsa') || name.includes('pista')) {
+    if (name.includes('ferrari') || name.includes('f40') || name.includes('sp3') || name.includes('daytona') || name.includes('488') || name.includes('corsa') || name.includes('scuderia') || name.includes('la corsa') || name.includes('pista')) {
         return 'ferrari_corsa';
     }
-    if (name.includes('porsche') || name.includes('911') || name.includes('carrera') || name.includes('gt3 rs') || name.includes('grello') || name.includes('boxer') || name.includes('stuttgart')) {
+    if (name.includes('porsche') || name.includes('stuttgart') || name.includes('911') || name.includes('carrera') || name.includes('weiss') || name.includes('gt3 rs') || name.includes('grello') || name.includes('boxer')) {
         return 'porsche_boxer';
     }
     if (name.includes('viper') || name.includes('mustang') || name.includes('rebel') || name.includes('z06') || name.includes('interceptor') || name.includes('mach')) {
         return 'viper_acr';
     }
-    if (name.includes('mitsu') || name.includes('lancer') || name.includes('evo') || name.includes('impreza') || name.includes('integrale') || name.includes('rally evo')) {
+    if (name.includes('mitsu') || name.includes('osaka') || name.includes('lancer') || name.includes('evo') || name.includes('impreza') || name.includes('integrale') || name.includes('rally evo')) {
         return 'rally_evo';
     }
     if (name.includes('supra') || name.includes('skyline') || name.includes('gt-r') || name.includes('r34') || name.includes('silvia') || name.includes('rx-7') || name.includes('fuji') || name.includes('drift')) {
         return 'jdm_supra';
     }
-    if (name.includes('bugatti') || name.includes('bolide') || name.includes('veyron') || name.includes('chiron') || name.includes('pur sport') || name.includes('hyperion')) {
+    if (name.includes('bugatti') || name.includes('molsheim') || name.includes('bolide') || name.includes('veyron') || name.includes('chiron') || name.includes('pur sport') || name.includes('hyperion')) {
         return 'bugatti_w16';
     }
-    if (name.includes('bentley') || name.includes('continental') || name.includes('falcon') || name.includes('eagle') || name.includes('superleggera')) {
+    if (name.includes('bentley') || name.includes('crewe') || name.includes('continental') || name.includes('falcon') || name.includes('eagle') || name.includes('superleggera')) {
         return 'bentley_gt3';
     }
     if (name.includes('pickup') || name.includes('cargo') || name.includes('dakar') || name.includes('raider') || name.includes('runner') || name.includes('trail') || name.includes('nevada') || name.includes('texas')) {
@@ -2248,19 +2248,19 @@ function getWeeklyTournamentInfo() {
         { rank: 1, pct: 0.30, pilot: "Hans 'Blitz' Becker", car: "Chiron Pur Sport W16", lapTime: "36.84s" },
         { rank: 2, pct: 0.20, pilot: "Phantom_Silva", car: "Hyperion Senna 720S", lapTime: "37.12s" },
         { rank: 3, pct: 0.15, pilot: "Marco 'Apex' Rossi", car: "Valkyrie AMR Pro", lapTime: "37.58s" },
-        { rank: 4, pct: 0.10, pilot: "Torque_Viper", car: "Dodge Viper ACR", lapTime: "38.05s" },
-        { rank: 5, pct: 0.07, pilot: "Grello_Manthey", car: "Porsche 911 GT3-RS", lapTime: "38.42s" },
+        { rank: 4, pct: 0.10, pilot: "Torque_Viper", car: "Viper ACR Extreme", lapTime: "38.05s" },
+        { rank: 5, pct: 0.07, pilot: "Grello_Manthey", car: "Stuttgart 911 GT3-RS", lapTime: "38.42s" },
         { rank: 6, pct: 0.05, pilot: "Klaus_Weber", car: "Bavaria M4 Beast", lapTime: "38.75s" },
-        { rank: 7, pct: 0.04, pilot: "Ayrton_GT", car: "Ferrari Daytona SP3", lapTime: "38.92s" },
-        { rank: 8, pct: 0.03, pilot: "Drift_Master_Ken", car: "Lancer Evo VI TME", lapTime: "39.10s" },
-        { rank: 9, pct: 0.03, pilot: "Speedy_Gonzalo", car: "Lamborghini SVJ", lapTime: "39.28s" },
-        { rank: 10, pct: 0.03, pilot: "Nordic_Racer", car: "Bentley Continental GT3", lapTime: "39.45s" }
+        { rank: 7, pct: 0.04, pilot: "Ayrton_GT", car: "Corsa Daytona SP3", lapTime: "38.92s" },
+        { rank: 8, pct: 0.03, pilot: "Drift_Master_Ken", car: "Osaka Lancer Evo VI", lapTime: "39.10s" },
+        { rank: 9, pct: 0.03, pilot: "Speedy_Gonzalo", car: "Tauro Aventus SVJ", lapTime: "39.28s" },
+        { rank: 10, pct: 0.03, pilot: "Nordic_Racer", car: "Crewe Continental GT3", lapTime: "39.45s" }
     ] : [
         { rank: 1, pct: 0.40, pilot: "Hans 'Blitz' Becker", car: "Chiron Pur Sport W16", lapTime: "36.84s" },
         { rank: 2, pct: 0.25, pilot: "Phantom_Silva", car: "Hyperion Senna 720S", lapTime: "37.12s" },
         { rank: 3, pct: 0.15, pilot: "Marco 'Apex' Rossi", car: "Valkyrie AMR Pro", lapTime: "37.58s" },
-        { rank: 4, pct: 0.12, pilot: "Torque_Viper", car: "Dodge Viper ACR", lapTime: "38.05s" },
-        { rank: 5, pct: 0.08, pilot: "Grello_Manthey", car: "Porsche 911 GT3-RS", lapTime: "38.42s" }
+        { rank: 4, pct: 0.12, pilot: "Torque_Viper", car: "Viper ACR Extreme", lapTime: "38.05s" },
+        { rank: 5, pct: 0.08, pilot: "Grello_Manthey", car: "Stuttgart 911 GT3-RS", lapTime: "38.42s" }
     ];
 
     const leaderboard = shareDistribution.map(entry => {
