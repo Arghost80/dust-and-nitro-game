@@ -2040,12 +2040,12 @@ if (updatedProdListings.length !== 1 || updatedProdListings[0].priceCr !== 480) 
 }
 console.log('✓ Precio libre verificado: La pieza se publicó con éxito a 480 $CR fijados por el usuario');
 
-// Verificar configuración del Torneo Semanal: 0 bono de la casa y sin tarjetas de inscritos/patrocinio
+// Verificar configuración del Torneo Semanal: 200 $CR de bote inicial garantizado sin cartel independiente
 const tourneyConfig = vm.runInContext('WEEKLY_TOURNAMENT_CONFIG', ctx);
-if (tourneyConfig.houseBonusCr !== 0) {
-    throw new Error(`El patrocinio de la casa debe ser 0 $CR, actual: ${tourneyConfig.houseBonusCr}`);
+if (tourneyConfig.houseBonusCr !== 200) {
+    throw new Error(`El bote inicial garantizado debe ser 200 $CR, actual: ${tourneyConfig.houseBonusCr}`);
 }
-console.log('✓ Torneo Semanal: houseBonusCr configurado en 0 $CR (solo acumula lo que ponen los usuarios)');
+console.log('✓ Torneo Semanal: houseBonusCr configurado en 200 $CR (integrado directamente en el bote acumulado)');
 
 vm.runInContext('openWeeklyTournamentModal()', ctx);
 const tourneyModalHtml = doc.getElementById('weekly-tournament-modal').innerHTML;

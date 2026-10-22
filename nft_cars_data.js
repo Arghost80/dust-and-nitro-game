@@ -2219,9 +2219,9 @@ const WEEKLY_TOURNAMENT_CONFIG = {
     timeOfDay: "night",
     totalLaps: 3,
     entryFeeCr: 20,       // Inscripción: 20 $CR por piloto
-    houseBonusCr: 0,      // 0 $CR de la casa (solo acumula lo que ponen los usuarios con sus entradas)
+    houseBonusCr: 200,    // 200 $CR de bote inicial garantizado (integrado directamente en el bote total)
     endsIn: "2 días 14 horas",
-    platformFeePct: 0.05  // 5% comisión recuperada por la plataforma
+    platformFeePct: 0.05  // 5% comisión recuperada sobre inscripciones
 };
 
 function getWeeklyTournamentInfo() {
