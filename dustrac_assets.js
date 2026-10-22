@@ -520,7 +520,7 @@ function createDustracModernAssets(scene) {
         ctx.font = 'bold 12px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('PIRELLI  •  BREMBO  •  MOTUL  •  SHELL', 128, 12);
+        ctx.fillText('APEX TIRES  •  APEX BRAKES  •  NITRO CLUB  •  DUST RACING', 128, 12);
         cvs.refresh();
     }
 

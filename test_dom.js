@@ -233,7 +233,7 @@ if (!modalHtml.includes('TU INVENTARIO DE PIEZAS') || !modalHtml.includes('RAMAS
 console.log('\n--- PROBANDO RENDERIZADO DE TIENDA CON PACKS DE PIEZAS ---');
 vm.runInContext(`renderShopView()`, ctx);
 const shopHtml = doc.getElementById('view-shop').innerHTML;
-if (!shopHtml.includes('PACKS DE PIEZAS DEL TALLER') || !shopHtml.includes('Pack de Frenada Brembo')) {
+if (!shopHtml.includes('PACKS DE PIEZAS DEL TALLER') || !shopHtml.includes('Pack de Frenada Apex Pro')) {
     throw new Error('La tienda no contiene los packs de piezas mecánicas');
 }
 
@@ -869,7 +869,7 @@ if (sponsorsHaveMoneyOrTon) {
 console.log('✓ Protección de Economía: Los patrocinadores no regalan TON ni tokens (otorgan XP, suministros y piezas)');
 
 const signRes = vm.runInContext("signSponsorshipContract('sp_castrol')", ctx);
-console.log('Firma de contrato con Castrol:', signRes.success);
+console.log('Firma de contrato con Dust & Nitro Synthetic:', signRes.success);
 if (!signRes.success) {
     throw new Error('Debe permitir firmar contratos de patrocinio');
 }
@@ -1590,7 +1590,7 @@ if (!v68Css.includes('radial-gradient') || !v68Css.includes('racing_splash_cover
 if (!v68Css.includes('grid-column: span 2') || !v68Css.includes('.shop-items-grid')) {
     throw new Error('hub_styles.css debe incluir adaptación de 2 columnas para la tienda con span 2 en el 3º elemento');
 }
-console.log('✓ Adaptabilidad CSS para frenos Brembo y fondo radial luminoso verificada al 100%');
+console.log('✓ Adaptabilidad CSS para frenos Apex Pro y fondo radial luminoso verificada al 100%');
 
 console.log('\n--- VERIFICANDO MAPA DE HISTORIA: CASILLAS, 3 ESTRELLAS Y COCHE AVANZANDO (V71) ---');
 // 1. Abrir Modo Historia

@@ -1325,35 +1325,35 @@ function buildProRacingEnvironmentTextures(scene) {
         } catch(e) {}
     };
 
-    // 1. Valla PIRELLI (Amarillo y Rojo Motorsport)
+    // 1. Valla APEX TIRES (Amarillo y Rojo Motorsport)
     makeTex('dt_billboard_pirelli', 130, 36, (ctx, w, h) => {
         ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = '#facc15'; ctx.fillRect(2, 2, w - 4, 3); ctx.fillRect(2, h - 5, w - 4, 3);
-        ctx.font = '900 18px Arial Black, sans-serif';
+        ctx.font = '900 14px Arial Black, sans-serif';
         ctx.fillStyle = '#dc2626'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('PIRELLI', w / 2, h / 2);
-        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1; ctx.strokeText('PIRELLI', w / 2, h / 2);
+        ctx.fillText('APEX TIRES', w / 2, h / 2);
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1; ctx.strokeText('APEX TIRES', w / 2, h / 2);
     });
 
-    // 2. Valla BREMBO (Rojo y Blanco)
+    // 2. Valla APEX BRAKES (Rojo y Blanco)
     makeTex('dt_billboard_brembo', 130, 36, (ctx, w, h) => {
         ctx.fillStyle = '#dc2626'; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = '#ffffff'; ctx.fillRect(4, 4, 14, 14);
         ctx.beginPath(); ctx.arc(11, 11, 5, 0, Math.PI * 2); ctx.fillStyle = '#dc2626'; ctx.fill();
-        ctx.font = 'bold 17px Arial, sans-serif';
+        ctx.font = 'bold 13px Arial, sans-serif';
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('brembo', w / 2 + 8, h / 2);
+        ctx.fillText('APEX BRAKES', w / 2 + 8, h / 2);
     });
 
-    // 3. Valla MOTUL 300V
+    // 3. Valla NITRO GT
     makeTex('dt_billboard_motul', 130, 36, (ctx, w, h) => {
         ctx.fillStyle = '#be123c'; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = '#ffffff'; ctx.beginPath();
         ctx.moveTo(10, 0); ctx.lineTo(w - 10, 0); ctx.lineTo(w - 20, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
-        ctx.font = '900 18px Arial Black, sans-serif';
+        ctx.font = '900 15px Arial Black, sans-serif';
         ctx.fillStyle = '#be123c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('MOTUL', w / 2 - 10, h / 2);
-        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 11px Arial'; ctx.fillText('300V', w - 24, h / 2);
+        ctx.fillText('NITRO GT', w / 2 - 10, h / 2);
+        ctx.fillStyle = '#0f172a'; ctx.font = 'bold 11px Arial'; ctx.fillText('PRO', w - 20, h / 2);
     });
 
     // 4. Valla DUSTRAC GT (Carbon & Neon Cyan)
@@ -1365,13 +1365,13 @@ function buildProRacingEnvironmentTextures(scene) {
         ctx.fillText('DUSTRAC GT', w / 2, h / 2);
     });
 
-    // 5. Valla MICHELIN (Azul Real y Amarillo)
+    // 5. Valla RACING CLUB (Azul Real y Amarillo)
     makeTex('dt_billboard_michelin', 130, 36, (ctx, w, h) => {
         ctx.fillStyle = '#1d4ed8'; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = '#fde047'; ctx.fillRect(0, h - 6, w, 6);
-        ctx.font = '900 16px Arial, sans-serif';
+        ctx.font = '900 14px Arial, sans-serif';
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('MICHELIN', w / 2, h / 2 - 2);
+        ctx.fillText('RACING CLUB', w / 2, h / 2 - 2);
     });
 
     // 6. Valla BADLANDS APEX (Negro y Oro)
@@ -1509,53 +1509,51 @@ function buildProRacingEnvironmentTextures(scene) {
         });
     };
 
-    // MOTUL 300V Arch
+    // NITRO MOTORSPORT Arch
     makeOverheadArch('dt_arch_motul', (ctx, bx, by, bw, bh) => {
         ctx.fillStyle = '#be123c'; ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = '#ffffff'; ctx.beginPath();
         ctx.moveTo(bx + 14, by); ctx.lineTo(bx + bw - 14, by); ctx.lineTo(bx + bw - 28, by + bh); ctx.lineTo(bx, by + bh);
         ctx.closePath(); ctx.fill();
-        ctx.font = '900 20px Arial Black, sans-serif';
+        ctx.font = '900 16px Arial Black, sans-serif';
         ctx.fillStyle = '#be123c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('MOTUL', bx + bw / 2 - 16, by + bh / 2);
-        ctx.fillStyle = '#0f172a'; ctx.font = '900 13px Arial';
-        ctx.fillText('300V', bx + bw - 32, by + bh / 2);
+        ctx.fillText('NITRO MOTORSPORT', bx + bw / 2, by + bh / 2);
     });
 
-    // PIRELLI Arch
+    // APEX TIRES Arch
     makeOverheadArch('dt_arch_pirelli', (ctx, bx, by, bw, bh) => {
         ctx.fillStyle = '#0a0a0a'; ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = '#facc15'; ctx.fillRect(bx, by, bw, 3); ctx.fillRect(bx, by + bh - 4, bw, 3);
-        ctx.font = '900 21px Arial Black, sans-serif';
+        ctx.font = '900 18px Arial Black, sans-serif';
         ctx.fillStyle = '#dc2626'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('PIRELLI', bx + bw / 2, by + bh / 2);
-        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1; ctx.strokeText('PIRELLI', bx + bw / 2, by + bh / 2);
+        ctx.fillText('APEX TIRES', bx + bw / 2, by + bh / 2);
+        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1; ctx.strokeText('APEX TIRES', bx + bw / 2, by + bh / 2);
     });
 
-    // MICHELIN Arch
+    // RACING CLUB Arch
     makeOverheadArch('dt_arch_michelin', (ctx, bx, by, bw, bh) => {
         ctx.fillStyle = '#1d4ed8'; ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = '#fde047'; ctx.fillRect(bx, by + bh - 6, bw, 6);
-        ctx.font = '900 20px Arial, sans-serif';
+        ctx.font = '900 18px Arial, sans-serif';
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('MICHELIN', bx + bw / 2, by + bh / 2 - 2);
+        ctx.fillText('RACING CLUB', bx + bw / 2, by + bh / 2 - 2);
     });
 
-    // BREMBO Arch
+    // APEX BRAKES Arch
     makeOverheadArch('dt_arch_brembo', (ctx, bx, by, bw, bh) => {
         ctx.fillStyle = '#dc2626'; ctx.fillRect(bx, by, bw, bh);
-        ctx.font = '900 19px Arial, sans-serif';
+        ctx.font = '900 18px Arial, sans-serif';
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('brembo RACING', bx + bw / 2, by + bh / 2);
+        ctx.fillText('APEX BRAKES RACING', bx + bw / 2, by + bh / 2);
     });
 
-    // CASTROL EDGE Arch
+    // DUST & NITRO Arch
     makeOverheadArch('dt_arch_castrol', (ctx, bx, by, bw, bh) => {
         ctx.fillStyle = '#059669'; ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = '#dc2626'; ctx.fillRect(bx, by, bw, 3);
-        ctx.font = '900 19px Arial Black, sans-serif';
+        ctx.font = '900 18px Arial Black, sans-serif';
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('CASTROL EDGE', bx + bw / 2, by + bh / 2);
+        ctx.fillText('DUST & NITRO', bx + bw / 2, by + bh / 2);
     });
 
     // BADLANDS APEX Arch

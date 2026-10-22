@@ -120,7 +120,7 @@ const NFT_CAR_MODELS = [
     { id: "u_20", name: "Daytona Pace Car", rarity: "uncommon", sprite: "car_yellow", visualId: 5, desc: "Luces estroboscópicas de seguridad y chasis reforzado", stats: makeStats(2,2,2,2,1,2,1,1,1,1) },
 
     // --- 15 RAROS (Presupuesto: 20 - 22 Puntos) ---
-    { id: "r_01", name: "Corsa GT4 Clubsport", rarity: "rare", sprite: "car_red", visualId: 1, desc: "Bólido oficial de copa GT4 con frenos cerámicos Brembo", stats: makeStats(3,3,2,3,2,2,2,2,2,1) },
+    { id: "r_01", name: "Corsa GT4 Clubsport", rarity: "rare", sprite: "car_red", visualId: 1, desc: "Bólido oficial de copa GT4 con frenos cerámicos Apex Pro", stats: makeStats(3,3,2,3,2,2,2,2,2,1) },
     { id: "r_02", name: "Nürburg M4 Competition", rarity: "rare", sprite: "car_green", visualId: 4, desc: "Aerodinámica de fibra de carbono probada en el Infierno Verde", stats: makeStats(3,3,2,2,2,2,2,2,2,1) },
     { id: "r_03", name: "Silverstone Vantage AMR", rarity: "rare", sprite: "car_blue", visualId: 3, desc: "División de carreras británica con cambio secuencial", stats: makeStats(3,3,2,3,2,2,2,2,2,1) },
     { id: "r_04", name: "Scuderia 458 Challenge", rarity: "rare", sprite: "car_red", visualId: 2, desc: "V8 atmosférico girando a 9.000 RPM en circuito", stats: makeStats(3,3,3,2,2,2,2,2,2,1) },
@@ -173,58 +173,58 @@ const WORKSHOP_PIECES_CATALOG = {
     // 1. MOTOR & VELOCIDAD PUNTA (speed_power)
     // -------------------------------------------------------------
     // Común (Tier 1 • Capítulo 1 Rookie)
-    spark_plugs: { id: "spark_plugs", name: "Bujías de Iridio NGK", icon: "🔌", category: "speed_power", rarity: "common", desc: "Chispa de alta frecuencia para combustión óptima", costCr: 250 },
-    air_filter_sport: { id: "air_filter_sport", name: "Filtro Cónico K&N Sport", icon: "🌪️", category: "speed_power", rarity: "common", desc: "Mayor flujo de admisión de aire frío", costCr: 280 },
+    spark_plugs: { id: "spark_plugs", name: "Bujías de Iridio Apex Spark", icon: "🔌", category: "speed_power", rarity: "common", desc: "Chispa de alta frecuencia para combustión óptima", costCr: 250 },
+    air_filter_sport: { id: "air_filter_sport", name: "Filtro Cónico Apex High-Flow", icon: "🌪️", category: "speed_power", rarity: "common", desc: "Mayor flujo de admisión de aire frío", costCr: 280 },
     ecu_chip_stage1: { id: "ecu_chip_stage1", name: "Reprogramación ECU Stage 1", icon: "💻", category: "speed_power", rarity: "common", desc: "Curva de encendido e inyección optimizada", costCr: 320 },
     throttle_body_sport: { id: "throttle_body_sport", name: "Mariposa de Admisión Agrandada 70mm", icon: "🚪", category: "speed_power", rarity: "common", desc: "Respuesta inmediata al acelerador en aperturas bruscas", costCr: 270 },
 
     // Infrecuente (Tier 2 • Capítulo 2 Clubman)
-    cylinders: { id: "cylinders", name: "Pistones Forjados Wössner", icon: "🔩", category: "speed_power", rarity: "uncommon", desc: "Pistones de compresión reforzada para altas RPM", costCr: 550 },
-    fuel_injectors_high: { id: "fuel_injectors_high", name: "Inyectores Bosch Motorsport", icon: "💉", category: "speed_power", rarity: "uncommon", desc: "Inyección atomizada a 4.5 bar de presión", costCr: 600 },
+    cylinders: { id: "cylinders", name: "Pistones Forjados Apex Racing", icon: "🔩", category: "speed_power", rarity: "uncommon", desc: "Pistones de compresión reforzada para altas RPM", costCr: 550 },
+    fuel_injectors_high: { id: "fuel_injectors_high", name: "Inyectores Apex Pro 4.5 Bar", icon: "💉", category: "speed_power", rarity: "uncommon", desc: "Inyección atomizada a 4.5 bar de presión", costCr: 600 },
     exhaust_manifold_sport: { id: "exhaust_manifold_sport", name: "Colectores 4-en-1 Acero Inox", icon: "💨", category: "speed_power", rarity: "uncommon", desc: "Evacuación de gases sin contrapresión", costCr: 650 },
-    fuel_pump_highflow: { id: "fuel_pump_highflow", name: "Bomba de Gasolina Walbro 450 LPH", icon: "⛽", category: "speed_power", rarity: "uncommon", desc: "Caudal constante de combustible sin caídas de presión", costCr: 570 },
+    fuel_pump_highflow: { id: "fuel_pump_highflow", name: "Bomba de Gasolina Apex 450 LPH", icon: "⛽", category: "speed_power", rarity: "uncommon", desc: "Caudal constante de combustible sin caídas de presión", costCr: 570 },
 
     // Rara (Tier 3 • Capítulo 3 Desierto)
     engine_block: { id: "engine_block", name: "Bloque Motor V8/Bóxer Aligerado", icon: "⚙️", category: "speed_power", rarity: "rare", desc: "Cárter seco y bloque de aleación ultraligero", costCr: 1200 },
     camshaft_racing: { id: "camshaft_racing", name: "Árbol de Levas Cruzado 284°", icon: "🪵", category: "speed_power", rarity: "rare", desc: "Mayor alzada de válvulas a 8.500 RPM", costCr: 1300 },
-    intercooler_forge: { id: "intercooler_forge", name: "Intercooler Frontal Forge", icon: "❄️", category: "speed_power", rarity: "rare", desc: "Enfriamiento criogénico de la admisión", costCr: 1400 },
-    blow_off_valve_hks: { id: "blow_off_valve_hks", name: "Válvula Blow-Off HKS SSQV", icon: "💨", category: "speed_power", rarity: "rare", desc: "Protege el compresor y reduce el lag entre cambios", costCr: 1250 },
+    intercooler_forge: { id: "intercooler_forge", name: "Intercooler Frontal Apex Forge", icon: "❄️", category: "speed_power", rarity: "rare", desc: "Enfriamiento criogénico de la admisión", costCr: 1400 },
+    blow_off_valve_hks: { id: "blow_off_valve_hks", name: "Válvula Blow-Off Apex Turbo SSQ", icon: "💨", category: "speed_power", rarity: "rare", desc: "Protege el compresor y reduce el lag entre cambios", costCr: 1250 },
 
     // Épica (Tier 4 • Capítulo 4 Pro)
-    turbocharger: { id: "turbocharger", name: "Turbocompresor Garrett G35-900", icon: "🔥", category: "speed_power", rarity: "epic", desc: "Turbina de titanio y soplado a 2.4 bar", costCr: 2200 },
-    motec_ecu_pro: { id: "motec_ecu_pro", name: "Centralita MoTeC M150 Pro GT", icon: "🧠", category: "speed_power", rarity: "epic", desc: "Telemetría en tiempo real y anti-lag launch control", costCr: 2500 },
-    titanium_valves_springs: { id: "titanium_valves_springs", name: "Válvulas y Muelles de Titanio Ferrea", icon: "✨", category: "speed_power", rarity: "epic", desc: "Distribución resistente a regímenes extremos de 10.000 RPM", costCr: 2400 },
+    turbocharger: { id: "turbocharger", name: "Turbocompresor Apex GT-900", icon: "🔥", category: "speed_power", rarity: "epic", desc: "Turbina de titanio y soplado a 2.4 bar", costCr: 2200 },
+    motec_ecu_pro: { id: "motec_ecu_pro", name: "Centralita Apex Pro M150 GT", icon: "🧠", category: "speed_power", rarity: "epic", desc: "Telemetría en tiempo real y anti-lag launch control", costCr: 2500 },
+    titanium_valves_springs: { id: "titanium_valves_springs", name: "Válvulas y Muelles de Titanio Apex", icon: "✨", category: "speed_power", rarity: "epic", desc: "Distribución resistente a regímenes extremos de 10.000 RPM", costCr: 2400 },
 
     // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
     billet_engine_v8: { id: "billet_engine_v8", name: "Bloque Motor CNC V8 Billet 1200HP", icon: "👑", category: "speed_power", rarity: "legendary", desc: "Mecanizado aeroespacial para más de 1.200 CV sin límite", costCr: 5500 },
-    water_meth_injection: { id: "water_meth_injection", name: "Inyección de Metanol Snow Performance", icon: "💧", category: "speed_power", rarity: "legendary", desc: "Elimina detonación permitiendo avance de encendido máximo", costCr: 6000 },
+    water_meth_injection: { id: "water_meth_injection", name: "Inyección de Metanol Apex Performance", icon: "💧", category: "speed_power", rarity: "legendary", desc: "Elimina detonación permitiendo avance de encendido máximo", costCr: 6000 },
     twin_turbo_hybrid_f1: { id: "twin_turbo_hybrid_f1", name: "Turbocompresor Híbrido F1 MGU-H", icon: "⚡", category: "speed_power", rarity: "legendary", desc: "Cero lag turbo mediante recuperación eléctrica térmica", costCr: 6200 },
 
     // -------------------------------------------------------------
     // 2. SISTEMA DE FRENOS (braking)
     // -------------------------------------------------------------
     // Común (Tier 1 • Capítulo 1 Rookie)
-    brake_pads: { id: "brake_pads", name: "Pastillas Cerámicas Ferodo Racing", icon: "🛞", category: "braking", rarity: "common", desc: "Compuesto resistente a fatiga térmica en curvas", costCr: 220 },
-    brake_fluid_dot5: { id: "brake_fluid_dot5", name: "Líquido de Frenos Motul RBF 660", icon: "🧪", category: "braking", rarity: "common", desc: "Punto de ebullición a 325°C para tacto duro de pedal", costCr: 240 },
-    brake_bias_valve: { id: "brake_bias_valve", name: "Repartidor de Frenada Manual Tilton", icon: "⚖️", category: "braking", rarity: "common", desc: "Regulación milimétrica de balance delantero/trasero", costCr: 230 },
+    brake_pads: { id: "brake_pads", name: "Pastillas Cerámicas Apex Racing", icon: "🛞", category: "braking", rarity: "common", desc: "Compuesto resistente a fatiga térmica en curvas", costCr: 220 },
+    brake_fluid_dot5: { id: "brake_fluid_dot5", name: "Líquido de Frenos Apex RBF 660", icon: "🧪", category: "braking", rarity: "common", desc: "Punto de ebullición a 325°C para tacto duro de pedal", costCr: 240 },
+    brake_bias_valve: { id: "brake_bias_valve", name: "Repartidor de Frenada Manual Pro", icon: "⚖️", category: "braking", rarity: "common", desc: "Regulación milimétrica de balance delantero/trasero", costCr: 230 },
 
     // Infrecuente (Tier 2 • Capítulo 2 Clubman)
-    brake_discs: { id: "brake_discs", name: "Discos Perforados Girodisc", icon: "💿", category: "braking", rarity: "uncommon", desc: "Ranuras de refrigeración activa para detención fulgurante", costCr: 500 },
-    braided_brake_lines: { id: "braided_brake_lines", name: "Latiguillos Metálicos Goodridge", icon: "⛓️", category: "braking", rarity: "uncommon", desc: "Trenzados de acero inoxidable sin expansión volumétrica", costCr: 520 },
-    master_cylinder_race: { id: "master_cylinder_race", name: "Doble Bomba de Freno AP Racing", icon: "🪛", category: "braking", rarity: "uncommon", desc: "Circuitos hidráulicos dobles independientes para máxima seguridad", costCr: 530 },
+    brake_discs: { id: "brake_discs", name: "Discos Perforados Apex Giro", icon: "💿", category: "braking", rarity: "uncommon", desc: "Ranuras de refrigeración activa para detención fulgurante", costCr: 500 },
+    braided_brake_lines: { id: "braided_brake_lines", name: "Latiguillos Metálicos Apex Braided", icon: "⛓️", category: "braking", rarity: "uncommon", desc: "Trenzados de acero inoxidable sin expansión volumétrica", costCr: 520 },
+    master_cylinder_race: { id: "master_cylinder_race", name: "Doble Bomba de Freno Apex Racing", icon: "🪛", category: "braking", rarity: "uncommon", desc: "Circuitos hidráulicos dobles independientes para máxima seguridad", costCr: 530 },
 
     // Rara (Tier 3 • Capítulo 3 Desierto)
-    brake_calipers: { id: "brake_calipers", name: "Pinzas Brembo Monobloque 4-Pistones", icon: "🔴", category: "braking", rarity: "rare", desc: "Mordida instantánea en frenadas a final de recta", costCr: 1100 },
-    ventilated_floating_discs: { id: "ventilated_floating_discs", name: "Discos Flotantes AP Racing 380mm", icon: "📀", category: "braking", rarity: "rare", desc: "Campana de ergal flotante con dilatación libre", costCr: 1250 },
+    brake_calipers: { id: "brake_calipers", name: "Pinzas Apex Monobloque 4-Pistones", icon: "🔴", category: "braking", rarity: "rare", desc: "Mordida instantánea en frenadas a final de recta", costCr: 1100 },
+    ventilated_floating_discs: { id: "ventilated_floating_discs", name: "Discos Flotantes Apex Racing 380mm", icon: "📀", category: "braking", rarity: "rare", desc: "Campana de ergal flotante con dilatación libre", costCr: 1250 },
     titanium_brake_shims: { id: "titanium_brake_shims", name: "Aislantes Térmicos de Titanio", icon: "🛡️", category: "braking", rarity: "rare", desc: "Barrera térmica que evita la transferencia de calor al líquido", costCr: 1180 },
 
     // Épica (Tier 4 • Capítulo 4 Pro)
-    carbon_ceramic_calipers: { id: "carbon_ceramic_calipers", name: "Pinzas Brembo GT-R Monobloque 6P", icon: "🛑", category: "braking", rarity: "epic", desc: "Mecanizadas de un bloque sólido de aluminio forjado", costCr: 2300 },
+    carbon_ceramic_calipers: { id: "carbon_ceramic_calipers", name: "Pinzas Apex GT-R Monobloque 6P", icon: "🛑", category: "braking", rarity: "epic", desc: "Mecanizadas de un bloque sólido de aluminio forjado", costCr: 2300 },
     cooling_ducts_brakes: { id: "cooling_ducts_brakes", name: "Conductos de Aire de Carbono", icon: "🌬️", category: "braking", rarity: "epic", desc: "Túneles de refrigeración forzada a los discos", costCr: 2400 },
     carbon_cooling_fans: { id: "carbon_cooling_fans", name: "Turbinas de Enfriamiento Dinámico", icon: "🌀", category: "braking", rarity: "epic", desc: "Aspas integradas en llantas para disipar calor a alta velocidad", costCr: 2350 },
 
     // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
-    carbon_ceramic_brembo: { id: "carbon_ceramic_brembo", name: "Frenos Carbono-Cerámicos Brembo CCM-R", icon: "💎", category: "braking", rarity: "legendary", desc: "Resistencia térmica absoluta sin fading a más de 1.000°C", costCr: 5400 },
+    carbon_ceramic_brembo: { id: "carbon_ceramic_brembo", name: "Frenos Carbono-Cerámicos Apex CCM-R", icon: "💎", category: "braking", rarity: "legendary", desc: "Resistencia térmica absoluta sin fading a más de 1.000°C", costCr: 5400 },
     kers_f1_regen: { id: "kers_f1_regen", name: "MGU-K Regeneración Eléctrica F1", icon: "⚡", category: "braking", rarity: "legendary", desc: "Freno motor electromagnético de 160 CV con recarga", costCr: 5800 },
     f1_brake_by_wire: { id: "f1_brake_by_wire", name: "Sistema de Freno F1 Brake-By-Wire", icon: "🖲️", category: "braking", rarity: "legendary", desc: "Modulación electrónica por microsegundo sin bloqueo de ruedas", costCr: 5900 },
 
@@ -233,8 +233,8 @@ const WORKSHOP_PIECES_CATALOG = {
     // -------------------------------------------------------------
     // Común (Tier 1 • Capítulo 1 Rookie)
     slick_tires: { id: "slick_tires", name: "Neumáticos Semi-Slick Sport", icon: "🏎️", category: "handling_grip", rarity: "common", desc: "Goma deportiva blanda con flanco reforzado", costCr: 260 },
-    lowering_springs: { id: "lowering_springs", name: "Muelles Pro-Kit Eibach", icon: "〰️", category: "handling_grip", rarity: "common", desc: "Baja el centro de gravedad en 35mm para menos balanceo", costCr: 270 },
-    wheel_spacers_hubcentric: { id: "wheel_spacers_hubcentric", name: "Separadores de Vía Ensanchada Eibach", icon: "📏", category: "handling_grip", rarity: "common", desc: "Ensancha la pisada en 20mm para mayor aplomo", costCr: 250 },
+    lowering_springs: { id: "lowering_springs", name: "Muelles Apex Pro-Kit Sport", icon: "〰️", category: "handling_grip", rarity: "common", desc: "Baja el centro de gravedad en 35mm para menos balanceo", costCr: 270 },
+    wheel_spacers_hubcentric: { id: "wheel_spacers_hubcentric", name: "Separadores de Vía Ensanchada Pro", icon: "📏", category: "handling_grip", rarity: "common", desc: "Ensancha la pisada en 20mm para mayor aplomo", costCr: 250 },
 
     // Infrecuente (Tier 2 • Capítulo 2 Clubman)
     suspension_springs: { id: "suspension_springs", name: "Muelles Roscados Coilover", icon: "🌀", category: "handling_grip", rarity: "uncommon", desc: "Amortiguación regulable en compresión y rebote", costCr: 520 },
@@ -242,17 +242,17 @@ const WORKSHOP_PIECES_CATALOG = {
     camber_plates_adjustable: { id: "camber_plates_adjustable", name: "Copelas Regulables de Caída Dinámica", icon: "📐", category: "handling_grip", rarity: "uncommon", desc: "Caída negativa precisa para apoyo en curva máxima", costCr: 530 },
 
     // Rara (Tier 3 • Capítulo 3 Desierto)
-    antiroll_bars: { id: "antiroll_bars", name: "Barra Estabilizadora H&R Gruesa", icon: "🔗", category: "handling_grip", rarity: "rare", desc: "Rigidez torsional contra el balanceo en cambios de apoyo", costCr: 1150 },
-    adjustable_coilovers: { id: "adjustable_coilovers", name: "Coilovers KW Competition 3-Vías", icon: "🎛️", category: "handling_grip", rarity: "rare", desc: "Ajuste milimétrico de alta/baja velocidad y rebote", costCr: 1300 },
-    polyurethane_bushings_kit: { id: "polyurethane_bushings_kit", name: "Silentblocks de Poliuretano Powerflex", icon: "🧱", category: "handling_grip", rarity: "rare", desc: "Cero holguras en los brazos de suspensión bajo carga", costCr: 1200 },
+    antiroll_bars: { id: "antiroll_bars", name: "Barra Estabilizadora Apex Gruesa", icon: "🔗", category: "handling_grip", rarity: "rare", desc: "Rigidez torsional contra el balanceo en cambios de apoyo", costCr: 1150 },
+    adjustable_coilovers: { id: "adjustable_coilovers", name: "Coilovers Apex Competition 3-Vías", icon: "🎛️", category: "handling_grip", rarity: "rare", desc: "Ajuste milimétrico de alta/baja velocidad y rebote", costCr: 1300 },
+    polyurethane_bushings_kit: { id: "polyurethane_bushings_kit", name: "Silentblocks de Poliuretano Pro", icon: "🧱", category: "handling_grip", rarity: "rare", desc: "Cero holguras en los brazos de suspensión bajo carga", costCr: 1200 },
 
     // Épica (Tier 4 • Capítulo 4 Pro)
-    michelin_cup_slicks: { id: "michelin_cup_slicks", name: "Slicks Lisos Michelin Pilot Sport GT", icon: "🏁", category: "handling_grip", rarity: "epic", desc: "Compuesto puro de goma slick para soportar 2.4G", costCr: 2450 },
+    michelin_cup_slicks: { id: "michelin_cup_slicks", name: "Slicks Lisos Apex Cup Sport GT", icon: "🏁", category: "handling_grip", rarity: "epic", desc: "Compuesto puro de goma slick para soportar 2.4G", costCr: 2450 },
     pushrod_suspension: { id: "pushrod_suspension", name: "Suspensión Inboard Push-Rod", icon: "📐", category: "handling_grip", rarity: "epic", desc: "Amortiguadores horizontales dentro del habitáculo", costCr: 2600 },
-    magnesium_forged_wheels: { id: "magnesium_forged_wheels", name: "Llantas Forjadas de Magnesio BBS", icon: "🛞", category: "handling_grip", rarity: "epic", desc: "Masa no suspendida reducida a la mitad para giros veloces", costCr: 2550 },
+    magnesium_forged_wheels: { id: "magnesium_forged_wheels", name: "Llantas Forjadas de Magnesio Apex GT", icon: "🛞", category: "handling_grip", rarity: "epic", desc: "Masa no suspendida reducida a la mitad para giros veloces", costCr: 2550 },
 
     // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
-    pirelli_f1_slicks: { id: "pirelli_f1_slicks", name: "Slicks F1 Pirelli P-Zero Rosso Corsa", icon: "🏆", category: "handling_grip", rarity: "legendary", desc: "Adherencia molecular térmica de monoplaza de GP", costCr: 5600 },
+    pirelli_f1_slicks: { id: "pirelli_f1_slicks", name: "Slicks F1 Apex Formula Rosso Corsa", icon: "🏆", category: "handling_grip", rarity: "legendary", desc: "Adherencia molecular térmica de monoplaza de GP", costCr: 5600 },
     monocoque_chassis_gt: { id: "monocoque_chassis_gt", name: "Chasis Monocasco Carbono-Titanio LMP", icon: "🛡️", category: "handling_grip", rarity: "legendary", desc: "Rigidez espacial de 50.000 Nm/grado con peso mínimo", costCr: 6200 },
     active_magnetic_dampers: { id: "active_magnetic_dampers", name: "Amortiguadores Magnetoreológicos Activos", icon: "🧲", category: "handling_grip", rarity: "legendary", desc: "Ajuste de viscosidad por campo electromagnético en 1ms", costCr: 6000 },
 
@@ -270,14 +270,14 @@ const WORKSHOP_PIECES_CATALOG = {
     final_drive_short_gear: { id: "final_drive_short_gear", name: "Grupo Cónico Corto Rápido 4.44", icon: "⚙️", category: "accel_traction", rarity: "uncommon", desc: "Aceleración demoledora a costa de velocidad punta", costCr: 590 },
 
     // Rara (Tier 3 • Capítulo 3 Desierto)
-    gearbox_cogs: { id: "gearbox_cogs", name: "Caja de Cambios Secuencial Quaife", icon: "⚙️", category: "accel_traction", rarity: "rare", desc: "Engranajes rectos para cambio de marcha en 30 milisegundos", costCr: 1300 },
+    gearbox_cogs: { id: "gearbox_cogs", name: "Caja de Cambios Secuencial Pro", icon: "⚙️", category: "accel_traction", rarity: "rare", desc: "Engranajes rectos para cambio de marcha en 30 milisegundos", costCr: 1300 },
     carbon_driveshaft: { id: "carbon_driveshaft", name: "Árbol de Transmisión de Carbono", icon: "🥢", category: "accel_traction", rarity: "rare", desc: "Eje de transmisión peso pluma que absorbe picos de par", costCr: 1350 },
     launch_control_module: { id: "launch_control_module", name: "Módulo de Salida Launch Control 2-Step", icon: "🚀", category: "accel_traction", rarity: "rare", desc: "Salidas perfectas desde parado sin patinaje de neumáticos", costCr: 1280 },
 
     // Épica (Tier 4 • Capítulo 4 Pro)
-    sequential_dogbox: { id: "sequential_dogbox", name: "Caja Secuencial Holinger 6-Vel", icon: "🕹️", category: "accel_traction", rarity: "epic", desc: "Cambios de marcha sin pisar embrague en 25ms", costCr: 2500 },
-    triple_plate_clutch: { id: "triple_plate_clutch", name: "Embrague Triple-Disco Tilton Carbon", icon: "🔘", category: "accel_traction", rarity: "epic", desc: "Capaz de transferir hasta 1.500 Nm de par motor", costCr: 2600 },
-    pneumatic_paddle_shifters: { id: "pneumatic_paddle_shifters", name: "Levas Neumáticas Magneti Marelli", icon: "🎮", category: "accel_traction", rarity: "epic", desc: "Actuador neumático que engrana marchas por aire comprimido", costCr: 2550 },
+    sequential_dogbox: { id: "sequential_dogbox", name: "Caja Secuencial Dogbox 6-Vel", icon: "🕹️", category: "accel_traction", rarity: "epic", desc: "Cambios de marcha sin pisar embrague en 25ms", costCr: 2500 },
+    triple_plate_clutch: { id: "triple_plate_clutch", name: "Embrague Triple-Disco Apex Carbon", icon: "🔘", category: "accel_traction", rarity: "epic", desc: "Capaz de transferir hasta 1.500 Nm de par motor", costCr: 2600 },
+    pneumatic_paddle_shifters: { id: "pneumatic_paddle_shifters", name: "Levas Neumáticas Apex Pro", icon: "🎮", category: "accel_traction", rarity: "epic", desc: "Actuador neumático que engrana marchas por aire comprimido", costCr: 2550 },
 
     // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
     f1_dual_clutch_transaxle: { id: "f1_dual_clutch_transaxle", name: "Transmisión Transaxle Dual-Clutch F1", icon: "🚀", category: "accel_traction", rarity: "legendary", desc: "Cero interrupción de empuje y levas magnéticas de titanio", costCr: 5800 },
@@ -300,7 +300,7 @@ const WORKSHOP_PIECES_CATALOG = {
     // Rara (Tier 3 • Capítulo 3 Desierto)
     monocoque_frame: { id: "monocoque_frame", name: "Chasis Monocasco Carbono", icon: "🪶", category: "aero_lightness", rarity: "rare", desc: "Estructura de fibra de carbono peso pluma de competición", costCr: 1400 },
     canards_vortex: { id: "canards_vortex", name: "Generadores de Vórtices Canards", icon: "🔪", category: "aero_lightness", rarity: "rare", desc: "Aletas laterales que sellan aerodinámicamente el lateral", costCr: 1350 },
-    titanium_exhaust_system: { id: "titanium_exhaust_system", name: "Escape Completo Akrapovic Titanio", icon: "🎺", category: "aero_lightness", rarity: "rare", desc: "Ahorra 18 kg de peso suspendido y optimiza flujo aerodinámico", costCr: 1380 },
+    titanium_exhaust_system: { id: "titanium_exhaust_system", name: "Escape Completo Apex Titanio", icon: "🎺", category: "aero_lightness", rarity: "rare", desc: "Ahorra 18 kg de peso suspendido y optimiza flujo aerodinámico", costCr: 1380 },
 
     // Épica (Tier 4 • Capítulo 4 Pro)
     flat_floor_undertray: { id: "flat_floor_undertray", name: "Fondo Plano de Carbono con Túneles Venturi", icon: "🛹", category: "aero_lightness", rarity: "epic", desc: "Efecto suelo integral que duplica el agarre en curva rápida", costCr: 2400 },
@@ -310,7 +310,7 @@ const WORKSHOP_PIECES_CATALOG = {
     // Legendaria (Tier 5 • Capítulo 5 Leyendas Mundial)
     active_drs_wing: { id: "active_drs_wing", name: "Alerón Activo con Sistema DRS F1", icon: "🪽", category: "aero_lightness", rarity: "legendary", desc: "Abre flap en rectas para +25 km/h y actúa como aerofreno", costCr: 5900 },
     lmp1_aero_body: { id: "lmp1_aero_body", name: "Carrocería Completa Fibra de Carbono LMP1", icon: "👑", category: "aero_lightness", rarity: "legendary", desc: "Estructura autoclave de 900 kg con aerodinámica de Le Mans", costCr: 6500 },
-    active_ground_effect_fan: { id: "active_ground_effect_fan", name: "Turbina de Efecto Suelo Brabham Fan-Car", icon: "🌀", category: "aero_lightness", rarity: "legendary", desc: "Succión activa por ventilador de turbina para adherencia ilimitada", costCr: 6600 }
+    active_ground_effect_fan: { id: "active_ground_effect_fan", name: "Turbina de Efecto Suelo Fan-Car", icon: "🌀", category: "aero_lightness", rarity: "legendary", desc: "Succión activa por ventilador de turbina para adherencia ilimitada", costCr: 6600 }
 };
 
 // Ramas de Mejora Específicas: Stage 1 (Común), Stage 2 (Infrecuente), Stage 3 (Rara), Stage 4 (Épica), Stage 5 (Legendaria)
@@ -524,9 +524,9 @@ const SHOP_PARTS_KITS = {
     },
     kit_brakes: {
         id: "kit_brakes",
-        name: "Pack de Frenada Brembo",
+        name: "Pack de Frenada Apex Pro",
         icon: "🛑",
-        desc: "Contiene: 6 Pastillas Cerámicas, 3 Discos Perforados y 1 Pinza Brembo",
+        desc: "Contiene: 6 Pastillas Cerámicas, 3 Discos Perforados y 1 Pinza Apex Pro",
         costCr: 2200,
         parts: { brake_pads: 6, brake_discs: 3, brake_calipers: 1 }
     },
@@ -1835,7 +1835,7 @@ let COMMUNITY_MARKETPLACE_LISTINGS = [
     { id: "lst_01", type: "part", seller: "@Phantom_Silva", sellerIsMe: false, isRealPlayer: false, partId: "turbocharger", name: "Turbocompresor Twin-Scroll", icon: "🌪️", category: "Motor & Turbo", rarity: "rare", priceCr: 1850, verified: true, timeAgo: "hace 12m" },
     { id: "lst_02", type: "part", seller: "@ApexDrift_Tokyo", sellerIsMe: false, isRealPlayer: false, partId: "slick_tires", name: "Neumáticos Slick GT3", icon: "🏎️", category: "Neumáticos", rarity: "uncommon", priceCr: 210, verified: true, timeAgo: "hace 24m" },
     { id: "lst_03", type: "car", seller: "@Viper_King_USA", sellerIsMe: false, isRealPlayer: false, carModelId: "rare_03", name: "VIPER GTS COUPE ACR", icon: "🏎️", category: "Vehículo NFT", rarity: "rare", priceCr: 7500, verified: true, timeAgo: "hace 35m", carData: { modelId: "rare_03", name: "VIPER GTS COUPE ACR", rarity: "rare", visualId: 2, level: 3, xp: 80, xpNeeded: 180, parts: { speed_power: 2, braking: 2, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Rosso Corsa", colorHex: "#e53935", tint: 0xe53935, mintNumber: 142 } },
-    { id: "lst_04", type: "part", seller: "@Brembo_Official", sellerIsMe: false, isRealPlayer: false, partId: "brake_calipers", name: "Pinzas Brembo Monobloque", icon: "🔴", category: "Frenos", rarity: "rare", priceCr: 950, verified: true, timeAgo: "hace 45m" },
+    { id: "lst_04", type: "part", seller: "@Apex_Brakes", sellerIsMe: false, isRealPlayer: false, partId: "brake_calipers", name: "Pinzas Apex Monobloque", icon: "🔴", category: "Frenos", rarity: "rare", priceCr: 950, verified: true, timeAgo: "hace 45m" },
     { id: "lst_05", type: "car", seller: "@Sophie_Laurent", sellerIsMe: false, isRealPlayer: false, carModelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", icon: "🏎️", category: "Vehículo NFT", rarity: "uncommon", priceCr: 2800, verified: true, timeAgo: "hace 1h", carData: { modelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", rarity: "uncommon", visualId: 1, level: 1, xp: 0, xpNeeded: 120, parts: { speed_power: 1, braking: 1, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Miami Blue GT", colorHex: "#0284c7", tint: 0x0284c7, mintNumber: 388 } },
     { id: "lst_06", type: "part", seller: "@Klaus_Precision", sellerIsMe: false, isRealPlayer: false, partId: "engine_block", name: "Bloque Motor V8 Bóxer", icon: "⚙️", category: "Motor & Turbo", rarity: "rare", priceCr: 1050, verified: true, timeAgo: "hace 1h" },
     { id: "lst_07", type: "part", seller: "@Tarek_Mansour", sellerIsMe: false, isRealPlayer: false, partId: "spark_plugs", name: "Bujías de Iridio (x2)", icon: "🔌", category: "Encendido", rarity: "common", priceCr: 190, verified: true, timeAgo: "hace 3h" }
@@ -2331,9 +2331,9 @@ function enterWeeklyTournament() {
 const SPONSORSHIP_CONTRACTS_DATA = [
     {
         id: 'sp_pirelli',
-        name: 'Pirelli P-Zero Motorsport',
-        badge: '🟡 PIRELLI RACING',
-        brand: 'Pirelli',
+        name: 'Apex Radial Motorsport',
+        badge: '🟡 APEX TIRES',
+        brand: 'Apex Radial',
         icon: '🛞',
         color: '#facc15',
         desc: 'El fabricante oficial de neumáticos busca pilotos que dominen el derrape y aprovechen el impulso en curva.',
@@ -2349,9 +2349,9 @@ const SPONSORSHIP_CONTRACTS_DATA = [
     },
     {
         id: 'sp_brembo',
-        name: 'Brembo Racing Brakes',
-        badge: '🔴 BREMBO BRAKES',
-        brand: 'Brembo',
+        name: 'Apex Racing Brakes',
+        badge: '🔴 APEX BRAKES',
+        brand: 'Apex Brakes',
         icon: '🛑',
         color: '#ef4444',
         desc: 'Demuestra frenadas quirúrgicas subiendo al cajón del podio en cualquier prueba oficial.',
@@ -2362,14 +2362,14 @@ const SPONSORSHIP_CONTRACTS_DATA = [
         rewardNitros: 0,
         rewardEnergy: 2,
         rewardPartId: 'brake_calipers',
-        rewardPartName: 'Pinzas Brembo Monobloque',
+        rewardPartName: 'Pinzas Apex Monobloque',
         tier: 'ELITE'
     },
     {
         id: 'sp_castrol',
-        name: 'Castrol Edge Titanium',
-        badge: '🟢 CASTROL EDGE',
-        brand: 'Castrol',
+        name: 'Dust & Nitro Synthetic',
+        badge: '🟢 NITRO EDGE',
+        brand: 'Dust & Nitro',
         icon: '⚡',
         color: '#10b981',
         desc: 'Rendimiento térmico extremo de motor: exprime al máximo la velocidad punta en recta.',
@@ -2380,15 +2380,15 @@ const SPONSORSHIP_CONTRACTS_DATA = [
         rewardNitros: 2,
         rewardEnergy: 0,
         rewardPartId: 'turbocharger',
-        rewardPartName: 'Turbocompresor Garrett Twin-Scroll',
+        rewardPartName: 'Turbocompresor Apex GT Twin-Scroll',
         tier: 'PRO'
     },
     {
         id: 'sp_redbull',
-        name: 'Red Bull Apex GP Racing',
-        badge: '🔵 RED BULL APEX',
-        brand: 'Red Bull',
-        icon: '🐂',
+        name: 'Apex World Racing Club',
+        badge: '🔵 RACING CLUB',
+        brand: 'Apex Racing Club',
+        icon: '🏆',
         color: '#38bdf8',
         desc: 'Contrato exclusivo de escudería campeona: consigue la victoria absoluta en 1º puesto.',
         goalType: 'win',

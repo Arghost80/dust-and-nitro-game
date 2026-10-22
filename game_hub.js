@@ -1714,7 +1714,7 @@ function renderShopView() {
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🛑</div>
-                    <div class="shop-item-name">Frenos Cerámicos Carbono Brembo</div>
+                    <div class="shop-item-name">Frenos Cerámicos Carbono Apex Pro</div>
                     <div class="shop-item-price">1,800 $CR</div>
                     <button class="btn-buy-item" onclick="buyUpgrade('brakes', 1800)">${t('shop_buy')}</button>
                 </div>
