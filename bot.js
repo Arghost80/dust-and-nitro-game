@@ -192,7 +192,7 @@ async function startPolling() {
             await telegramRequest('setChatMenuButton', {
                 menu_button: {
                     type: 'web_app',
-                    text: 'JUGAR DUST & NITRO',
+                    text: 'JUGAR APEX MOTORSPORT',
                     web_app: { url: WEBAPP_URL }
                 }
             });

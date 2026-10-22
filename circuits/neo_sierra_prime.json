@@ -1,5 +1,5 @@
-﻿{
-  "project": "Dust & Nitro Racing",
+{
+  "project": "Apex Motorsport",
   "engine_compatibility": ["GDevelop 5", "Phaser 3", "microStudio", "Godot 2D"],
   "circuit": {
     "id": "neo_sierra_prime_4lanes",
