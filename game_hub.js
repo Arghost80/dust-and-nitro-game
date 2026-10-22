@@ -3681,22 +3681,17 @@ function openWeeklyTournamentModal() {
                         </div>
                     </div>
 
-                    <!-- Métricas del Bote Dinámico (20 $CR Inscripción • Casa +200 $CR • 5% Fee) -->
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px;">
-                        <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                            <span style="font-size: 10px; color: #94a3b8;">INSCRITOS:</span>
-                            <div style="font-size: 14px; font-weight: 900; color: #38bdf8;">👥 ${tInfo.registeredPlayers || 124} pilotos</div>
-                            <div style="font-size: 9px; color: #64748b;">${((tInfo.registeredPlayers || 124) * 20).toLocaleString()} $CR en entradas</div>
+                    <!-- Bote Total Acumulado (Sin métrica de usuarios ni patrocinio de la casa, solo bote acumulativo) -->
+                    <div style="background: linear-gradient(135deg, rgba(253, 224, 71, 0.12), rgba(245, 158, 11, 0.08)); border: 1.5px solid rgba(253, 224, 71, 0.35); border-radius: 12px; padding: 14px 18px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div>
+                            <span style="font-size: 11px; font-weight: 900; color: #fde047; letter-spacing: 1px; text-transform: uppercase;">🏆 BOTE TOTAL ACUMULADO</span>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">Se incrementa automáticamente con cada inscripción al torneo</div>
                         </div>
-                        <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                            <span style="font-size: 10px; color: #94a3b8;">PATROCINIO DE LA CASA:</span>
-                            <div style="font-size: 14px; font-weight: 900; color: #00f5d4;">💰 +${(tInfo.houseBonusCr || 200).toLocaleString()} $CR</div>
-                            <div style="font-size: 9px; color: #64748b;">Aportación directa al bote</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                            <span style="font-size: 10px; color: #94a3b8;">BOTE NETO PREMIOS (95%):</span>
-                            <div style="font-size: 14px; font-weight: 900; color: #fde047;">💰 ${(tInfo.netPrizePotCr || 2090).toLocaleString()} $CR</div>
-                            <div style="font-size: 9px; color: #10b981;">Fee Plataforma 5%: ${(tInfo.devFeeCr || 110)} $CR</div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 24px; font-weight: 900; color: #fde047; text-shadow: 0 0 12px rgba(253, 224, 71, 0.4);">
+                                💰 ${(tInfo.netPrizePotCr || 0).toLocaleString()} $CR
+                            </div>
+                            <div style="font-size: 10px; color: #10b981; font-weight: 700;">Reparto íntegro entre los mejores tiempos</div>
                         </div>
                     </div>
                 </div>
@@ -4178,11 +4173,11 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                         </div>
                                         <div style="display: flex; align-items: center; gap: 12px;">
                                             <div style="text-align: right;">
-                                                <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
-                                                <div style="font-size: 9px; color: #94a3b8;">Precio de venta: ${askPrice} $CR</div>
+                                                <div style="font-size: 11px; color: #94a3b8;">Precio sugerido:</div>
+                                                <div style="font-size: 13px; font-weight: 900; color: #fde047;">~${askPrice.toLocaleString()} $CR</div>
                                             </div>
                                             <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${partKey}', ${askPrice})">
-                                                🏷️ PUBLICAR 1x
+                                                🏷️ PONER PRECIO Y VENDER
                                             </button>
                                         </div>
                                     </div>
@@ -4216,11 +4211,11 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                         </div>
                                         <div style="display: flex; align-items: center; gap: 12px;">
                                             <div style="text-align: right;">
-                                                <div style="font-size: 13px; font-weight: 900; color: #10b981;">+${netCr.toLocaleString()} $CR netos</div>
-                                                <div style="font-size: 9px; color: #94a3b8;">Precio de venta: ${basePrice.toLocaleString()} $CR</div>
+                                                <div style="font-size: 11px; color: #94a3b8;">Precio sugerido:</div>
+                                                <div style="font-size: 13px; font-weight: 900; color: #fde047;">~${basePrice.toLocaleString()} $CR</div>
                                             </div>
                                             <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${car.instanceId}', ${basePrice})">
-                                                🏷️ PUBLICAR
+                                                🏷️ PONER PRECIO Y VENDER
                                             </button>
                                         </div>
                                     </div>
@@ -4266,9 +4261,18 @@ function handleBuyMarketplacePart(listingId) {
     return handleBuyMarketplaceItem(listingId);
 }
 
-function handleListMarketplacePart(partKey, priceCr) {
+function handleListMarketplacePart(partKey, defaultPrice) {
     hubAudio.playClick();
     if (typeof listPartOnMarketplace !== 'function') return;
+    const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey };
+    const promptMsg = `¿Qué precio en $CR deseas fijar para vender "${pDef.name}"?\n\n(Tú eliges libremente el precio. Mínimo: 10 $CR)`;
+    const input = prompt(promptMsg, defaultPrice || 250);
+    if (input === null) return;
+    const priceCr = parseInt(String(input).trim(), 10);
+    if (isNaN(priceCr) || priceCr < 10) {
+        alert('Por favor introduce un precio válido en $CR (mínimo 10 $CR).');
+        return;
+    }
     const res = listPartOnMarketplace(partKey, priceCr);
     if (!res.success) {
         alert(res.reason || 'No se pudo publicar la pieza.');
@@ -4277,12 +4281,23 @@ function handleListMarketplacePart(partKey, priceCr) {
     hubAudio.playOpenCrate();
     renderHubHeader();
     openPartsMarketplaceModal('buy');
-    alert(`🏷️ ¡Pieza publicada con éxito en el Mercado P2P por ${priceCr} $CR!\n\nAhora está visible para que otros pilotos la compren. La plataforma no compra con fondos propios; tus tokens se acreditarán cuando otro jugador la adquiera.`);
+    alert(`🏷️ ¡Pieza "${pDef.name}" publicada por ${priceCr.toLocaleString()} $CR!\n\nAhora está visible en el Mercado P2P para que otro piloto la compre. Tus tokens se acreditarán en cuanto se complete la compra.`);
 }
 
-function handleListMarketplaceCar(instanceId, priceCr) {
+function handleListMarketplaceCar(instanceId, defaultPrice) {
     hubAudio.playClick();
     if (typeof listCarOnMarketplace !== 'function') return;
+    const userData = loadNftUserData();
+    const car = (userData.garage || []).find(c => c.instanceId === instanceId);
+    const carName = car ? car.name : 'Coche NFT';
+    const promptMsg = `¿Qué precio en $CR deseas fijar para vender tu coche "${carName}"?\n\n(Tú eliges libremente el precio. Mínimo: 50 $CR)`;
+    const input = prompt(promptMsg, defaultPrice || 1000);
+    if (input === null) return;
+    const priceCr = parseInt(String(input).trim(), 10);
+    if (isNaN(priceCr) || priceCr < 50) {
+        alert('Por favor introduce un precio válido en $CR (mínimo 50 $CR).');
+        return;
+    }
     const res = listCarOnMarketplace(instanceId, priceCr);
     if (!res.success) {
         alert(res.reason || 'No se pudo publicar el coche.');
@@ -4292,7 +4307,7 @@ function handleListMarketplaceCar(instanceId, priceCr) {
     renderHubHeader();
     renderGarageView();
     openPartsMarketplaceModal('buy');
-    alert(`🏷️ ¡Vehículo NFT publicado en el Mercado P2P por ${priceCr.toLocaleString()} $CR!\n\nEl coche está ahora en el catálogo comunitario para que otros usuarios puedan adquirirlo.`);
+    alert(`🏷️ ¡"${carName}" publicado en el Mercado P2P por ${priceCr.toLocaleString()} $CR!\n\nEl vehículo ya está disponible en el catálogo de ofertas de la comunidad.`);
 }
 
 function handleCancelMarketplaceListing(listingId) {

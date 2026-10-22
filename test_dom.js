@@ -2017,7 +2017,48 @@ const modalHtmlDev = doc.getElementById('settings-modal').innerHTML;
 if (!modalHtmlDev.includes('grantTestingFunds')) {
     throw new Error('En modo desarrollo (false), las herramientas de testing deben estar disponibles para pruebas.');
 }
-console.log('✓ En Desarrollo (false): Herramientas de testing disponibles para el creador');
+// 3. Verificar Mercado P2P vacío en producción y libre elección de precio
+console.log('\n--- VERIFICANDO MERCADO P2P Y TORNEO SEMANAL CON BOTE ACUMULATIVO (V91) ---');
+// Limpiar ofertas de tests previos para simular el inicio limpio de producción
+vm.runInContext('COMMUNITY_MARKETPLACE_LISTINGS = COMMUNITY_MARKETPLACE_LISTINGS.filter(l => !l.sellerIsMe && !l.isRealPlayer);', ctx);
+vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = true', ctx);
+const prodMarketListings = vm.runInContext('getMarketplaceListings()', ctx);
+if (prodMarketListings.length !== 0) {
+    throw new Error(`En producción el mercado debe arrancar vacío si no hay ofertas reales. Encontradas: ${prodMarketListings.length}`);
+}
+console.log('✓ En Producción: El Mercado P2P arranca 100% vacío (sin ofertas bot/seed)');
+
+// Publicar pieza con precio personalizado elegido por el usuario (ej: 480 $CR)
+vm.runInContext('(() => { const uData = loadNftUserData(); if (!uData.partsInventory) uData.partsInventory = {}; uData.partsInventory["turbocharger"] = 2; saveNftUserData(uData); })()', ctx);
+const customPriceRes = vm.runInContext('listPartOnMarketplace("turbocharger", 480)', ctx);
+if (!customPriceRes.success || customPriceRes.listing.priceCr !== 480) {
+    throw new Error('El usuario debe poder fijar el precio que desee en $CR');
+}
+const updatedProdListings = vm.runInContext('getMarketplaceListings()', ctx);
+if (updatedProdListings.length !== 1 || updatedProdListings[0].priceCr !== 480) {
+    throw new Error('La oferta del usuario debe aparecer en el mercado de producción con su precio personalizado');
+}
+console.log('✓ Precio libre verificado: La pieza se publicó con éxito a 480 $CR fijados por el usuario');
+
+// Verificar configuración del Torneo Semanal: 0 bono de la casa y sin tarjetas de inscritos/patrocinio
+const tourneyConfig = vm.runInContext('WEEKLY_TOURNAMENT_CONFIG', ctx);
+if (tourneyConfig.houseBonusCr !== 0) {
+    throw new Error(`El patrocinio de la casa debe ser 0 $CR, actual: ${tourneyConfig.houseBonusCr}`);
+}
+console.log('✓ Torneo Semanal: houseBonusCr configurado en 0 $CR (solo acumula lo que ponen los usuarios)');
+
+vm.runInContext('openWeeklyTournamentModal()', ctx);
+const tourneyModalHtml = doc.getElementById('weekly-tournament-modal').innerHTML;
+if (!tourneyModalHtml.includes('BOTE TOTAL ACUMULADO')) {
+    throw new Error('El modal del torneo debe mostrar la tarjeta destacada BOTE TOTAL ACUMULADO');
+}
+if (tourneyModalHtml.includes('INSCRITOS:') || tourneyModalHtml.includes('PATROCINIO DE LA CASA:')) {
+    throw new Error('El modal del torneo NO debe mostrar tarjetas de inscritos ni patrocinio de la casa');
+}
+console.log('✓ Modal de Torneo verificado: Muestra exclusivamente el BOTE TOTAL ACUMULADO');
+
+// Restaurar desarrollo
+vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = false', ctx);
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

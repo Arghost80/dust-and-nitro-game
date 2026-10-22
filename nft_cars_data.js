@@ -1832,16 +1832,21 @@ function claimDailyMission(missionId) {
 // 9. MERCADO P2P COMUNITARIO (COMERCIO DIRECTO DE PIEZAS Y COCHES ENTRE PILOTOS)
 // =========================================================================
 let COMMUNITY_MARKETPLACE_LISTINGS = [
-    { id: "lst_01", type: "part", seller: "@Phantom_Silva", sellerIsMe: false, partId: "turbocharger", name: "Turbocompresor Twin-Scroll", icon: "🌪️", category: "Motor & Turbo", rarity: "rare", priceCr: 1850, verified: true, timeAgo: "hace 12m" },
-    { id: "lst_02", type: "part", seller: "@ApexDrift_Tokyo", sellerIsMe: false, partId: "slick_tires", name: "Neumáticos Slick GT3", icon: "🏎️", category: "Neumáticos", rarity: "uncommon", priceCr: 210, verified: true, timeAgo: "hace 24m" },
-    { id: "lst_03", type: "car", seller: "@Viper_King_USA", sellerIsMe: false, carModelId: "rare_03", name: "VIPER GTS COUPE ACR", icon: "🏎️", category: "Vehículo NFT", rarity: "rare", priceCr: 7500, verified: true, timeAgo: "hace 35m", carData: { modelId: "rare_03", name: "VIPER GTS COUPE ACR", rarity: "rare", visualId: 2, level: 3, xp: 80, xpNeeded: 180, parts: { speed_power: 2, braking: 2, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Rosso Corsa", colorHex: "#e53935", tint: 0xe53935, mintNumber: 142 } },
-    { id: "lst_04", type: "part", seller: "@Brembo_Official", sellerIsMe: false, partId: "brake_calipers", name: "Pinzas Brembo Monobloque", icon: "🔴", category: "Frenos", rarity: "rare", priceCr: 950, verified: true, timeAgo: "hace 45m" },
-    { id: "lst_05", type: "car", seller: "@Sophie_Laurent", sellerIsMe: false, carModelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", icon: "🏎️", category: "Vehículo NFT", rarity: "uncommon", priceCr: 2800, verified: true, timeAgo: "hace 1h", carData: { modelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", rarity: "uncommon", visualId: 1, level: 1, xp: 0, xpNeeded: 120, parts: { speed_power: 1, braking: 1, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Miami Blue GT", colorHex: "#0284c7", tint: 0x0284c7, mintNumber: 388 } },
-    { id: "lst_06", type: "part", seller: "@Klaus_Precision", sellerIsMe: false, partId: "engine_block", name: "Bloque Motor V8 Bóxer", icon: "⚙️", category: "Motor & Turbo", rarity: "rare", priceCr: 1050, verified: true, timeAgo: "hace 1h" },
-    { id: "lst_07", type: "part", seller: "@Tarek_Mansour", sellerIsMe: false, partId: "spark_plugs", name: "Bujías de Iridio (x2)", icon: "🔌", category: "Encendido", rarity: "common", priceCr: 190, verified: true, timeAgo: "hace 3h" }
+    { id: "lst_01", type: "part", seller: "@Phantom_Silva", sellerIsMe: false, isRealPlayer: false, partId: "turbocharger", name: "Turbocompresor Twin-Scroll", icon: "🌪️", category: "Motor & Turbo", rarity: "rare", priceCr: 1850, verified: true, timeAgo: "hace 12m" },
+    { id: "lst_02", type: "part", seller: "@ApexDrift_Tokyo", sellerIsMe: false, isRealPlayer: false, partId: "slick_tires", name: "Neumáticos Slick GT3", icon: "🏎️", category: "Neumáticos", rarity: "uncommon", priceCr: 210, verified: true, timeAgo: "hace 24m" },
+    { id: "lst_03", type: "car", seller: "@Viper_King_USA", sellerIsMe: false, isRealPlayer: false, carModelId: "rare_03", name: "VIPER GTS COUPE ACR", icon: "🏎️", category: "Vehículo NFT", rarity: "rare", priceCr: 7500, verified: true, timeAgo: "hace 35m", carData: { modelId: "rare_03", name: "VIPER GTS COUPE ACR", rarity: "rare", visualId: 2, level: 3, xp: 80, xpNeeded: 180, parts: { speed_power: 2, braking: 2, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Rosso Corsa", colorHex: "#e53935", tint: 0xe53935, mintNumber: 142 } },
+    { id: "lst_04", type: "part", seller: "@Brembo_Official", sellerIsMe: false, isRealPlayer: false, partId: "brake_calipers", name: "Pinzas Brembo Monobloque", icon: "🔴", category: "Frenos", rarity: "rare", priceCr: 950, verified: true, timeAgo: "hace 45m" },
+    { id: "lst_05", type: "car", seller: "@Sophie_Laurent", sellerIsMe: false, isRealPlayer: false, carModelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", icon: "🏎️", category: "Vehículo NFT", rarity: "uncommon", priceCr: 2800, verified: true, timeAgo: "hace 1h", carData: { modelId: "uncom_02", name: "HOT HATCHBACK GTI CLUB", rarity: "uncommon", visualId: 1, level: 1, xp: 0, xpNeeded: 120, parts: { speed_power: 1, braking: 1, handling_grip: 1, accel_traction: 1, aero_lightness: 1 }, colorName: "Miami Blue GT", colorHex: "#0284c7", tint: 0x0284c7, mintNumber: 388 } },
+    { id: "lst_06", type: "part", seller: "@Klaus_Precision", sellerIsMe: false, isRealPlayer: false, partId: "engine_block", name: "Bloque Motor V8 Bóxer", icon: "⚙️", category: "Motor & Turbo", rarity: "rare", priceCr: 1050, verified: true, timeAgo: "hace 1h" },
+    { id: "lst_07", type: "part", seller: "@Tarek_Mansour", sellerIsMe: false, isRealPlayer: false, partId: "spark_plugs", name: "Bujías de Iridio (x2)", icon: "🔌", category: "Encendido", rarity: "common", priceCr: 190, verified: true, timeAgo: "hace 3h" }
 ];
 
 function getMarketplaceListings() {
+    const isProd = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    if (isProd) {
+        // En lanzamiento oficial el mercado arranca 100% vacío (solo ofertas reales publicadas por jugadores)
+        return COMMUNITY_MARKETPLACE_LISTINGS.filter(l => l.sellerIsMe === true || l.isRealPlayer === true);
+    }
     return COMMUNITY_MARKETPLACE_LISTINGS;
 }
 
@@ -1868,6 +1873,7 @@ function listPartOnMarketplace(partId, priceCr) {
         rarity: pDef.rarity,
         seller: "@" + playerName.replace(/\s+/g, '_'),
         sellerIsMe: true,
+        isRealPlayer: true,
         priceCr: safePrice,
         verified: true,
         timeAgo: "justo ahora"
@@ -1899,7 +1905,7 @@ function listCarOnMarketplace(instanceId, priceCr) {
         return { success: false, reason: "Debes conservar al menos 1 vehículo en tu garaje para poder correr" };
     }
 
-    const safePrice = Math.max(100, Math.round(Number(priceCr) || 2000));
+    const safePrice = Math.max(50, Math.round(Number(priceCr) || 1000));
 
     // Si estaba equipado, equipar otro coche del garaje
     if (userData.equippedInstanceId === instanceId) {
@@ -1922,6 +1928,7 @@ function listCarOnMarketplace(instanceId, priceCr) {
         rarity: car.rarity,
         seller: "@" + playerName.replace(/\s+/g, '_'),
         sellerIsMe: true,
+        isRealPlayer: true,
         priceCr: safePrice,
         verified: true,
         timeAgo: "justo ahora"
@@ -2212,7 +2219,7 @@ const WEEKLY_TOURNAMENT_CONFIG = {
     timeOfDay: "night",
     totalLaps: 3,
     entryFeeCr: 20,       // Inscripción: 20 $CR por piloto
-    houseBonusCr: 200,    // Aportación de la casa / patrocinador al bote
+    houseBonusCr: 0,      // 0 $CR de la casa (solo acumula lo que ponen los usuarios con sus entradas)
     endsIn: "2 días 14 horas",
     platformFeePct: 0.05  // 5% comisión recuperada por la plataforma
 };
@@ -2224,7 +2231,10 @@ function getWeeklyTournamentInfo() {
         if (raw) savedTourney = JSON.parse(raw);
     } catch(e) {}
 
-    const registeredPlayers = (savedTourney && savedTourney.registeredPlayers) || 124;
+    const isProd = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    const registeredPlayers = (savedTourney && typeof savedTourney.registeredPlayers === 'number')
+        ? savedTourney.registeredPlayers
+        : (isProd ? 0 : 124);
     const playerBestTime = (savedTourney && savedTourney.playerBestTime) || null;
 
     const totalCollectedCr = registeredPlayers * WEEKLY_TOURNAMENT_CONFIG.entryFeeCr;
