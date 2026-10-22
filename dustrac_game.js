@@ -2537,6 +2537,7 @@ function dustCreate() {
     try { buildHDRoadTextures(this); } catch(e) { console.warn('HD road tex build error:', e); }
     try { buildHDBridgeTextures(this); } catch(e) { console.warn('HD bridge tex build error:', e); }
     try { buildHDBiomeTextures(this); } catch(e) { console.warn('HD biome tex build error:', e); }
+    try { buildProRacingEnvironmentTextures(this); } catch(e) { console.warn('Pro racing env tex build error:', e); }
 
     // Configuración de Teclado (con salvaguarda para móviles y Telegram WebApp)
     if (this.input && this.input.keyboard && Phaser.Input && Phaser.Input.Keyboard && Phaser.Input.Keyboard.KeyCodes) {
@@ -3449,6 +3450,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
 
     raceScene = scene;
     window.raceScene = scene;
+    try { buildProRacingEnvironmentTextures(scene); } catch(e) {}
 
     trackBarriers = [];
     trackMarshals = [];
@@ -3844,15 +3846,27 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             const bH = 22;
             const texKey = isLong ? 'dt_armco_long' : 'dt_armco_short';
 
+            if (!scene.textures || !scene.textures.exists(texKey)) {
+                try { buildProRacingEnvironmentTextures(scene); } catch(e) {}
+            }
+
             // Sombra arquitectónica bajo el quitamiedos metálico coherente con el sol
             scene.add.rectangle(obj.x + lightConfig.shadowDx * 0.35, obj.y + lightConfig.shadowDy * 0.35, bW, bH, 0x000000, lightConfig.shadowAlpha)
                 .setAngle(obj.o)
                 .setDepth(11);
 
-            scene.add.sprite(obj.x, obj.y, texKey)
-                .setDisplaySize(bW, bH)
-                .setAngle(obj.o)
-                .setDepth(12);
+            if (scene.textures && scene.textures.exists(texKey)) {
+                scene.add.sprite(obj.x, obj.y, texKey)
+                    .setDisplaySize(bW, bH)
+                    .setAngle(obj.o)
+                    .setDepth(12);
+            } else {
+                // Fallback visual metálico impecable en caso de cualquier anomalía de textura
+                scene.add.rectangle(obj.x, obj.y, bW, bH, 0x94a3b8)
+                    .setStrokeStyle(1.5, 0x475569)
+                    .setAngle(obj.o)
+                    .setDepth(12);
+            }
 
             // Registrar en lista de barreras físicas infranqueables
             trackBarriers.push({
@@ -3869,10 +3883,31 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
             const bShadow = scene.add.rectangle(obj.x + 3, obj.y + 4, 115, 26, 0x000000, 0.40)
                 .setAngle(obj.o)
                 .setDepth(11);
-            const bSprite = scene.add.sprite(obj.x, obj.y, 'dt_billboard_dustrac')
-                .setDisplaySize(115, 28)
-                .setAngle(obj.o)
-                .setDepth(12);
+
+            if (!scene.textures || !scene.textures.exists('dt_billboard_dustrac')) {
+                try { buildProRacingEnvironmentTextures(scene); } catch(e) {}
+            }
+
+            const billboardKeys = [
+                'dt_billboard_dustrac', 'dt_billboard_pirelli', 'dt_billboard_brembo',
+                'dt_billboard_motul', 'dt_billboard_michelin', 'dt_billboard_badlands'
+            ];
+            const chosenKey = billboardKeys[Math.abs(Math.floor(obj.x + obj.y)) % billboardKeys.length];
+            const activeTexKey = (scene.textures && scene.textures.exists(chosenKey)) ? chosenKey : 'dt_billboard_dustrac';
+
+            let bSprite = null;
+            if (scene.textures && scene.textures.exists(activeTexKey)) {
+                bSprite = scene.add.sprite(obj.x, obj.y, activeTexKey)
+                    .setDisplaySize(115, 28)
+                    .setAngle(obj.o)
+                    .setDepth(12);
+            } else {
+                bSprite = scene.add.rectangle(obj.x, obj.y, 115, 28, 0x0f172a)
+                    .setStrokeStyle(2, 0x00f5d4)
+                    .setAngle(obj.o)
+                    .setDepth(12);
+            }
+
             parallaxObjects.push({
                 sprite: bSprite,
                 shadow: bShadow,
