@@ -1,4 +1,4 @@
-// ===== DUST & NITRO - BOT DE TELEGRAM NATIVO (SIN DEPENDENCIAS) =====
+// ===== APEX MOTORSPORT - BOT DE TELEGRAM NATIVO (SIN DEPENDENCIAS) =====
 // Utiliza Node.js https con long-polling para no requerir túneles HTTPS en desarrollo local.
 
 const https = require('https');
@@ -73,13 +73,13 @@ async function handleMessage(msg) {
 
     if (text === '/start' || text.startsWith('/start')) {
         const user = db.getUser(userId, username);
-        const welcomeText = `🏁 <b>¡BIENVENIDO A DUST & NITRO RACING!</b> 🏁\n\n` +
-            `Juego de carreras 2D arcade inspirado en <i>Badlands</i>, <i>Super Off Road</i> y <i>Dust Racing 2D</i>.\n\n` +
+        const welcomeText = `🏁 <b>¡BIENVENIDO A APEX MOTORSPORT!</b> 🏁\n\n` +
+            `Simulador arcade GT & Web3 en Telegram. Pilota superdeportivos, derrapa en circuitos mundiales y compite en torneos.\n\n` +
             `👤 <b>Piloto:</b> @${username}\n` +
             `💰 <b>Monedas:</b> ${user.coins} CR\n` +
             `🏎️ <b>Vehículo:</b> ${user.selectedCar.toUpperCase()}\n` +
             `🏆 <b>Carreras:</b> ${user.stats.races} | Mejor tiempo: ${user.stats.bestTime ? user.stats.bestTime + 's' : 'N/A'}\n\n` +
-            `¡Presiona el botón de abajo para saltar a la pista y derrapar con tus rivales!`;
+            `¡Presiona el botón de abajo para saltar a la pista y competir contra otros pilotos!`;
 
         const keyboard = {
             inline_keyboard: [

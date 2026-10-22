@@ -1463,7 +1463,7 @@ function buildProRacingEnvironmentTextures(scene) {
         ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('START  🏁  FINISH', w / 2, h / 2 - 4);
         ctx.font = 'bold 9px Arial, sans-serif';
-        ctx.fillStyle = '#00f5d4'; ctx.fillText('DUSTRAC WORLD CHAMPIONSHIP', w / 2, h / 2 + 10);
+        ctx.fillStyle = '#00f5d4'; ctx.fillText('APEX MOTORSPORT WORLD CHAMPIONSHIP', w / 2, h / 2 + 10);
         [240, 248, 256, 264, 272].forEach(lx => {
             ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(lx, 26, 3, 0, Math.PI * 2); ctx.fill();
         });
@@ -2972,7 +2972,7 @@ function showMenu(scene) {
     });
 
     // Cabecera Principal
-    scene.add.text(420, 22, '🏁 DUST RACING 2D: APEX MOTORSPORT 🏁', {
+    scene.add.text(420, 22, '🏁 APEX MOTORSPORT: GT CHAMPIONSHIP 🏁', {
         font: '900 22px Arial',
         fill: '#ffffff',
         stroke: '#e53935',
