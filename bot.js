@@ -6,7 +6,7 @@ const db = require('./database');
 const { CircuitsCatalog } = require('./track_generator');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
-const WEBAPP_URL = process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
+const WEBAPP_URL = process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || 'https://dust-and-nitro-game.onrender.com';
 
 if (!BOT_TOKEN) {
     console.log('================================================================');
