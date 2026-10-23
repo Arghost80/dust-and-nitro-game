@@ -4591,6 +4591,9 @@ function openWeb3WalletModal() {
                                     5.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+25.000 $CR (~$25.00)</span>
                                 </button>
                             </div>
+                            <div style="font-size: 9.5px; color: #94a3b8; margin-top: 8px; text-align: center; word-break: break-all; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 6px;">
+                                🏛️ <strong>Tesorería Oficial (Receptora):</strong> <span style="font-family: monospace; color: #38bdf8;">UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X</span>
+                            </div>
                         </div>
 
                         <!-- ESTADO DE RETIROS: FASE BETA PÚBLICA TEMPORADA 1 (PRE-TGE) -->
@@ -4677,16 +4680,30 @@ function handleDisconnectWallet() {
 
 function handleSwapTonToCr(tonAmount) {
     hubAudio.playClick();
+    const treasury = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.TREASURY_WALLET_ADDRESS) ? APP_CONFIG.TREASURY_WALLET_ADDRESS : 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X';
+    
     if (typeof buyCrWithTon === 'function') {
         const res = buyCrWithTon(tonAmount);
-        if (!res.success) {
-            alert('Saldo insuficiente de TON para realizar el swap.');
+        if (res.success) {
+            hubAudio.playOpenCrate();
+            renderHubHeader();
+            openWeb3WalletModal();
+            alert(`🎉 ¡Swap completado! Recibiste +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} TON.`);
             return;
         }
-        hubAudio.playOpenCrate();
-        renderHubHeader();
-        openWeb3WalletModal();
-        alert(`🎉 ¡Swap completado! Recibiste +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} TON.`);
+    }
+
+    // Si no tiene saldo interno de TON, ofrece transferir directamente a la Tesorería Oficial del juego:
+    const nanoTons = Math.round(tonAmount * 1e9);
+    const memo = encodeURIComponent(`Apex Motorsport Swap ${tonAmount} TON`);
+    const tonDeepLink = `ton://transfer/${treasury}?amount=${nanoTons}&text=${memo}`;
+    
+    if (confirm(`💎 Para adquirir este paquete de tokens necesitas transferir ${tonAmount} TON a la Tesorería Oficial del juego:\n\n${treasury}\n\n¿Deseas abrir tu billetera (Tonkeeper / Telegram Wallet) para confirmar el pago?`)) {
+        if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+            window.Telegram.WebApp.openLink(tonDeepLink);
+        } else {
+            window.location.href = tonDeepLink;
+        }
     }
 }
 

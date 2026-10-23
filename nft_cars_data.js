@@ -12,7 +12,9 @@ const APP_CONFIG = {
     VERSION: '1.0.0-PROD',
     DEFAULT_TRACK: 'rookie_ring',
     DEFAULT_STARTING_CREDITS: 100,
-    DEFAULT_STARTING_GEMS: 0
+    DEFAULT_STARTING_GEMS: 0,
+    // Billetera Oficial de Tesorería del Proyecto (Receptora de pagos de Swaps, Tienda y Ads)
+    TREASURY_WALLET_ADDRESS: 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X'
 };
 
 if (typeof window !== 'undefined') {

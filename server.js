@@ -8,6 +8,8 @@ const { CircuitsCatalog } = require('./track_generator');
 
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
+// Billetera Oficial de Tesorería del Proyecto (Receptora de fondos del juego, swaps y Ads)
+const TREASURY_WALLET_ADDRESS = process.env.TREASURY_WALLET_ADDRESS || 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X';
 
 // ===== MOTOR DE SEGURIDAD, AUDITORÍA Y PROTECCIÓN ANTI-BOTS =====
 const SERVER_SECRET_KEY = process.env.SERVER_SECRET_KEY || crypto.randomBytes(32).toString('hex');
@@ -137,6 +139,7 @@ const server = http.createServer((req, res) => {
     if (pathname === '/api/security/audit') {
         const auditStatus = {
             status: 'SECURE_AND_AUDITED',
+            treasuryWallet: TREASURY_WALLET_ADDRESS,
             timestamp: new Date().toISOString(),
             defenses: {
                 telegramAuthHmacSha256: Boolean(BOT_TOKEN) ? 'ENFORCED' : 'DEV_STANDALONE_SIMULATION',
