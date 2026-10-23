@@ -4578,17 +4578,17 @@ function openWeb3WalletModal() {
                         <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(0, 245, 212, 0.2); border-radius: 10px; padding: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-size: 12px; font-weight: 900; color: #00f5d4;">🔄 COMPRAR TOKENS $CR CON TON</span>
-                                <span style="font-size: 10px; color: #cbd5e1;">Tasa: 1 TON = 12.500 $CR</span>
+                                <span style="font-size: 10px; color: #cbd5e1;">Tasa: 1 TON ≈ 5.000 $CR (~$5.00 USDT)</span>
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(0.5)">
-                                    0.5 TON<br><span style="color: #fde047; font-size: 9.5px;">+6.250 $CR</span>
+                                    0.5 TON<br><span style="color: #fde047; font-size: 9.5px;">+2.500 $CR (~$2.50)</span>
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(1.0)">
-                                    1.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+12.500 $CR</span>
+                                    1.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+5.000 $CR (~$5.00)</span>
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(5.0)">
-                                    5.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+62.500 $CR</span>
+                                    5.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+25.000 $CR (~$25.00)</span>
                                 </button>
                             </div>
                         </div>
@@ -4598,17 +4598,17 @@ function openWeb3WalletModal() {
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span style="font-size: 15px;">🔒</span>
-                                    <span style="font-size: 12.5px; font-weight: 900; color: #fbbf24;">RETIROS ON-CHAIN: FASE BETA S1</span>
+                                    <span style="font-size: 12.5px; font-weight: 900; color: #fbbf24;">RETIRO DE TOKENS $CR A TU BILLETERA (JETTON TON)</span>
                                 </div>
                                 <span style="font-size: 9.5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde047; font-weight: 800; padding: 2px 7px; border-radius: 6px;">PRE-TGE ACTIVO</span>
                             </div>
 
                             <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
                                 <div style="font-size: 11px; font-weight: 800; color: #fde047; display: flex; align-items: center; gap: 6px;">
-                                    <span>⏳</span> Retiro a TON: BLOQUEADO HASTA EL LANZAMIENTO OFICIAL (TGE)
+                                    <span>⏳</span> Retiro On-Chain de Tokens $CR: BLOQUEADO HASTA EL LANZAMIENTO OFICIAL (TGE)
                                 </div>
                                 <div style="font-size: 10.5px; color: #cbd5e1; margin-top: 5px; line-height: 1.4;">
-                                    Estamos en la <strong>Temporada 1 Fase Beta</strong>. Todos tus <strong>$CR</strong> ganados están <strong>100% asegurados y acumulados</strong> en tu perfil. Se desbloquearán para canje on-chain al desplegar la pool oficial de liquidez en DEX (TGE).
+                                    Estamos en la <strong>Temporada 1 Fase Beta</strong>. Todos tus tokens <strong>$CR</strong> ganados están <strong>100% asegurados y acumulados</strong> en tu perfil. Al desplegarse la pool en DEX (TGE), podrás transferir tus tokens $CR a tu billetera Tonkeeper/Telegram Wallet para conservarlos o intercambiarlos en DeDust/STON.fi.
                                 </div>
                             </div>
 
@@ -4621,13 +4621,13 @@ function openWeb3WalletModal() {
 
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(1000)">
-                                    🔒 1.000 $CR (BLOQUEADO HASTA TGE)
+                                    🔒 RETIRAR 1.000 $CR (BLOQUEADO TGE)
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(5000)">
-                                    🔒 5.000 $CR (BLOQUEADO HASTA TGE)
+                                    🔒 RETIRAR 5.000 $CR (BLOQUEADO TGE)
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(10000)">
-                                    🔒 10.000 $CR (BLOQUEADO HASTA TGE)
+                                    🔒 RETIRAR 10.000 $CR (BLOQUEADO TGE)
                                 </button>
                             </div>
                         </div>
@@ -4696,7 +4696,8 @@ function handleWithdrawCrToTon(crAmount) {
         "🔒 RETIROS ON-CHAIN BLOQUEADOS (FASE BETA / TEMPORADA 1 PRE-TGE)\n\n" +
         "Actualmente APEX MOTORSPORT se encuentra en Fase Beta de Acumulación.\n\n" +
         "• Todos los tokens $CR que ganes están 100% SEGUROS y acreditados en tu cuenta de juego.\n" +
-        "• Los retiros directos on-chain a TON se activarán tras el Lanzamiento Oficial del Token (TGE) y la apertura de las pools de liquidez en DEX (DeDust / STON.fi).\n\n" +
+        "• Al llegar el Lanzamiento Oficial del Token (TGE), transferirás tus tokens $CR directamente a tu billetera de Tonkeeper/Telegram Wallet como Jetton oficial.\n" +
+        "• Si deseas cambiarlos por TON o USDT, podrás hacerlo libremente en las pools públicas de DeDust.io o STON.fi.\n\n" +
         "🏎️ ¡Aprovecha la Fase Beta para tunear y subir de nivel tus coches GT3, dominar el Gran Premio y maximizar tu saldo de $CR para el Airdrop!"
     );
 }

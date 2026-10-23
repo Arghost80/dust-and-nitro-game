@@ -304,17 +304,17 @@ console.log('✅ Billetera TON conectada:', connectRes.address);
 // Swap TON a $CR
 vm.runInContext(`(() => { const u = loadNftUserData(); u.gems = 10; saveNftUserData(u); })();`, ctx);
 const swapRes = vm.runInContext(`buyCrWithTon(1.0)`, ctx);
-if (!swapRes.success || swapRes.crGained !== 12500) {
+if (!swapRes.success || swapRes.crGained !== 5000) {
     throw new Error(`Swap TON a $CR fallido: ${JSON.stringify(swapRes)}`);
 }
-console.log('✅ Swap TON a $CR completado: 1 TON -> +12,500 $CR');
+console.log('✅ Swap TON a $CR completado: 1 TON -> +5,000 $CR');
 
 // Retiro Anti-Drenaje de $CR a TON
 const withdrawRes = vm.runInContext(`withdrawCrToTon(1000)`, ctx);
-if (!withdrawRes.success || withdrawRes.tonGained !== 0.08) {
+if (!withdrawRes.success || withdrawRes.tonGained !== 0.20) {
     throw new Error(`Retiro a TON fallido: ${JSON.stringify(withdrawRes)}`);
 }
-console.log('✅ Retiro seguro completado: 1000 $CR -> 0.08 TON transferidos a la wallet');
+console.log('✅ Retiro seguro completado: 1000 $CR -> 0.20 TON transferidos a la wallet');
 
 // Test Anti-Bot 1: Reserva Mínima de Holding (500 $CR)
 const userCr = vm.runInContext('loadNftUserData().credits', ctx);
@@ -333,10 +333,10 @@ console.log('✅ Anti-Bot 2 superado: Cooldown de 7 días activo con aviso de pe
 
 // Test Anti-Bot 3: Retiro anticipado con Quema Deflacionaria del 50%
 const earlyWithdrawRes = vm.runInContext(`withdrawCrToTon(1000, true)`, ctx);
-if (!earlyWithdrawRes.success || !earlyWithdrawRes.isEarly || earlyWithdrawRes.burnedCr !== 500 || earlyWithdrawRes.tonGained !== 0.04) {
+if (!earlyWithdrawRes.success || !earlyWithdrawRes.isEarly || earlyWithdrawRes.burnedCr !== 500 || earlyWithdrawRes.tonGained !== 0.10) {
     throw new Error(`Fallo en quema deflacionaria del 50%: ${JSON.stringify(earlyWithdrawRes)}`);
 }
-console.log('✅ Anti-Bot 3 superado: Quema deflacionaria ejecutada (500 $CR quemados, 0.04 TON transferidos)');
+console.log('✅ Anti-Bot 3 superado: Quema deflacionaria ejecutada (500 $CR quemados, 0.10 TON transferidos)');
 
 // Test Anti-Cheat 4: Telemetría Física Imposible (Speedhack / Fast-forward)
 const invalidRaceCheck = vm.runInContext(`validateRaceTelemetry('grand_prix', 3, 5.0, 1.2)`, ctx);

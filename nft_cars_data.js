@@ -2102,7 +2102,8 @@ function buyCrWithTon(tonAmount) {
     if ((userData.gems || 0) < tonAmount) {
         return { success: false, reason: "ton_insufficient" };
     }
-    const crGained = Math.round(tonAmount * 12500); // Tasa: 1 TON = 12.500 $CR
+    // Tasa real de mercado: 1 TON ≈ 5.00 USDT | 1 USDT = 1.000 $CR -> 1 TON = 5.000 $CR
+    const crGained = Math.round(tonAmount * 5000);
     userData.gems -= tonAmount;
     userData.credits += crGained;
     saveNftUserData(userData);
@@ -2169,7 +2170,7 @@ function withdrawCrToTon(crAmount, forceEarly = false) {
         const remainingMs = WITHDRAW_COOLDOWN_MS - elapsed;
         const burnCr = Math.round(crAmount * EARLY_WITHDRAW_BURN_PCT);
         const netCr = crAmount - burnCr;
-        const netTon = Number((netCr / 12500).toFixed(4));
+        const netTon = Number((netCr / 5000).toFixed(4));
         return {
             success: false,
             reason: "early_withdraw_warning",
@@ -2192,7 +2193,7 @@ function withdrawCrToTon(crAmount, forceEarly = false) {
         userData.totalBurnedTokens = (userData.totalBurnedTokens || 0) + burnedCr;
     }
 
-    const tonGained = Number((netCrAmount / 12500).toFixed(4));
+    const tonGained = Number((netCrAmount / 5000).toFixed(4));
     userData.credits -= crAmount; // Se deducen los tokens solicitados
     userData.gems = (userData.gems || 0) + tonGained;
     userData.lastWithdrawTimestamp = now;
