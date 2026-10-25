@@ -17,6 +17,28 @@ const activeMatchTickets = new Map();
 const rateLimitMap = new Map();
 const securityAuditLogs = [];
 
+// ===== SISTEMA MULTIJUGADOR REAL: SALAS PÚBLICAS Y DUELOS PRIVADOS =====
+const publicLobbies = new Map(); // roomId -> active lobby
+const privateDuels = new Map();  // duelCode -> private duel room
+
+const AI_BOT_POOL = [
+    { name: "🤖 Bot_Klaus", carName: "Bavaria ROWE M4", archetype: "dtm_coupe", colorHex: "#15803d" },
+    { name: "🤖 Bot_Matteo", carName: "Scuderia 488 GT3", archetype: "ferrari_corsa", colorHex: "#e53935" },
+    { name: "🤖 Bot_Kenji", carName: "Tokyo Supra Turbo", archetype: "jdm_supra", colorHex: "#a855f7" },
+    { name: "🤖 Bot_Lucas", carName: "Valkyrie AMR Pro", archetype: "le_mans_proto", colorHex: "#0284c7" }
+];
+
+const WAGER_CIRCUITS_DEFAULT = [
+    { id: 'rookie_ring', name: 'Rookie Ring Speedway', env: 'asphalt' },
+    { id: 'radiator_oval', name: 'Radiator Oval Park', env: 'asphalt' },
+    { id: 'curvastone_park', name: 'Curvastone GP Park', env: 'asphalt' },
+    { id: 'monza', name: 'Monza Speed Ring', env: 'asphalt' }
+];
+
+function getRandomCircuit() {
+    return WAGER_CIRCUITS_DEFAULT[Math.floor(Math.random() * WAGER_CIRCUITS_DEFAULT.length)];
+}
+
 // Cortafuegos de seguridad de tesorería (Emergency Circuit Breaker)
 const emergencyCircuitBreaker = {
     isTriggered: false,
@@ -391,6 +413,293 @@ const server = http.createServer((req, res) => {
     if (pathname === '/api/cars') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(db.getCars()));
+        return;
+    }
+
+    // ===== RUTAS DE MULTIJUGADOR REAL: SALAS PÚBLICAS (60s) Y DUELOS PRIVADOS =====
+
+    // 1. Unirse a cola de sala pública (Tiempo: 60s antes de auto-rellenar con IA)
+    if (pathname === '/api/multiplayer/public/join' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { roomId = 'room_bronze', buyIn = 5, userId = 'user_' + Date.now(), name = 'PILOTO', carName = 'GT3 Racer', colorHex = '#00f5d4', archetype = 'ferrari_corsa' } = data;
+
+                let lobby = publicLobbies.get(roomId);
+                const now = Date.now();
+
+                // Si no existe lobby o expiró o ya empezó, crear uno nuevo
+                if (!lobby || now > lobby.expiresAt || lobby.status !== 'WAITING') {
+                    const randomCircuit = getRandomCircuit();
+                    lobby = {
+                        id: 'pub_' + crypto.randomBytes(6).toString('hex'),
+                        roomId,
+                        buyIn: Number(buyIn) || 5,
+                        circuit: randomCircuit,
+                        createdAt: now,
+                        expiresAt: now + 60000, // 60 segundos completos de espera
+                        slots: [],
+                        status: 'WAITING'
+                    };
+                    publicLobbies.set(roomId, lobby);
+                }
+
+                // Añadir al jugador si no está ya en la sala
+                const existingIdx = lobby.slots.findIndex(s => s && s.userId === userId);
+                if (existingIdx === -1) {
+                    if (lobby.slots.length < 4) {
+                        lobby.slots.push({
+                            id: 'player_' + userId,
+                            userId,
+                            name,
+                            carName,
+                            colorHex,
+                            archetype,
+                            isAI: false,
+                            isPlayer: true,
+                            stake: lobby.buyIn,
+                            roleLabel: '👤 JUGADOR REAL P2P',
+                            status: 'LISTO'
+                        });
+                    }
+                }
+
+                // Si se llena con 4 jugadores reales, iniciar inmediatamente
+                if (lobby.slots.length >= 4) {
+                    lobby.status = 'STARTING';
+                }
+
+                const countdown = Math.max(0, Math.ceil((lobby.expiresAt - Date.now()) / 1000));
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    ok: true,
+                    lobbyId: lobby.id,
+                    roomId: lobby.roomId,
+                    circuit: lobby.circuit,
+                    countdown,
+                    slots: lobby.slots,
+                    status: lobby.status
+                }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON', message: e.message }));
+            }
+        });
+        return;
+    }
+
+    // 2. Estado en vivo de sala pública (Polling cada 1s)
+    if (pathname === '/api/multiplayer/public/status') {
+        const roomId = parsedUrl.searchParams.get('roomId') || 'room_bronze';
+        const lobbyId = parsedUrl.searchParams.get('lobbyId');
+        let lobby = publicLobbies.get(roomId);
+
+        if (!lobby || (lobbyId && lobby.id !== lobbyId)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, status: 'EXPIRED' }));
+            return;
+        }
+
+        const now = Date.now();
+        // Si expiraron los 60s y sigue en espera, auto-rellenar con IA
+        if (now >= lobby.expiresAt && lobby.status === 'WAITING') {
+            for (let i = lobby.slots.length; i < 4; i++) {
+                const botDef = AI_BOT_POOL[i] || AI_BOT_POOL[0];
+                lobby.slots.push({
+                    id: 'ai_' + i,
+                    userId: 'ai_' + i,
+                    name: botDef.name,
+                    carName: botDef.carName,
+                    colorHex: botDef.colorHex,
+                    archetype: botDef.archetype,
+                    isAI: true,
+                    isPlayer: false,
+                    stake: lobby.buyIn * 0.5,
+                    roleLabel: `🤖 IA (APORTE 50%: ${lobby.buyIn * 0.5} $CR)`,
+                    status: 'AUTO-RELLENO'
+                });
+            }
+            lobby.status = 'STARTING';
+        }
+
+        const countdown = Math.max(0, Math.ceil((lobby.expiresAt - now) / 1000));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            ok: true,
+            lobbyId: lobby.id,
+            roomId: lobby.roomId,
+            circuit: lobby.circuit,
+            countdown,
+            slots: lobby.slots,
+            status: lobby.status
+        }));
+        return;
+    }
+
+    // 3. Salir de sala pública / Cancelar
+    if (pathname === '/api/multiplayer/public/leave' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { roomId, userId } = data;
+                const lobby = publicLobbies.get(roomId);
+                if (lobby) {
+                    lobby.slots = lobby.slots.filter(s => s && s.userId !== userId);
+                    if (lobby.slots.length === 0) {
+                        publicLobbies.delete(roomId);
+                    }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, refunded: true }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
+        return;
+    }
+
+    // 4. Crear Duelo Privado con Apuesta Personalizada (Amigos / Familia)
+    if (pathname === '/api/multiplayer/duel/create' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { userId, name, carName, colorHex, archetype, betAmount = 100, trackId, trackName } = data;
+
+                const code = 'DUEL-' + Math.floor(1000 + Math.random() * 9000);
+                const circuit = trackId ? { id: trackId, name: trackName || trackId } : getRandomCircuit();
+                const cleanBet = Math.max(10, Math.round(Number(betAmount) || 100));
+
+                const duel = {
+                    code,
+                    betAmount: cleanBet,
+                    circuit,
+                    createdAt: Date.now(),
+                    expiresAt: Date.now() + 180000, // 3 minutos de validez
+                    hostUserId: userId,
+                    slots: [
+                        {
+                            id: 'host',
+                            userId,
+                            name,
+                            carName,
+                            colorHex,
+                            archetype,
+                            isAI: false,
+                            isPlayer: true,
+                            stake: cleanBet,
+                            roleLabel: '👑 ANFITRIÓN (TÚ)',
+                            status: 'LISTO'
+                        }
+                    ],
+                    status: 'WAITING',
+                    results: {}
+                };
+
+                privateDuels.set(code, duel);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, code, duel }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
+        return;
+    }
+
+    // 5. Unirse a Duelo Privado con Código
+    if (pathname === '/api/multiplayer/duel/join' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { code, userId, name, carName, colorHex, archetype } = data;
+                const cleanCode = (code || '').toUpperCase().trim();
+                const duel = privateDuels.get(cleanCode);
+
+                if (!duel) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'not_found', message: 'Código de duelo no encontrado o expirado' }));
+                    return;
+                }
+
+                if (duel.status !== 'WAITING') {
+                    res.writeHead(409, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'already_started', message: 'La sala de duelo ya está en juego' }));
+                    return;
+                }
+
+                if (duel.hostUserId === userId) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true, code: cleanCode, duel }));
+                    return;
+                }
+
+                // Añadir rival desafiante
+                duel.slots.push({
+                    id: 'guest',
+                    userId,
+                    name,
+                    carName,
+                    colorHex,
+                    archetype,
+                    isAI: false,
+                    isPlayer: false,
+                    stake: duel.betAmount,
+                    roleLabel: '⚔️ RIVAL RETADOR',
+                    status: 'LISTO'
+                });
+
+                duel.status = 'STARTING';
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, code: cleanCode, duel }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
+        return;
+    }
+
+    // 6. Consultar estado del Duelo Privado (Polling cada 1s)
+    if (pathname === '/api/multiplayer/duel/status') {
+        const code = (parsedUrl.searchParams.get('code') || '').toUpperCase().trim();
+        const duel = privateDuels.get(code);
+
+        if (!duel) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, status: 'NOT_FOUND' }));
+            return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, duel, status: duel.status, slots: duel.slots }));
+        return;
+    }
+
+    // 7. Cancelar Duelo Privado
+    if (pathname === '/api/multiplayer/duel/cancel' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const cleanCode = (data.code || '').toUpperCase().trim();
+                privateDuels.delete(cleanCode);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, cancelled: true }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid JSON' }));
+            }
+        });
         return;
     }
 

@@ -2684,6 +2684,34 @@ function renderCompView() {
                 }).join('')}
             </div>
 
+            <!-- RETO DIRECTO: DUELO PRIVADO CON AMIGO (APUESTA LIBRE $CR) -->
+            <div class="wager-card" style="border: 2px solid #ec4899; background: linear-gradient(135deg, rgba(236, 72, 153, 0.16), rgba(168, 85, 247, 0.16)); box-shadow: 0 0 25px rgba(236, 72, 153, 0.2); margin-bottom: 20px;">
+                <div class="wager-card-header">
+                    <div class="wager-header-left">
+                        <span class="wager-badge-tag" style="background: rgba(236, 72, 153, 0.25); color: #f472b6; border: 1px solid #ec4899;">
+                            ⚔️ SALA PRIVADA • APUESTA PERSONALIZADA
+                        </span>
+                        <h3 class="wager-title" style="color: #f472b6;">⚔️ RETAR A UN AMIGO (DUELO DIRECTO)</h3>
+                    </div>
+                    <div class="wager-header-icon" style="font-size: 28px;">👥</div>
+                </div>
+
+                <div class="wager-body">
+                    <p class="wager-desc">
+                        Crea una sala privada, elige los tokens $CR que queréis apostar (libre) y reta a tu amigo o hijo con un código de sala o enlace directo de Telegram.
+                    </p>
+
+                    <div style="display: flex; gap: 10px; margin-top: 14px;">
+                        <button class="btn-primary" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #ec4899, #a855f7); color: #fff; font-weight: 900; font-size: 13px; border-radius: 8px; border: none; cursor: pointer;" onclick="openCreateDuelModal()">
+                            ⚔️ CREAR SALA DE DUELO
+                        </button>
+                        <button class="btn-secondary" style="flex: 1; padding: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #fff; font-weight: 800; font-size: 13px; border-radius: 8px; cursor: pointer;" onclick="openJoinDuelModal()">
+                            🔑 UNIRSE CON CÓDIGO
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- MODOS ADICIONALES: TORNEO SEMANAL & LEADERBOARD -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div class="comp-card" onclick="openWeeklyTournamentModal();">
@@ -2732,11 +2760,13 @@ function openWagerLobby(roomId) {
 
     currentWagerLobby = {
         room: room,
-        countdown: 5,
+        countdown: 60,
         timer: null,
+        lobbyId: null,
         slots: [
             {
                 id: 'player',
+                userId: userData.userId || 'usr_me',
                 name: pilotName,
                 carName: equippedCar ? equippedCar.name : 'Supercar GT',
                 colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
@@ -2760,12 +2790,11 @@ function openWagerLobby(roomId) {
 function startWagerMatchmaking() {
     if (!currentWagerLobby) return;
 
-    const potentialPeers = [
-        { name: "Alex_Apex_99", carName: "Valkyrie AMR Pro", archetype: "le_mans_proto", colorHex: "#0284c7" },
-        { name: "TorqueQueen_GT", carName: "Manthey 911 GT3", archetype: "porsche_boxer", colorHex: "#facc15" },
-        { name: "Veloce_Racer", carName: "Hyperion Senna", archetype: "ferrari_corsa", colorHex: "#ec4899" },
-        { name: "Phantom_Turbo", carName: "Chiron Pur Sport", archetype: "bugatti_w16", colorHex: "#10b981" }
-    ];
+    const userData = loadNftUserData();
+    const userId = userData.userId || ('usr_' + Math.random().toString(36).substring(2, 9));
+    const room = currentWagerLobby.room;
+    const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+    const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
 
     const aiBots = [
         { name: "🤖 Bot_Klaus", carName: "Bavaria ROWE M4", archetype: "dtm_coupe", colorHex: "#15803d" },
@@ -2773,31 +2802,80 @@ function startWagerMatchmaking() {
         { name: "🤖 Bot_Kenji", carName: "Tokyo Supra Turbo", archetype: "jdm_supra", colorHex: "#a855f7" }
     ];
 
+    // Conexión real al servidor para emparejar en la misma sala en la nube
+    if (typeof fetch === 'function') {
+        fetch('/api/multiplayer/public/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roomId: room.id,
+                buyIn: room.buyIn,
+                userId: userId,
+                name: pilotName,
+                carName: equippedCar ? equippedCar.name : 'Supercar GT',
+                colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
+                archetype: equippedCar ? (equippedCar.archetype || 'ferrari_corsa') : 'ferrari_corsa'
+            })
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res && res.ok && currentWagerLobby) {
+                currentWagerLobby.lobbyId = res.lobbyId;
+                if (typeof res.countdown === 'number') currentWagerLobby.countdown = res.countdown;
+                if (Array.isArray(res.slots) && res.slots.length > 0) {
+                    currentWagerLobby.slots = res.slots.map(s => ({
+                        ...s,
+                        isPlayer: s.userId === userId
+                    }));
+                }
+                if (res.circuit) {
+                    room.currentTrackId = res.circuit.id;
+                    room.currentTrackName = res.circuit.name;
+                }
+                renderWagerLobbyModal(res.status === 'STARTING');
+            }
+        })
+        .catch(() => {});
+    }
+
     currentWagerLobby.timer = setInterval(() => {
         if (!currentWagerLobby) return;
 
         currentWagerLobby.countdown--;
 
-        // A los 3 segundos, probabilidad de conectar un rival humano simulado
-        if (currentWagerLobby.countdown === 3 && !currentWagerLobby.slots[1]) {
-            if (Math.random() < 0.65) {
-                const peer = potentialPeers[Math.floor(Math.random() * potentialPeers.length)];
-                currentWagerLobby.slots[1] = {
-                    id: 'peer_1',
-                    name: peer.name,
-                    carName: peer.carName,
-                    colorHex: peer.colorHex,
-                    archetype: peer.archetype,
-                    isAI: false,
-                    isPlayer: false,
-                    stake: currentWagerLobby.room.buyIn,
-                    roleLabel: '👤 JUGADOR P2P CONECTADO',
-                    status: 'LISTO'
-                };
-            }
+        // Polling cada 1 segundo al servidor para sincronizar otros jugadores reales que entren a la misma sala
+        if (typeof fetch === 'function' && currentWagerLobby.lobbyId) {
+            fetch(`/api/multiplayer/public/status?roomId=${room.id}&lobbyId=${currentWagerLobby.lobbyId}&userId=${userId}`)
+                .then(r => r.json())
+                .then(res => {
+                    if (res && res.ok && currentWagerLobby) {
+                        if (typeof res.countdown === 'number') currentWagerLobby.countdown = res.countdown;
+                        if (Array.isArray(res.slots)) {
+                            currentWagerLobby.slots = res.slots.map(s => ({
+                                ...s,
+                                isPlayer: s.userId === userId
+                            }));
+                        }
+                        if (res.status === 'STARTING') {
+                            clearInterval(currentWagerLobby.timer);
+                            currentWagerLobby.timer = null;
+                            renderWagerLobbyModal(true);
+                            setTimeout(() => {
+                                if (currentWagerLobby) launchWagerRace();
+                            }, 1500);
+                            return;
+                        }
+                        renderWagerLobbyModal(false);
+                    }
+                })
+                .catch(() => {
+                    renderWagerLobbyModal(false);
+                });
+        } else {
+            renderWagerLobbyModal(false);
         }
 
-        // Cuando la cuenta atrás llega a 0:
+        // Si la cuenta atrás llega a 0 (pasaron 60 segundos y nadie más entró):
         if (currentWagerLobby.countdown <= 0) {
             clearInterval(currentWagerLobby.timer);
             currentWagerLobby.timer = null;
@@ -2808,6 +2886,7 @@ function startWagerMatchmaking() {
                     const botDef = aiBots[i - 1] || aiBots[0];
                     currentWagerLobby.slots[i] = {
                         id: 'ai_' + i,
+                        userId: 'ai_' + i,
                         name: botDef.name,
                         carName: botDef.carName,
                         colorHex: botDef.colorHex,
@@ -2822,10 +2901,11 @@ function startWagerMatchmaking() {
             }
 
             renderWagerLobbyModal(true);
+            setTimeout(() => {
+                if (currentWagerLobby) launchWagerRace();
+            }, 1500);
             return;
         }
-
-        renderWagerLobbyModal(false);
     }, 1000);
 }
 
@@ -2957,11 +3037,27 @@ function closeWagerLobby(refund = true) {
         currentWagerLobby.timer = null;
     }
 
-    if (currentWagerLobby && refund) {
-        const u = loadNftUserData();
-        u.credits = (u.credits || 0) + currentWagerLobby.room.buyIn;
-        saveNftUserData(u);
-        renderHubHeader();
+    if (currentWagerLobby) {
+        if (typeof fetch === 'function' && currentWagerLobby.lobbyId) {
+            const userData = loadNftUserData();
+            const userId = userData.userId || 'usr_me';
+            fetch('/api/multiplayer/public/leave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: currentWagerLobby.room ? currentWagerLobby.room.id : '',
+                    lobbyId: currentWagerLobby.lobbyId,
+                    userId: userId
+                })
+            }).catch(() => {});
+        }
+
+        if (refund) {
+            const u = loadNftUserData();
+            u.credits = (u.credits || 0) + currentWagerLobby.room.buyIn;
+            saveNftUserData(u);
+            renderHubHeader();
+        }
     }
 
     currentWagerLobby = null;
@@ -3050,6 +3146,694 @@ function launchWagerRace(overrideRoom = null, overrideSlots = null, overridePot 
         }
     };
     tryLaunch();
+}
+
+// =========================================================================
+// SISTEMA DE SALAS PRIVADAS DE DUELO (RETO DIRECTO CON APUESTA LIBRE $CR)
+// =========================================================================
+let currentDuelLobby = null;
+
+function openCreateDuelModal() {
+    hubAudio.playClick();
+    let modal = document.getElementById('create-duel-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'create-duel-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const userData = loadNftUserData();
+    const userCredits = typeof userData.credits === 'number' ? userData.credits : 1000;
+
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 500px; width: 95%;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25)); border-bottom: 1px solid rgba(236, 72, 153, 0.4);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 26px;">⚔️</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 17px; color: #f472b6;">CREAR SALA DE DUELO PRIVADA</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Reta a un amigo o a tu hijo con apuesta personalizada</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeCreateDuelModal()">✖</button>
+            </div>
+
+            <div class="settings-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <span style="font-size: 12px; color: #94a3b8;">Tu Saldo Actual:</span>
+                    <strong style="color: #00f5d4; font-size: 14px;">${userCredits.toLocaleString()} $CR</strong>
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: 800; color: #f8fafc; display: block; margin-bottom: 6px;">
+                        💰 APUESTA POR PILOTO ($CR):
+                    </label>
+                    <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(50)">50 $CR</button>
+                        <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(100)">100 $CR</button>
+                        <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(250)">250 $CR</button>
+                        <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(500)">500 $CR</button>
+                        <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(1000)">1.000 $CR</button>
+                        <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(5000)">5.000 $CR</button>
+                    </div>
+                    <input id="input-duel-bet" type="number" min="10" step="10" value="100" style="width: 100%; box-sizing: border-box; padding: 10px 14px; background: rgba(15, 23, 42, 0.85); border: 1px solid #ec4899; border-radius: 8px; color: #fee440; font-size: 16px; font-weight: 900; font-family: monospace;" oninput="updateDuelPotPreview()" />
+                </div>
+
+                <div>
+                    <label style="font-size: 12px; font-weight: 800; color: #f8fafc; display: block; margin-bottom: 6px;">
+                        🏁 CIRCUITO DEL DUELO:
+                    </label>
+                    <select id="select-duel-track" style="width: 100%; box-sizing: border-box; padding: 10px 14px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: #fff; font-size: 13px; font-weight: 800;">
+                        <option value="random">🎲 Circuito Sorpresa (Sorteo al azar)</option>
+                        <option value="rookie_ring">🏁 Rookie Ring Speedway (Iniciación)</option>
+                        <option value="monza">⚡ Monza Speed Ring (Alta Velocidad)</option>
+                        <option value="desert_canyon">🏜️ Desert Canyon Canyonway</option>
+                        <option value="neo_tokyo_bay">🌃 Neo-Tokyo Harbor Bay (Nocturno)</option>
+                        <option value="triangle">🔺 Triangle Oval GP</option>
+                        <option value="suzuka">🏎️ Suzuka Grand Prix</option>
+                    </select>
+                </div>
+
+                <!-- PREVISUALIZACIÓN DEL BOTE -->
+                <div id="duel-pot-preview" style="background: rgba(236, 72, 153, 0.08); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 8px; padding: 12px; font-size: 11.5px; color: #cbd5e1; display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>👥 Bote Total (2 x 100 $CR):</span>
+                        <strong style="color: #fff;">200 $CR</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>🔥 Protocolo y Quema (5%):</span>
+                        <span style="color: #ef4444;">-10 $CR</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-top: 1px dashed rgba(236,72,153,0.3); padding-top: 4px; margin-top: 4px;">
+                        <span style="font-weight: 800; color: #f472b6;">🏆 Premio para el Ganador (95%):</span>
+                        <strong style="color: #fde047; font-size: 13px;">+190 $CR</strong>
+                    </div>
+                </div>
+
+                <button class="btn-primary" style="padding: 14px; background: linear-gradient(135deg, #ec4899, #a855f7); color: #fff; font-weight: 900; font-size: 14px; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);" onclick="handleCreateDuelSubmit()">
+                    🚀 CREAR SALA Y OBTENER CÓDIGO
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function setDuelPresetBet(amount) {
+    const input = document.getElementById('input-duel-bet');
+    if (input) {
+        input.value = amount;
+        updateDuelPotPreview();
+    }
+}
+
+function updateDuelPotPreview() {
+    const input = document.getElementById('input-duel-bet');
+    const preview = document.getElementById('duel-pot-preview');
+    if (!input || !preview) return;
+
+    const bet = Math.max(10, Math.round(Number(input.value) || 10));
+    const gross = bet * 2;
+    const fee = Math.round(gross * 0.05 * 100) / 100;
+    const prize = Math.round((gross - fee) * 100) / 100;
+
+    preview.innerHTML = `
+        <div style="display: flex; justify-content: space-between;">
+            <span>👥 Bote Total (2 x ${bet.toLocaleString()} $CR):</span>
+            <strong style="color: #fff;">${gross.toLocaleString()} $CR</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span>🔥 Protocolo y Quema (5%):</span>
+            <span style="color: #ef4444;">-${fee.toLocaleString()} $CR</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-top: 1px dashed rgba(236,72,153,0.3); padding-top: 4px; margin-top: 4px;">
+            <span style="font-weight: 800; color: #f472b6;">🏆 Premio para el Ganador (95%):</span>
+            <strong style="color: #fde047; font-size: 13px;">+${prize.toLocaleString()} $CR</strong>
+        </div>
+    `;
+}
+
+function closeCreateDuelModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('create-duel-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function handleCreateDuelSubmit() {
+    hubAudio.playClick();
+    const input = document.getElementById('input-duel-bet');
+    const trackSelect = document.getElementById('select-duel-track');
+    const bet = Math.max(10, Math.round(Number(input ? input.value : 100) || 100));
+
+    const userData = loadNftUserData();
+    const userCredits = typeof userData.credits === 'number' ? userData.credits : 1000;
+
+    if (userCredits < bet) {
+        alert(`❌ Saldo insuficiente.\nPara crear este reto necesitas ${bet} $CR y dispones de ${userCredits} $CR.\n\nPuedes ajustar la apuesta o conseguir tokens en Modo Historia / Tienda.`);
+        return;
+    }
+
+    // Deducir apuesta temporalmente del usuario
+    userData.credits -= bet;
+    saveNftUserData(userData);
+    renderHubHeader();
+
+    const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+    const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
+    const chosenTrackVal = trackSelect ? trackSelect.value : 'random';
+
+    const payload = {
+        userId: userData.userId || 'usr_me',
+        name: pilotName,
+        carName: equippedCar ? equippedCar.name : 'Supercar GT',
+        colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
+        archetype: equippedCar ? (equippedCar.archetype || 'ferrari_corsa') : 'ferrari_corsa',
+        betAmount: bet,
+        trackId: chosenTrackVal === 'random' ? null : chosenTrackVal,
+        trackName: (trackSelect && chosenTrackVal !== 'random') ? trackSelect.options[trackSelect.selectedIndex].text : null
+    };
+
+    closeCreateDuelModal();
+
+    if (typeof fetch === 'function') {
+        fetch('/api/multiplayer/duel/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res && res.ok && res.duel) {
+                renderDuelWaitingModal(res.duel, true);
+            } else {
+                // Si falló el server, restaurar saldo
+                userData.credits += bet;
+                saveNftUserData(userData);
+                renderHubHeader();
+                alert('⚠️ No se pudo crear la sala. Inténtalo de nuevo.');
+            }
+        })
+        .catch(() => {
+            userData.credits += bet;
+            saveNftUserData(userData);
+            renderHubHeader();
+            alert('⚠️ Error de conexión con el servidor de carreras.');
+        });
+    } else {
+        const fallbackDuel = {
+            code: 'DUEL-' + Math.floor(1000 + Math.random() * 9000),
+            betAmount: bet,
+            circuit: { id: 'rookie_ring', name: 'Rookie Ring Speedway' },
+            slots: [{
+                id: 'host',
+                userId: userData.userId || 'usr_me',
+                name: pilotName,
+                carName: payload.carName,
+                colorHex: payload.colorHex,
+                archetype: payload.archetype,
+                stake: bet,
+                roleLabel: '👑 ANFITRIÓN (TÚ)',
+                isPlayer: true
+            }],
+            status: 'WAITING'
+        };
+        renderDuelWaitingModal(fallbackDuel, true);
+    }
+}
+
+function openJoinDuelModal(prefillCode = '') {
+    hubAudio.playClick();
+    let modal = document.getElementById('join-duel-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'join-duel-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    const cleanPrefill = (prefillCode || '').toUpperCase().trim();
+
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 480px; width: 95%;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25)); border-bottom: 1px solid rgba(236, 72, 153, 0.4);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 26px;">🔑</span>
+                    <div>
+                        <h2 style="margin: 0; font-size: 17px; color: #f472b6;">UNIRSE A SALA DE DUELO PRIVADA</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Acepta el desafío directo con tu código de sala</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeJoinDuelModal()">✖</button>
+            </div>
+
+            <div class="settings-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+                <div>
+                    <label style="font-size: 12px; font-weight: 800; color: #f8fafc; display: block; margin-bottom: 6px;">
+                        INTRODUCE EL CÓDIGO DE SALA:
+                    </label>
+                    <div style="display: flex; gap: 8px;">
+                        <input id="input-join-duel-code" type="text" placeholder="EJ: DUEL-1234" value="${cleanPrefill}" style="flex: 1; padding: 12px 14px; background: rgba(15, 23, 42, 0.85); border: 1px solid #ec4899; border-radius: 8px; color: #fee440; font-size: 16px; font-weight: 900; font-family: monospace; text-transform: uppercase;" />
+                        <button type="button" style="padding: 10px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; color: #fff; font-weight: 800; font-size: 12px; cursor: pointer;" onclick="handlePasteDuelCode()">
+                            📋 PEGAR
+                        </button>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.25); border-radius: 8px; padding: 12px; font-size: 11.5px; color: #cbd5e1; line-height: 1.5;">
+                    💡 <strong>¿Cómo funciona?</strong> Al pulsar "Entrar al Reto", verificaremos la apuesta del anfitrión. Si dispones de saldo suficiente en tu cuenta, entrarás a la sala y la carrera comenzará al instante.
+                </div>
+
+                <button class="btn-primary" style="padding: 14px; background: linear-gradient(135deg, #ec4899, #a855f7); color: #fff; font-weight: 900; font-size: 14px; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);" onclick="handleJoinDuelSubmit()">
+                    ⚔️ ENTRAR AL RETO
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function handlePasteDuelCode() {
+    hubAudio.playClick();
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(text => {
+            const input = document.getElementById('input-join-duel-code');
+            if (input && text) {
+                input.value = text.trim().toUpperCase();
+            }
+        }).catch(() => {
+            alert('Por favor escribe o pega el código manualmente.');
+        });
+    } else {
+        alert('Por favor escribe o pega el código manualmente.');
+    }
+}
+
+function closeJoinDuelModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('join-duel-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function handleJoinDuelSubmit() {
+    hubAudio.playClick();
+    const input = document.getElementById('input-join-duel-code');
+    const code = (input ? input.value : '').toUpperCase().trim();
+
+    if (!code) {
+        alert('⚠️ Por favor introduce un código de sala válido (ej. DUEL-1234).');
+        return;
+    }
+
+    const userData = loadNftUserData();
+    const userCredits = typeof userData.credits === 'number' ? userData.credits : 1000;
+    const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+    const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
+
+    // Consultar estado de la sala al servidor
+    if (typeof fetch === 'function') {
+        fetch(`/api/multiplayer/duel/status?code=${encodeURIComponent(code)}`)
+            .then(r => r.json())
+            .then(statusRes => {
+                if (!statusRes || !statusRes.ok || !statusRes.duel) {
+                    alert('⚠️ Sala de duelo no encontrada. Comprueba que el código esté bien escrito y que la sala no haya caducado.');
+                    return;
+                }
+
+                const duel = statusRes.duel;
+                if (duel.status !== 'WAITING' && duel.hostUserId !== userData.userId) {
+                    alert('⚠️ La sala de duelo ya ha comenzado con otro rival o ha concluido.');
+                    return;
+                }
+
+                // Verificar si tiene saldo suficiente
+                if (userCredits < duel.betAmount) {
+                    alert(`❌ Saldo insuficiente.\nEste reto requiere una apuesta de ${duel.betAmount} $CR y tu saldo actual es de ${userCredits} $CR.\n\nPuedes conseguir tokens en el Modo Historia o en la Tienda.`);
+                    return;
+                }
+
+                // Deducir apuesta si no es el anfitrión
+                if (duel.hostUserId !== userData.userId) {
+                    userData.credits -= duel.betAmount;
+                    saveNftUserData(userData);
+                    renderHubHeader();
+                }
+
+                // Unirse a la sala
+                fetch('/api/multiplayer/duel/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code: code,
+                        userId: userData.userId || 'usr_me',
+                        name: pilotName,
+                        carName: equippedCar ? equippedCar.name : 'Supercar GT',
+                        colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
+                        archetype: equippedCar ? (equippedCar.archetype || 'ferrari_corsa') : 'ferrari_corsa'
+                    })
+                })
+                .then(r => r.json())
+                .then(joinRes => {
+                    if (joinRes && joinRes.ok && joinRes.duel) {
+                        closeJoinDuelModal();
+                        renderDuelWaitingModal(joinRes.duel, joinRes.duel.hostUserId === userData.userId);
+                    } else {
+                        // Reembolsar si falló el join
+                        if (duel.hostUserId !== userData.userId) {
+                            userData.credits += duel.betAmount;
+                            saveNftUserData(userData);
+                            renderHubHeader();
+                        }
+                        alert(joinRes.message || '⚠️ No se pudo unir a la sala de duelo.');
+                    }
+                })
+                .catch(() => {
+                    if (duel.hostUserId !== userData.userId) {
+                        userData.credits += duel.betAmount;
+                        saveNftUserData(userData);
+                        renderHubHeader();
+                    }
+                    alert('⚠️ Error conectando a la sala de duelo.');
+                });
+            })
+            .catch(() => {
+                alert('⚠️ Error de conexión con el servidor.');
+            });
+    }
+}
+
+function renderDuelWaitingModal(duel, isHost) {
+    let modal = document.getElementById('duel-lobby-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'duel-lobby-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+
+    currentDuelLobby = {
+        duel,
+        isHost,
+        timer: null
+    };
+
+    const slots = duel.slots || [];
+    const isReady = slots.length >= 2;
+    const botUsername = 'argho_racing_test_bot';
+
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=duel_${duel.code}`)}&text=${encodeURIComponent(`🏎️ ¡Te reto a un duelo directo 1 vs 1 en APEX MOTORSPORT! Apuesta: ${duel.betAmount} $CR en ${duel.circuit.name}. Código: ${duel.code} 🏁`)}`;
+
+    const grossPot = duel.betAmount * 2;
+    const winnerPrize = Math.round(grossPot * 0.95);
+
+    modal.innerHTML = `
+        <div class="wager-lobby-dialog" style="border: 2px solid #ec4899; box-shadow: 0 0 35px rgba(236, 72, 153, 0.35);">
+            <div class="wager-lobby-header" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25)); border-bottom: 1px solid rgba(236, 72, 153, 0.4);">
+                <div>
+                    <span class="wager-badge-tag" style="background: rgba(236, 72, 153, 0.25); color: #f472b6; border: 1px solid #ec4899;">
+                        ⚔️ SALA DE DUELO PRIVADA • 1 VS 1
+                    </span>
+                    <h2 style="font-size: 20px; font-weight: 900; margin: 6px 0 2px; color: #fff;">
+                        SALA: <span style="color: #fde047; font-family: monospace;">${duel.code}</span>
+                    </h2>
+                    <div style="font-size: 11.5px; color: #cbd5e1; margin-top: 3px;">
+                        🏁 Trazada Oficial: <strong style="color:#00f5d4; text-transform: uppercase;">${escapeHtml(duel.circuit.name)}</strong>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeDuelLobbyModal(true)" title="Cancelar y recuperar tokens">✖</button>
+            </div>
+
+            <!-- COMPARTIR CÓDIGO Y TELEGRAM -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px dashed rgba(236, 72, 153, 0.6); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center;">
+                <div style="font-size: 11px; font-weight: 800; color: #f472b6; letter-spacing: 0.5px;">
+                    COMPARTE ESTE CÓDIGO CON TU HIJO O AMIGO:
+                </div>
+                <div style="font-size: 32px; font-weight: 900; font-family: monospace; color: #fee440; letter-spacing: 4px; text-shadow: 0 0 15px rgba(254, 228, 64, 0.5);">
+                    ${duel.code}
+                </div>
+                <div style="display: flex; gap: 8px; width: 100%; max-width: 420px;">
+                    <button class="btn-secondary" style="flex: 1; padding: 10px; font-weight: 800; font-size: 12px; border-radius: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #fff; cursor: pointer;" onclick="handleCopyDuelCode('${duel.code}')">
+                        📋 COPIAR CÓDIGO
+                    </button>
+                    <a href="${tgShareUrl}" target="_blank" class="btn-primary" style="flex: 1.4; padding: 10px; font-weight: 900; font-size: 12px; border-radius: 8px; background: linear-gradient(135deg, #0088cc, #00b4d8); color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 12px rgba(0, 136, 204, 0.4);">
+                        📲 COMPARTIR EN TELEGRAM
+                    </a>
+                </div>
+            </div>
+
+            <!-- BARRA DE TIEMPO / ESTADO -->
+            <div class="wager-countdown-bar" style="border-color: ${isReady ? '#00f5d4' : '#ec4899'}; background: ${isReady ? 'rgba(0, 245, 212, 0.15)' : 'rgba(236, 72, 153, 0.12)'};">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">${isReady ? '🏁' : '⏱️'}</span>
+                    <strong style="color: ${isReady ? '#00f5d4' : '#f472b6'}; font-size: 13px;">
+                        ${isReady ? '¡OPONENTE CONECTADO! PREPARANDO SALIDA...' : 'ESPERANDO A TU OPONENTE EN RED...'}
+                    </strong>
+                </div>
+                <div style="font-size: 11px; color: #cbd5e1;">
+                    ${isReady ? 'Iniciando en 2s' : 'Tu rival debe introducir el código'}
+                </div>
+            </div>
+
+            <!-- SLOTS DE LOS 2 PILOTOS -->
+            <div class="wager-slots-grid" style="grid-template-columns: 1fr 1fr;">
+                <!-- PILOTO 1 (ANFITRIÓN) -->
+                <div class="wager-slot-card slot-ready" style="border-color: #ec4899;">
+                    <div class="wager-slot-avatar" style="border: 2px solid ${slots[0] ? slots[0].colorHex : '#00f5d4'};">
+                        👑
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="wager-slot-name">${escapeHtml(slots[0] ? slots[0].name : 'Anfitrión')}</span>
+                            <span style="font-size: 10px; font-weight: 800; color: #f472b6;">${duel.betAmount} $CR</span>
+                        </div>
+                        <div class="wager-slot-role">${slots[0] ? slots[0].roleLabel : '👑 ANFITRIÓN'}</div>
+                        <div style="font-size: 10px; color: #cbd5e1;">Coche: ${slots[0] ? slots[0].carName : 'GT3 Racer'}</div>
+                    </div>
+                </div>
+
+                <!-- PILOTO 2 (RIVAL) -->
+                ${slots[1] ? `
+                    <div class="wager-slot-card slot-ready" style="border-color: #00f5d4;">
+                        <div class="wager-slot-avatar" style="border: 2px solid ${slots[1].colorHex || '#00f5d4'};">
+                            ⚔️
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="wager-slot-name">${escapeHtml(slots[1].name)}</span>
+                                <span style="font-size: 10px; font-weight: 800; color: #00f5d4;">${duel.betAmount} $CR</span>
+                            </div>
+                            <div class="wager-slot-role">${slots[1].roleLabel || '⚔️ RIVAL RETADOR'}</div>
+                            <div style="font-size: 10px; color: #cbd5e1;">Coche: ${slots[1].carName || 'GT3 Racer'}</div>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="wager-slot-card" style="opacity: 0.7; border-style: dashed; border-color: rgba(236,72,153,0.5);">
+                        <div class="wager-slot-avatar" style="border: 1px dashed #ec4899;">⏳</div>
+                        <div>
+                            <div class="wager-slot-name" style="color: #f472b6;">Esperando rival...</div>
+                            <div class="wager-slot-role">Envía el código por Telegram</div>
+                        </div>
+                    </div>
+                `}
+            </div>
+
+            <!-- DESGLOSE DEL BOTE DIRECTO 1 VS 1 -->
+            <div class="wager-pot-accounting-box" style="border-color: rgba(236, 72, 153, 0.4);">
+                <div style="font-size: 12px; font-weight: 900; color: #f8fafc; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>⚔️ BOTE DIRECTO 1 VS 1</span>
+                    <span style="color: #f472b6;">BOTE BRUTO: ${grossPot} $CR</span>
+                </div>
+                <div class="wager-accounting-row">
+                    <span>🔥 Protocolo, Mantenimiento y Quema (5%):</span>
+                    <span style="color: #ef4444;">-${(grossPot * 0.05).toFixed(2)} $CR</span>
+                </div>
+                <div class="wager-accounting-row highlight" style="color: #fde047; background: rgba(254, 228, 64, 0.08); padding: 8px 10px; border-radius: 6px;">
+                    <span>🏆 ¡EL GANADOR SE LLEVA EL 95% LIMPIO!</span>
+                    <span style="font-size: 14px; font-weight: 900;">+${winnerPrize} $CR</span>
+                </div>
+            </div>
+
+            <!-- BOTONES DE ACCIÓN -->
+            <div style="display: flex; gap: 12px;">
+                <button class="btn-secondary" style="flex: 1; padding: 12px; font-weight: 800; font-size: 13px; border-radius: 10px;" onclick="closeDuelLobbyModal(true)">
+                    CANCELAR Y RECUPERAR ${duel.betAmount} $CR
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+
+    // Iniciar polling cada 1s al servidor si todavía no hay 2 jugadores
+    if (!isReady && typeof fetch === 'function') {
+        currentDuelLobby.timer = setInterval(() => {
+            if (!currentDuelLobby) return;
+
+            fetch(`/api/multiplayer/duel/status?code=${encodeURIComponent(duel.code)}`)
+                .then(r => r.json())
+                .then(res => {
+                    if (res && res.ok && res.duel) {
+                        const updatedDuel = res.duel;
+                        if (updatedDuel.slots && updatedDuel.slots.length >= 2) {
+                            clearInterval(currentDuelLobby.timer);
+                            currentDuelLobby.timer = null;
+                            renderDuelWaitingModal(updatedDuel, isHost);
+                            setTimeout(() => {
+                                launchDuelRace(updatedDuel, updatedDuel.slots);
+                            }, 1800);
+                        }
+                    }
+                })
+                .catch(() => {});
+        }, 1000);
+    } else if (isReady) {
+        setTimeout(() => {
+            launchDuelRace(duel, duel.slots);
+        }, 1800);
+    }
+}
+
+function handleCopyDuelCode(code) {
+    hubAudio.playClick();
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(() => {
+            alert(`✅ Código copiado: ${code}\nEnvíalo a tu rival.`);
+        }).catch(() => {
+            alert(`Código: ${code}`);
+        });
+    } else {
+        alert(`Código: ${code}`);
+    }
+}
+
+function closeDuelLobbyModal(refund = true) {
+    hubAudio.playClick();
+    if (currentDuelLobby && currentDuelLobby.timer) {
+        clearInterval(currentDuelLobby.timer);
+        currentDuelLobby.timer = null;
+    }
+
+    if (currentDuelLobby) {
+        const duel = currentDuelLobby.duel;
+        if (duel && typeof fetch === 'function') {
+            fetch('/api/multiplayer/duel/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: duel.code })
+            }).catch(() => {});
+        }
+
+        if (refund && duel) {
+            const u = loadNftUserData();
+            u.credits = (u.credits || 0) + duel.betAmount;
+            saveNftUserData(u);
+            renderHubHeader();
+        }
+    }
+
+    currentDuelLobby = null;
+    const modal = document.getElementById('duel-lobby-modal');
+    if (modal) modal.remove();
+}
+
+function launchDuelRace(duel, slots) {
+    if (currentDuelLobby && currentDuelLobby.timer) {
+        clearInterval(currentDuelLobby.timer);
+        currentDuelLobby.timer = null;
+    }
+    const modal = document.getElementById('duel-lobby-modal');
+    if (modal) modal.remove();
+
+    const userData = loadNftUserData();
+    const userId = userData.userId || 'usr_me';
+    const cleanSlots = slots || (duel ? duel.slots : []) || [];
+
+    const aiBots = [
+        { name: "🤖 Bot_Klaus", carName: "Bavaria ROWE M4", archetype: "dtm_coupe", colorHex: "#15803d" },
+        { name: "🤖 Bot_Matteo", carName: "Scuderia 488 GT3", archetype: "ferrari_corsa", colorHex: "#e53935" }
+    ];
+
+    const final4Slots = [
+        // slot 0 (local user)
+        cleanSlots.find(s => s && s.userId === userId) || cleanSlots[0],
+        // slot 1 (rival)
+        cleanSlots.find(s => s && s.userId !== userId) || cleanSlots[1] || {
+            name: "Rival Piloto", carName: "GT3 Challenger", colorHex: "#f59e0b", archetype: "ferrari_corsa", isAI: false, isPlayer: false, stake: duel.betAmount
+        },
+        // slot 2 (pacer)
+        {
+            id: 'ai_duel_1',
+            name: aiBots[0].name,
+            carName: aiBots[0].carName,
+            colorHex: aiBots[0].colorHex,
+            archetype: aiBots[0].archetype,
+            isAI: true,
+            isPlayer: false,
+            stake: 0,
+            roleLabel: '🤖 PACER (IA)',
+            status: 'PACER'
+        },
+        // slot 3 (pacer)
+        {
+            id: 'ai_duel_2',
+            name: aiBots[1].name,
+            carName: aiBots[1].carName,
+            colorHex: aiBots[1].colorHex,
+            archetype: aiBots[1].archetype,
+            isAI: true,
+            isPlayer: false,
+            stake: 0,
+            roleLabel: '🤖 PACER (IA)',
+            status: 'PACER'
+        }
+    ];
+
+    const grossPot = duel.betAmount * 2;
+    const devFee = Math.round(grossPot * 0.02 * 100) / 100;
+    const rewardsFee = Math.round(grossPot * 0.02 * 100) / 100;
+    const burnFee = Math.round(grossPot * 0.01 * 100) / 100;
+    const netPot = Math.round((grossPot - (devFee + rewardsFee + burnFee)) * 100) / 100;
+
+    const potData = {
+        grossPot,
+        totalFee: devFee + rewardsFee + burnFee,
+        devFee,
+        rewardsFee,
+        burnedTokens: burnFee,
+        netPot,
+        p1Prize: netPot,
+        p2Prize: 0,
+        p3Prize: 0,
+        payouts: [netPot, 0, 0, 0]
+    };
+
+    const duelRoom = {
+        id: 'duel_' + duel.code,
+        name: `DUELO PRIVADO [${duel.code}]`,
+        buyIn: duel.betAmount,
+        currency: '$CR',
+        badge: '⚔️ DUELO 1VS1',
+        badgeColor: '#ec4899',
+        trackId: duel.circuit.id,
+        trackName: duel.circuit.name,
+        currentTrackId: duel.circuit.id,
+        currentTrackName: duel.circuit.name,
+        aiContributionPct: 0
+    };
+
+    currentDuelLobby = null;
+    launchWagerRace(duelRoom, final4Slots, potData);
 }
 
 window.returnToCompHub = function() {
@@ -4998,6 +5782,54 @@ if (typeof window !== 'undefined') {
     window.handleRedeemReferralCode = handleRedeemReferralCode;
     window.handleLinkEmail = handleLinkEmail;
     window.handleSimulateInvite = handleSimulateInvite;
+    window.openCreateDuelModal = openCreateDuelModal;
+    window.closeCreateDuelModal = closeCreateDuelModal;
+    window.setDuelPresetBet = setDuelPresetBet;
+    window.updateDuelPotPreview = updateDuelPotPreview;
+    window.handleCreateDuelSubmit = handleCreateDuelSubmit;
+    window.openJoinDuelModal = openJoinDuelModal;
+    window.closeJoinDuelModal = closeJoinDuelModal;
+    window.handlePasteDuelCode = handlePasteDuelCode;
+    window.handleJoinDuelSubmit = handleJoinDuelSubmit;
+    window.renderDuelWaitingModal = renderDuelWaitingModal;
+    window.handleCopyDuelCode = handleCopyDuelCode;
+    window.closeDuelLobbyModal = closeDuelLobbyModal;
+    window.launchDuelRace = launchDuelRace;
+    window.checkTelegramDeepLinkParams = checkTelegramDeepLinkParams;
+}
+
+// Detección automática de enlaces de Telegram (retos directos ?startapp=duel_XXXX o invitaciones ?startapp=ref_XXXX)
+function checkTelegramDeepLinkParams() {
+    try {
+        let startParam = null;
+        if (typeof window !== 'undefined') {
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.start_param) {
+                startParam = window.Telegram.WebApp.initDataUnsafe.start_param;
+            } else if (typeof location !== 'undefined' && location.search) {
+                const params = new URLSearchParams(location.search);
+                startParam = params.get('startapp') || params.get('tgWebAppStartParam') || params.get('start_param');
+            }
+        }
+        if (startParam) {
+            if (startParam.startsWith('duel_')) {
+                const code = startParam.replace('duel_', '').toUpperCase().trim();
+                setTimeout(() => {
+                    if (typeof openJoinDuelModal === 'function') {
+                        openJoinDuelModal(code);
+                    }
+                }, 800);
+            } else if (startParam.startsWith('ref_')) {
+                const refCode = startParam.replace('ref_', '').toUpperCase().trim();
+                setTimeout(() => {
+                    if (typeof handleRedeemReferralCode === 'function') {
+                        handleRedeemReferralCode(refCode);
+                    }
+                }, 800);
+            }
+        }
+    } catch (e) {
+        console.warn('Error comprobando deep link de Telegram:', e);
+    }
 }
 
 // Secuencia de Salida FIA y Animación de Carga de Competición
@@ -5091,6 +5923,7 @@ function initGameHub() {
         renderHubHeader();
         showHubView('main');
         runRacingPreloaderSequence();
+        checkTelegramDeepLinkParams();
     } catch(e) {
         console.error('Error inicializando Hub:', e);
     }

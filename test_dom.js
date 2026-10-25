@@ -2060,6 +2060,60 @@ console.log('✓ Modal de Torneo verificado: Muestra exclusivamente el BOTE TOTA
 // Restaurar desarrollo
 vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = false', ctx);
 
+console.log('\n--- VERIFICANDO SALAS PRIVADAS DE DUELO Y MULTIJUGADOR 60s (V99) ---');
+// 1. Verificar modal de creación de duelo privado
+vm.runInContext('openCreateDuelModal()', ctx);
+const createDuelModal = doc.getElementById('create-duel-modal');
+if (!createDuelModal || !createDuelModal.innerHTML.includes('CREAR SALA DE DUELO PRIVADA')) {
+    throw new Error('openCreateDuelModal debe abrir el modal con el título correspondiente');
+}
+if (!createDuelModal.innerHTML.includes('input-duel-bet')) {
+    throw new Error('openCreateDuelModal debe incluir input numérico para la apuesta libre');
+}
+console.log('✓ Modal de creación de duelo con apuesta libre renderizado correctamente');
+
+// 2. Verificar modal para unirse a duelo por código
+vm.runInContext('openJoinDuelModal("DUEL-7788")', ctx);
+const joinDuelModal = doc.getElementById('join-duel-modal');
+if (!joinDuelModal || !joinDuelModal.innerHTML.includes('DUEL-7788')) {
+    throw new Error('openJoinDuelModal debe pre-rellenar el código introducido');
+}
+console.log('✓ Modal de unirse con código pre-rellenado verificado con éxito');
+
+// 3. Verificar modal de sala de espera del duelo con enlace de Telegram
+vm.runInContext(`
+    const mockDuel = {
+        code: 'DUEL-4455',
+        betAmount: 500,
+        circuit: { id: 'monza', name: 'Monza Speed Ring' },
+        slots: [
+            { id: 'host', name: 'Padre GT', carName: 'Ferrari 488', colorHex: '#e53935', roleLabel: '👑 ANFITRIÓN', isPlayer: true }
+        ],
+        status: 'WAITING'
+    };
+    renderDuelWaitingModal(mockDuel, true);
+`, ctx);
+const duelLobbyModal = doc.getElementById('duel-lobby-modal');
+if (!duelLobbyModal || !duelLobbyModal.innerHTML.includes('DUEL-4455')) {
+    throw new Error('renderDuelWaitingModal debe renderizar el código de la sala DUEL-4455');
+}
+if (!duelLobbyModal.innerHTML.includes('https://t.me/share/url?url=')) {
+    throw new Error('renderDuelWaitingModal debe contener el botón para compartir en Telegram');
+}
+if (!duelLobbyModal.innerHTML.includes('950 $CR')) {
+    throw new Error('renderDuelWaitingModal debe calcular correctamente el bote ganador (500x2x0.95 = 950 $CR)');
+}
+console.log('✓ Sala de espera de duelo privado, cálculo de bote del 95% y enlace de Telegram verificados');
+
+// 4. Verificar cancelación y reembolso de sala de duelo
+const preCancelCredits = vm.runInContext('loadNftUserData().credits', ctx);
+vm.runInContext('closeDuelLobbyModal(true)', ctx);
+const postCancelCredits = vm.runInContext('loadNftUserData().credits', ctx);
+if (postCancelCredits !== preCancelCredits + 500) {
+    throw new Error(`closeDuelLobbyModal(true) debe reembolsar la apuesta de 500 $CR, antes: ${preCancelCredits}, ahora: ${postCancelCredits}`);
+}
+console.log('✓ Cancelación de sala de duelo y reembolso íntegro de la apuesta verificados');
+
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');
 console.log('========================================');

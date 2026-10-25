@@ -783,7 +783,14 @@ function loadNftUserData() {
     if (typeof data.gems !== 'number') data.gems = APP_CONFIG.DEFAULT_STARTING_GEMS;
     if (!Array.isArray(data.garage) || data.garage.length === 0) data.garage = [starterCar];
     if (!data.equippedInstanceId && data.garage[0]) data.equippedInstanceId = data.garage[0].instanceId;
-    if (typeof data.nitros !== 'number') data.nitros = 2;
+    if (!data.userId) {
+        let tgId = null;
+        try {
+            const tgUser = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) ? window.Telegram.WebApp.initDataUnsafe.user : null;
+            if (tgUser && tgUser.id) tgId = String(tgUser.id);
+        } catch(e) {}
+        data.userId = tgId || ('usr_' + Math.random().toString(36).substring(2, 9));
+    }
 
     // Nombre de piloto personalizado del usuario
     if (!data.pilotName || typeof data.pilotName !== 'string' || !data.pilotName.trim()) {
