@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const db = require('./database');
 const { CircuitsCatalog } = require('./track_generator');
 
@@ -111,6 +112,54 @@ function checkRateLimit(ip, limitPerMinute = 30) {
     return { allowed: true };
 }
 
+// ===== GUARDADO EN SERVIDOR (v100): utilidades =====
+// Lee un cuerpo JSON con límite de tamaño (evita abusos / DoS con cuerpos gigantes)
+function readJsonBody(req, res, maxBytes, onOk) {
+    let body = '';
+    let aborted = false;
+    req.on('data', chunk => {
+        if (aborted) return;
+        body += chunk;
+        if (body.length > maxBytes) {
+            aborted = true;
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'payload_too_large', message: 'El guardado supera el tamaño máximo permitido' }));
+            req.destroy();
+        }
+    });
+    req.on('end', () => {
+        if (aborted) return;
+        try {
+            onOk(JSON.parse(body || '{}'));
+        } catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'invalid_json', message: e.message }));
+        }
+    });
+    req.on('error', () => {});
+}
+
+function isValidSaveId(id) {
+    return typeof id === 'string' && /^[A-Za-z0-9_-]{3,64}$/.test(id);
+}
+
+// Autorización del guardado: si el ID es numérico (ID de Telegram) y hay BOT_TOKEN,
+// se exige la firma oficial de Telegram (initData) y que coincida con ese ID.
+// Los ID de dispositivo (usr_xxx aleatorios) son secretos en sí mismos.
+function authorizeSaveAccess(req, saveId) {
+    const initData = req.headers['x-telegram-init-data'] || '';
+    const isTelegramId = /^\d{3,}$/.test(saveId);
+    if (BOT_TOKEN && isTelegramId) {
+        if (!initData) return { ok: false, reason: 'Falta initData de Telegram para este ID' };
+        const check = verifyTelegramWebAppData(initData, BOT_TOKEN);
+        if (!check.valid) return { ok: false, reason: check.reason || 'initData no válido' };
+        if (!check.user || String(check.user.id) !== String(saveId)) {
+            return { ok: false, reason: 'El usuario de Telegram no coincide con el guardado' };
+        }
+    }
+    return { ok: true };
+}
+
 const MIME_TYPES = {
     '.html': 'text/html',
     '.css': 'text/css',
@@ -118,7 +167,11 @@ const MIME_TYPES = {
     '.json': 'application/json',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
-    '.svg': 'image/svg+xml'
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.txt': 'text/plain'
 };
 
 const server = http.createServer((req, res) => {
@@ -127,8 +180,8 @@ const server = http.createServer((req, res) => {
 
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Init-Data');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -387,9 +440,14 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const result = db.recordRaceResult(data.userId, data.username, data.track, data.time);
+                if (!data.userId || !Number.isFinite(Number(data.time)) || Number(data.time) <= 0) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'invalid_race_result', message: 'userId y time (>0) son obligatorios' }));
+                    return;
+                }
+                const result = db.recordRaceResult(data.userId, data.username, data.track, Number(data.time), data.car);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(result));
+                res.end(JSON.stringify({ ok: true, ...result }));
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON' }));
@@ -703,6 +761,71 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ===== GUARDADO EN SERVIDOR DEL JUGADOR (v100 - cloud_save.js) =====
+    // GET    /api/save/:userId  -> descargar guardado (garaje + historia + ajustes)
+    // PUT    /api/save/:userId  -> subir guardado (POST también, para sendBeacon al salir)
+    // DELETE /api/save/:userId  -> borrar (botón "restablecer progreso" en Ajustes)
+    if (pathname.startsWith('/api/save/')) {
+        const saveId = decodeURIComponent(pathname.replace('/api/save/', ''));
+        if (!isValidSaveId(saveId)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'invalid_id' }));
+            return;
+        }
+        const authz = authorizeSaveAccess(req, saveId);
+        if (!authz.ok) {
+            securityAuditLogs.push({ event: 'SAVE_AUTH_FAILED', saveId, ip: clientIp, time: new Date().toISOString() });
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'forbidden', reason: authz.reason }));
+            return;
+        }
+
+        if (req.method === 'GET') {
+            const save = db.getPlayerSave(saveId);
+            if (!save) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: 'not_found' }));
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, save }));
+            return;
+        }
+
+        if (req.method === 'DELETE') {
+            const existed = db.deletePlayerSave(saveId);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, deleted: existed }));
+            return;
+        }
+
+        if (req.method === 'PUT' || req.method === 'POST') {
+            readJsonBody(req, res, 1024 * 1024, (data) => {
+                if (!data || typeof data !== 'object' ||
+                    (data.garage != null && (typeof data.garage !== 'object' || Array.isArray(data.garage))) ||
+                    (data.story != null && (typeof data.story !== 'object' || Array.isArray(data.story)))) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'invalid_save_shape' }));
+                    return;
+                }
+                const result = db.putPlayerSave(saveId, data);
+                if (!result.ok) {
+                    // Otro dispositivo guardó después: gana la versión más nueva
+                    res.writeHead(409, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, conflict: true, save: result.save }));
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, updatedAt: result.save.updatedAt, serverSavedAt: result.save.serverSavedAt }));
+            });
+            return;
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'method_not_allowed' }));
+        return;
+    }
+
     // ===== RUTAS ESTÁTICAS =====
     let filePath = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
     fs.stat(filePath, (err, stats) => {
@@ -715,18 +838,39 @@ const server = http.createServer((req, res) => {
         const ext = path.extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-        // Caché optimizado: recursos multimedia e imágenes con caché local (evita peticiones redundantes y 429)
-        const isMedia = ['.jpg', '.jpeg', '.png', '.svg', '.mp3', '.ogg', '.wav'].includes(ext);
-        const cacheHeader = isMedia 
+        // Caché optimizado (v100):
+        // - Multimedia: 1 día + revalidación en segundo plano.
+        // - JS/CSS versionados (?v=100): 7 días inmutables -> las reaperturas en Telegram son casi instantáneas.
+        // - El resto (HTML y recursos sin versión): siempre fresco.
+        const isMedia = ['.jpg', '.jpeg', '.png', '.webp', '.svg', '.mp3', '.ogg', '.wav'].includes(ext);
+        const isVersionedAsset = parsedUrl.searchParams.has('v') && ['.js', '.css'].includes(ext);
+        const cacheHeader = isMedia
             ? 'public, max-age=86400, stale-while-revalidate=604800'
-            : 'no-cache, no-store, must-revalidate';
+            : (isVersionedAsset
+                ? 'public, max-age=604800, immutable'
+                : 'no-cache, no-store, must-revalidate');
 
-        res.writeHead(200, {
+        // Compresión gzip (v100): tracks_data.js y compañía pesan ~2,8 MB sin comprimir;
+        // con gzip la primera carga en el móvil se reduce en torno a un 70 %.
+        const isCompressible = ['.html', '.css', '.js', '.json', '.svg', '.txt'].includes(ext);
+        const acceptsGzip = typeof req.headers['accept-encoding'] === 'string' && req.headers['accept-encoding'].includes('gzip');
+
+        const headers = {
             'Content-Type': contentType,
             'Cache-Control': cacheHeader,
-            'Pragma': isMedia ? 'public' : 'no-cache'
-        });
-        fs.createReadStream(filePath).pipe(res);
+            'Pragma': (isMedia || isVersionedAsset) ? 'public' : 'no-cache',
+            'Vary': 'Accept-Encoding'
+        };
+
+        if (isCompressible && acceptsGzip) {
+            headers['Content-Encoding'] = 'gzip';
+            res.writeHead(200, headers);
+            fs.createReadStream(filePath).pipe(zlib.createGzip({ level: 6 })).pipe(res);
+        } else {
+            headers['Content-Length'] = stats.size;
+            res.writeHead(200, headers);
+            fs.createReadStream(filePath).pipe(res);
+        }
     });
 });
 
@@ -735,6 +879,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🏁 APEX MOTORSPORT - Servidor Web & Game Hub listo`);
     console.log(`📡 URL Local: http://localhost:${PORT}`);
     console.log(`📡 URL IPv4:  http://127.0.0.1:${PORT}`);
+    console.log(`💾 Guardados de jugadores en: ${db.DB_FILE}`);
     console.log(`=======================================================`);
 
     if (process.env.BOT_TOKEN) {

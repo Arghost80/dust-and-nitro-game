@@ -390,6 +390,11 @@ const CONFIG = {
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
     parent: 'game-container',
+    // v100 (fluidez móvil): objetivo 60 fps con paso suavizado y GPU a máximo rendimiento.
+    // La resolución de renderizado se mantiene en 1 (960x540): nítido en el móvil sin
+    // disparar el consumo de GPU/batería en pantallas de alta densidad.
+    fps: { target: 60, smoothStep: true },
+    render: { powerPreference: 'high-performance', antialias: true },
     physics: {
         default: 'arcade',
         arcade: { debug: false, gravity: { y: 0 } }
@@ -630,7 +635,12 @@ function loadStoryProgress() {
 
 function saveStoryProgress(data) {
     try {
+        // v100: marca de tiempo + subida al guardado en servidor
+        if (data && typeof data === 'object') data.updatedAt = Date.now();
         localStorage.setItem('dustrac_story_save', JSON.stringify(data));
+        if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.scheduleUpload === 'function') {
+            window.CloudSave.scheduleUpload();
+        }
     } catch(e) {}
 }
 
@@ -2719,22 +2729,102 @@ function initVirtualJoystick() {
     });
 }
 
+// v100 (móvil): soltar TODOS los controles de golpe. Se usa al perder el foco,
+// minimizar Telegram o recibir una cancelación táctil del sistema.
+function resetAllTouchInputs() {
+    touchLeft = false;
+    touchRight = false;
+    touchGas = false;
+    touchBrake = false;
+    touchHandbrake = false;
+    touchJoyGas = false;
+    touchJoyBrake = false;
+    touchSteerAmount = 1.0;
+    try {
+        document.querySelectorAll('.btn-touch.is-pressed').forEach(el => el.classList.remove('is-pressed'));
+        const stick = document.getElementById('joystick-stick');
+        if (stick) stick.style.transform = 'translate(0px, 0px)';
+    } catch (e) {}
+}
+window.resetAllTouchInputs = resetAllTouchInputs;
+
+// v100: vibración háptica nativa de Telegram (con límite para no machacar la API)
+let _lastHapticAt = 0;
+function apexHaptic(kind) {
+    try {
+        const now = Date.now();
+        if (now - _lastHapticAt < 220) return;
+        _lastHapticAt = now;
+        const hf = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) ? window.Telegram.WebApp.HapticFeedback : null;
+        if (hf && typeof hf.impactOccurred === 'function') {
+            hf.impactOccurred(kind === 'heavy' ? 'heavy' : (kind === 'light' ? 'light' : 'medium'));
+        } else if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            navigator.vibrate(kind === 'heavy' ? 35 : 15);
+        }
+    } catch (e) {}
+}
+window.apexHaptic = apexHaptic;
+
 function setupTouchControls() {
+    // v100 (móvil): Pointer Events con captura del puntero.
+    // Antes solo había touchstart/touchend + ratón: si el dedo resbalaba fuera del
+    // botón o el sistema cancelaba el toque, el pedal se quedaba PULSADO para siempre.
+    // Ahora cada botón sigue a su propio puntero (multitáctil real: GAS + giro a la vez)
+    // y se suelta sí o sí con pointerup / pointercancel / pérdida de captura.
     const bindTouch = (id, onDown, onUp) => {
         const btn = document.getElementById(id);
-        if (!btn) return;
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); dustAudio.init(); onDown(); });
-        btn.addEventListener('touchend', (e) => { e.preventDefault(); onUp(); });
-        btn.addEventListener('mousedown', (e) => { e.preventDefault(); dustAudio.init(); onDown(); });
-        btn.addEventListener('mouseup', (e) => { e.preventDefault(); onUp(); });
+        if (!btn || typeof btn.addEventListener !== 'function') return;
+        if (btn.dataset && btn.dataset.apexBound === '1') return;
+        if (btn.dataset) btn.dataset.apexBound = '1';
+        const activePointers = new Set();
+
+        const press = (e) => {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            if (e && e.pointerId !== undefined) {
+                activePointers.add(e.pointerId);
+                try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+            }
+            btn.classList.add('is-pressed');
+            try { dustAudio.init(); } catch (err) {}
+            onDown();
+        };
+        const release = (e) => {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            if (e && e.pointerId !== undefined) activePointers.delete(e.pointerId);
+            if (activePointers.size === 0) {
+                btn.classList.remove('is-pressed');
+                onUp();
+            }
+        };
+
+        btn.addEventListener('pointerdown', press);
+        btn.addEventListener('pointerup', release);
+        btn.addEventListener('pointercancel', release);
+        btn.addEventListener('lostpointercapture', release);
+        btn.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+        // Respaldo para WebViews antiguos sin Pointer Events
+        btn.addEventListener('touchstart', (e) => { if (!window.PointerEvent) press(e); }, { passive: false });
+        btn.addEventListener('touchend', (e) => { if (!window.PointerEvent) release(e); }, { passive: false });
+        btn.addEventListener('touchcancel', (e) => { if (!window.PointerEvent) release(e); }, { passive: false });
     };
 
     bindTouch('btn-left', () => { touchLeft = true; touchSteerAmount = 1.0; }, () => { touchLeft = false; });
     bindTouch('btn-right', () => { touchRight = true; touchSteerAmount = 1.0; }, () => { touchRight = false; });
     bindTouch('btn-accel', () => touchGas = true, () => touchGas = false);
     bindTouch('btn-brake', () => touchBrake = true, () => touchBrake = false);
-    bindTouch('btn-handbrake', () => touchHandbrake = true, () => touchHandbrake = false);
+    bindTouch('btn-handbrake', () => { touchHandbrake = true; apexHaptic('light'); }, () => touchHandbrake = false);
     bindTouch('btn-nitro', () => { activateNitroBoost(); }, () => {});
+
+    // v100: si la app pierde el foco o se minimiza, ningún pedal queda atascado
+    try {
+        if (typeof window !== 'undefined' && !window.__apexTouchResetBound && typeof window.addEventListener === 'function') {
+            window.__apexTouchResetBound = true;
+            window.addEventListener('blur', resetAllTouchInputs);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') resetAllTouchInputs();
+            });
+        }
+    } catch (e) {}
 
     initVirtualJoystick();
     applyTouchControlMode();
@@ -2778,6 +2868,7 @@ function activateNitroBoost() {
     updateNitroButtonBadge();
 
     nitroBoostTimer = 4.0; // 4.0s de inyección N2O
+    apexHaptic('heavy'); // v100: golpe háptico al notar el empujón del nitro
     try {
         dustAudio.init();
         if (typeof dustAudio.playNitro === 'function') {
@@ -4867,7 +4958,11 @@ function setupHud(scene, track) {
 function dustUpdate(time, delta) {
     if (!playerCar || gameState === 'MENU') return;
 
-    const dt = delta / 1000;
+    // v100 (fluidez): limitar dt a 50 ms. En un tirón de FPS (notificación, GC,
+    // móvil modesto...) el coche avanza en "cámara lenta" unas décimas en vez de
+    // teletransportarse contra el muro con un dt enorme.
+    const dt = Math.min(Math.max(delta || 0, 0) / 1000, 0.05);
+    if (dt <= 0) return;
     const tracks = window.DustracTracks || {};
     const track = tracks[currentTrackId];
     if (!track) return;
@@ -6232,6 +6327,14 @@ function endRace() {
         progress.stars[currentTrackId] = earnedStars;
     }
     progress.bestRanks[currentTrackId] = Math.min(progress.bestRanks[currentTrackId] || 99, playerRank);
+    // v100: registrar por fin el mejor tiempo total por circuito (el campo existía pero nunca se rellenaba)
+    if (!progress.bestTimes || typeof progress.bestTimes !== 'object') progress.bestTimes = {};
+    if (Number.isFinite(totalRaceNum) && totalRaceNum > 0) {
+        const roundedTotal = Math.round(totalRaceNum * 100) / 100;
+        if (!progress.bestTimes[currentTrackId] || roundedTotal < progress.bestTimes[currentTrackId]) {
+            progress.bestTimes[currentTrackId] = roundedTotal;
+        }
+    }
 
     // Desbloqueo del siguiente circuito de la historia
     let nextTrack = null;
@@ -6247,6 +6350,39 @@ function endRace() {
         }
     }
     saveStoryProgress(progress);
+
+    // v100: enviar el resultado al servidor (ranking global real alimentado por el juego).
+    // "Dispara y olvida": si no hay red, la partida ya quedó guardada localmente y en la nube.
+    try {
+        if (!isTestEnvironment && typeof fetch === 'function' && Number.isFinite(totalRaceNum) && totalRaceNum > 0) {
+            const trackObj = (typeof window !== 'undefined' && window.DustracTracks) ? window.DustracTracks[currentTrackId] : null;
+            let raceUserId = 'guest_user';
+            try {
+                if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
+                    raceUserId = window.CloudSave.getUserId();
+                } else if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+                    raceUserId = String(window.Telegram.WebApp.initDataUnsafe.user.id);
+                }
+            } catch (e) {}
+            let raceCarName = '';
+            try {
+                const eq = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+                if (eq && eq.name) raceCarName = eq.name;
+            } catch (e) {}
+            fetch('/api/race/result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                keepalive: true,
+                body: JSON.stringify({
+                    userId: raceUserId,
+                    username: (typeof getPlayerName === 'function') ? getPlayerName() : 'Piloto',
+                    track: trackObj ? (trackObj.name || currentTrackId) : currentTrackId,
+                    time: Math.round(totalRaceNum * 100) / 100,
+                    car: raceCarName || undefined
+                })
+            }).catch(() => {});
+        }
+    } catch (e) {}
 
     // Título, Piloto y Trofeo
     const curPilot = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO';

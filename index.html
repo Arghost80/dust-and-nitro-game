@@ -2,10 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0d121d">
     <title>Apex Motorsport - Web3 NFT GT Circuit Edition</title>
-    <link rel="stylesheet" href="style.css?v=99">
-    <link rel="stylesheet" href="hub_styles.css?v=99">
+    <link rel="stylesheet" href="style.css?v=100">
+    <link rel="stylesheet" href="hub_styles.css?v=100">
     <!-- Telegram WebApp SDK (carga asíncrona no bloqueante) -->
     <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
     <!-- Adsgram SDK Oficial (Rewarded Video Ads para Telegram Mini Apps) -->
@@ -130,10 +131,12 @@
     </div>
 
     <!-- Módulos de Datos, Traducciones y Lógica Web3 -->
-    <script src="translations.js?v=99"></script>
-    <script src="nft_cars_data.js?v=99"></script>
-    <script src="tracks_data.js?v=99"></script>
-    <script src="dustrac_game.js?v=99"></script>
-    <script src="game_hub.js?v=99"></script>
+    <script src="translations.js?v=100"></script>
+    <script src="nft_cars_data.js?v=100"></script>
+    <!-- v100: Guardado en servidor (debe cargar antes que el hub para restaurar la partida) -->
+    <script src="cloud_save.js?v=100"></script>
+    <script src="tracks_data.js?v=100"></script>
+    <script src="dustrac_game.js?v=100"></script>
+    <script src="game_hub.js?v=100"></script>
 </body>
 </html>

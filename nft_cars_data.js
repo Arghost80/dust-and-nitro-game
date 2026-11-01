@@ -963,7 +963,13 @@ function getTimeUntilNextEnergy(car) {
 
 function saveNftUserData(data) {
     try {
+        // v100: marca de tiempo para el guardado en servidor (gana el más reciente)
+        if (data && typeof data === 'object') data.updatedAt = Date.now();
         localStorage.setItem('apex_web3_garage_save', JSON.stringify(data));
+        // v100: subir al servidor (con debounce). Guardado para tests sin navegador.
+        if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.scheduleUpload === 'function') {
+            window.CloudSave.scheduleUpload();
+        }
     } catch(e) {}
 }
 

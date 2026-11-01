@@ -220,6 +220,7 @@ function renderHubHeader() {
                             ${userData.walletConnected ? `💎 ${userData.walletAddress}` : '💎 TON CONNECT'}
                         </span>
                         <span class="beta-badge-pill" style="font-size: 9.5px; font-weight: 800; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(59, 130, 246, 0.25)); border: 1px solid #06b6d4; color: #38bdf8; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px; cursor: pointer;" onclick="event.stopPropagation(); openWeb3WalletModal();" title="Temporada 1 Fase Beta: Acumulación de $CR activa">⚡ BETA S1</span>
+                        <span id="cloud-sync-badge" style="font-size: 9.5px; font-weight: 800; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.55); color: #6ee7b7; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px;" title="Tu garaje y tu saldo se guardan en el servidor: no los pierdes al cambiar de móvil">☁️ LOCAL</span>
                     </div>
                 </div>
             </div>
@@ -266,6 +267,13 @@ function renderHubHeader() {
             openSettingsModal();
         };
     }
+
+    // v100: reflejar el estado real del guardado en servidor en la insignia ☁️
+    try {
+        if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.refreshBadge === 'function') {
+            window.CloudSave.refreshBadge();
+        }
+    } catch (e) {}
 }
 
 // Navegar entre vistas del Hub
@@ -4140,6 +4148,14 @@ function resetAllSaveData() {
     if (confirm(t('settings_reset_confirm'))) {
         localStorage.removeItem('apex_web3_garage_save');
         localStorage.removeItem('dustrac_story_save');
+        // v100: borrar también la copia del servidor, o al recargar volvería la partida anterior
+        try {
+            if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.clearRemote === 'function') {
+                window.CloudSave.clearRemote().then(() => location.reload(), () => location.reload());
+                setTimeout(() => location.reload(), 3000); // respaldo si la red tarda
+                return;
+            }
+        } catch (e) {}
         location.reload();
     }
 }
@@ -5920,6 +5936,19 @@ function initGameHub() {
             sm.classList.add('hidden');
             sm.style.display = 'none';
         }
+        // v100: si la partida del servidor llega DESPUÉS del primer pintado
+        // (móvil nuevo, red lenta...), repintar cabecera y vista con los datos buenos.
+        try {
+            if (typeof window !== 'undefined' && typeof window.addEventListener === 'function' && !window.__apexCloudListener) {
+                window.__apexCloudListener = true;
+                window.addEventListener('apex-cloud-applied', () => {
+                    try {
+                        renderHubHeader();
+                        showHubView(currentHubView || 'main');
+                    } catch (e) {}
+                });
+            }
+        } catch (e) {}
         renderHubHeader();
         showHubView('main');
         runRacingPreloaderSequence();
