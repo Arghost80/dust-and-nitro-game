@@ -2,14 +2,13 @@
 // CONFIGURACIÓN DE LANZAMIENTO OFICIAL & SEGURIDAD DEL JUEGO
 // =========================================================================
 const APP_CONFIG = {
-    // Pon en 'true' para el lanzamiento oficial definitivo:
-    // - Oculta y destruye completamente el botón de Modo Diseñador en Ajustes
-    // - Elimina los botones de "Dinero Gratis" de la Tienda y Ajustes
-    // - Bloquea la progresión estricta desde la Pista 1 (Rookie Ring Speedway)
-    // - Deshabilita cualquier función de inyección de saldo de desarrollo
-    IS_PRODUCTION_RELEASE: false,
+    // v101: el valor seguro por defecto es producción. Las herramientas de
+    // desarrollo solo se activan explícitamente en localhost/preview con
+    // ?apex_dev=1; nunca por defecto en el dominio público.
+    IS_PRODUCTION_RELEASE: true,
+    WEB3_SIMULATION_ONLY: true,
 
-    VERSION: '1.0.0-PROD',
+    VERSION: '1.0.1',
     DEFAULT_TRACK: 'rookie_ring',
     DEFAULT_STARTING_CREDITS: 100,
     DEFAULT_STARTING_GEMS: 0,
@@ -19,6 +18,47 @@ const APP_CONFIG = {
 
 if (typeof window !== 'undefined') {
     window.APP_CONFIG = APP_CONFIG;
+}
+
+function isApexDevMode() {
+    try {
+        if (typeof window === 'undefined' || !window.location) return false;
+        const host = String(window.location.hostname || '').toLowerCase();
+        const isLocalDevHost = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.e2b.app');
+        if (!isLocalDevHost) return false;
+        const params = new URLSearchParams(window.location.search || '');
+        if (params.get('apex_dev') === '1') {
+            try { window.localStorage.setItem('apex_dev_mode', '1'); } catch (e) {}
+            return true;
+        }
+        if (params.get('apex_dev') === '0') {
+            try { window.localStorage.removeItem('apex_dev_mode'); } catch (e) {}
+            return false;
+        }
+        return window.localStorage && window.localStorage.getItem('apex_dev_mode') === '1';
+    } catch (e) {
+        return false;
+    }
+}
+
+function isProductionRelease() {
+    return !isApexDevMode();
+}
+
+function generateDeviceUserId() {
+    try {
+        if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            window.crypto.getRandomValues(bytes);
+            return 'usr_' + Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+    } catch (e) {}
+    return 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+}
+
+if (typeof window !== 'undefined') {
+    window.isApexDevMode = isApexDevMode;
+    window.isProductionRelease = isProductionRelease;
 }
 
 // ===== CATÁLOGO DE 73 VEHÍCULOS NFT WEB3, 10 ESTADÍSTICAS POR PUNTOS, SISTEMA DE NIVELES Y PIEZAS =====
@@ -618,15 +658,18 @@ function calculateCarPerformance(car) {
 }
 
 // =========================================================================
-// ORÁCULO DE PRECIOS DINÁMICO WEB3 ($CR / USDT)
-// Mantiene los precios de la economía (cofres, nitros, mejoras)
-// siempre equivalentes a su valor real en USDT aunque el token suba en DEX/GasPump.
-// Ejemplo: Si el token sube a $0.10, la caja de $1.00 USDT costará 10 $CR en vez de 1.000 $CR.
+// SIMULADOR LOCAL DE PRECIOS $CR (SOLO DESARROLLO)
+// Herramienta de balance para probar cómo cambiarían los costes internos si
+// variase una referencia ficticia. No consulta ningún DEX, no es una
+// cotización real y en producción siempre se usa la referencia base.
 // =========================================================================
 const TOKEN_ORACLE = {
-    basePriceUsd: 0.001, // Precio base de salida en curva GasPump ($0.001 USDT / token)
+    basePriceUsd: 0.001, // Referencia interna de balance, sin valor de mercado
 
     getPriceUsd() {
+        if (typeof isProductionRelease === 'function' && isProductionRelease()) {
+            return this.basePriceUsd;
+        }
         try {
             if (typeof window !== 'undefined' && window.localStorage) {
                 const saved = window.localStorage.getItem('apex_token_price_usd');
@@ -640,6 +683,9 @@ const TOKEN_ORACLE = {
     },
 
     setPriceUsd(newPrice) {
+        if (typeof isProductionRelease === 'function' && isProductionRelease()) {
+            return this.basePriceUsd;
+        }
         const parsed = parseFloat(newPrice);
         if (!isNaN(parsed) && parsed > 0) {
             try {
@@ -709,6 +755,7 @@ const NFT_CRATES = {
         },
         currency: "credits", // $CR
         odds: { common: 0.55, uncommon: 0.35, rare: 0.09, legendary: 0.01 },
+        partsBonusCount: 3,
         badgeColor: 0xcd7f32
     },
     silver: {
@@ -720,6 +767,7 @@ const NFT_CRATES = {
         },
         currency: "credits", // $CR
         odds: { common: 0.30, uncommon: 0.45, rare: 0.22, legendary: 0.03 },
+        partsBonusCount: 6,
         badgeColor: 0xc0c0c0
     },
     gold: {
@@ -731,9 +779,36 @@ const NFT_CRATES = {
         },
         currency: "credits", // $CR
         odds: { common: 0.08, uncommon: 0.32, rare: 0.45, legendary: 0.15 },
+        partsBonusCount: 12,
         badgeColor: 0xffd700
     }
 };
+
+function getCrateRates(crateKey) {
+    const crate = NFT_CRATES[crateKey];
+    if (!crate || !crate.odds) return null;
+    const percent = (value) => {
+        const pct = Math.max(0, Math.min(100, Number(value || 0) * 100));
+        return Math.round(pct * 10) / 10;
+    };
+    return {
+        common: percent(crate.odds.common),
+        uncommon: percent(crate.odds.uncommon),
+        rare: percent(crate.odds.rare),
+        legendary: percent(crate.odds.legendary),
+        partsBonusCount: Number.isFinite(Number(crate.partsBonusCount)) ? Math.max(0, Math.round(Number(crate.partsBonusCount))) : 0
+    };
+}
+
+function formatCrateRatePercent(value) {
+    const pct = Math.round(Number(value || 0) * 10) / 10;
+    return Number.isInteger(pct) ? String(pct) : String(pct).replace('.', ',');
+}
+
+if (typeof window !== 'undefined') {
+    window.getCrateRates = getCrateRates;
+    window.formatCrateRatePercent = formatCrateRatePercent;
+}
 
 // Guardado del Usuario Web3
 function loadNftUserData() {
@@ -789,7 +864,7 @@ function loadNftUserData() {
             const tgUser = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) ? window.Telegram.WebApp.initDataUnsafe.user : null;
             if (tgUser && tgUser.id) tgId = String(tgUser.id);
         } catch(e) {}
-        data.userId = tgId || ('usr_' + Math.random().toString(36).substring(2, 9));
+        data.userId = tgId || generateDeviceUserId();
     }
 
     // Nombre de piloto personalizado del usuario
@@ -1215,7 +1290,7 @@ function openMysteryCrate(crateKey) {
     userData.garage.push(mintedCar);
 
     // Otorgar lote de piezas de taller de regalo con la caja
-    const partsCount = crateKey === 'gold' ? 12 : (crateKey === 'silver' ? 6 : 3);
+    const partsCount = Number.isFinite(Number(crate.partsBonusCount)) ? Math.max(0, Math.round(Number(crate.partsBonusCount))) : 0;
     const awardedParts = {};
     const catalogKeys = Object.keys(WORKSHOP_PIECES_CATALOG);
     if (!userData.partsInventory) userData.partsInventory = { ...DEFAULT_PARTS_INVENTORY };
@@ -1857,7 +1932,7 @@ let COMMUNITY_MARKETPLACE_LISTINGS = [
 ];
 
 function getMarketplaceListings() {
-    const isProd = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    const isProd = (typeof isProductionRelease === 'function' ? isProductionRelease() : true);
     if (isProd) {
         // En lanzamiento oficial el mercado arranca 100% vacío (solo ofertas reales publicadas por jugadores)
         return COMMUNITY_MARKETPLACE_LISTINGS.filter(l => l.sellerIsMe === true || l.isRealPlayer === true);
@@ -2091,16 +2166,17 @@ function sellPartToMarketplace(partId, priceCr) {
 }
 
 // =========================================================================
-// 9.1 BILLETERA WEB3 & TON CONNECT (GESTIÓN ON-CHAIN Y TOKENS $CR / TON)
+// 9.1 BILLETERA WEB3 & TON — SIMULACIÓN LOCAL (SIN FONDOS REALES)
 // =========================================================================
 function connectTonWallet(walletProvider = 'telegram_wallet') {
     const userData = loadNftUserData();
-    const mockAddr = 'EQB' + Math.random().toString(36).substring(2, 8).toUpperCase() + '...' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    const mockAddr = 'SIM-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
     userData.walletConnected = true;
     userData.walletAddress = mockAddr;
     userData.walletProvider = walletProvider;
+    userData.walletSimulation = true;
     saveNftUserData(userData);
-    return { success: true, address: mockAddr, provider: walletProvider };
+    return { success: true, simulated: true, address: mockAddr, provider: walletProvider };
 }
 
 function disconnectTonWallet() {
@@ -2108,21 +2184,26 @@ function disconnectTonWallet() {
     userData.walletConnected = false;
     userData.walletAddress = null;
     userData.walletProvider = null;
+    userData.walletSimulation = false;
     saveNftUserData(userData);
-    return { success: true };
+    return { success: true, simulated: true };
 }
 
 function buyCrWithTon(tonAmount) {
-    const userData = loadNftUserData();
-    if ((userData.gems || 0) < tonAmount) {
-        return { success: false, reason: "ton_insufficient" };
+    const amount = Number(tonAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) {
+        return { success: false, simulated: true, reason: "invalid_amount" };
     }
-    // Tasa real de mercado: 1 TON ≈ 5.00 USDT | 1 USDT = 1.000 $CR -> 1 TON = 5.000 $CR
-    const crGained = Math.round(tonAmount * 5000);
-    userData.gems -= tonAmount;
+    const userData = loadNftUserData();
+    if ((userData.gems || 0) < amount) {
+        return { success: false, simulated: true, reason: "ton_insufficient" };
+    }
+    // Conversión únicamente dentro de la economía local simulada del juego.
+    const crGained = Math.round(amount * 5000);
+    userData.gems -= amount;
     userData.credits += crGained;
     saveNftUserData(userData);
-    return { success: true, tonSpent: tonAmount, crGained: crGained, credits: userData.credits, gems: userData.gems };
+    return { success: true, simulated: true, tonSpent: amount, crGained: crGained, credits: userData.credits, gems: userData.gems };
 }
 
 // =========================================================================
@@ -2151,79 +2232,10 @@ function getWithdrawStatus() {
 }
 
 function withdrawCrToTon(crAmount, forceEarly = false) {
-    const userData = loadNftUserData();
-    if (!userData.walletConnected) {
-        return { success: false, reason: "wallet_not_connected" };
-    }
-    const minWithdraw = 1000;
-    if (crAmount < minWithdraw) {
-        return { success: false, reason: "min_withdraw_not_met", min: minWithdraw };
-    }
-    if ((userData.credits || 0) < crAmount) {
-        return { success: false, reason: "credits_insufficient" };
-    }
-
-    // 1. REGLA DE SALDO MÍNIMO EN WALLET (HOLDING MÍNIMO DE SEGURIDAD: 500 $CR)
-    // El usuario no puede vaciar su cuenta; deben quedar al menos 500 $CR en la wallet tras el retiro
-    if ((userData.credits - crAmount) < MIN_HOLDING_BALANCE) {
-        return { 
-            success: false, 
-            reason: "holding_reserve_required", 
-            minHolding: MIN_HOLDING_BALANCE,
-            currentBalance: userData.credits,
-            maxAllowedWithdraw: Math.max(0, userData.credits - MIN_HOLDING_BALANCE)
-        };
-    }
-
-    // 2. REGLA DE COOLDOWN DE 7 DÍAS & QUEMA DEL 50% POR RETIRO ANTICIPADO
-    const now = Date.now();
-    const lastWithdraw = userData.lastWithdrawTimestamp || 0;
-    const elapsed = now - lastWithdraw;
-    const isEarly = lastWithdraw > 0 && elapsed < WITHDRAW_COOLDOWN_MS;
-
-    if (isEarly && !forceEarly) {
-        const remainingMs = WITHDRAW_COOLDOWN_MS - elapsed;
-        const burnCr = Math.round(crAmount * EARLY_WITHDRAW_BURN_PCT);
-        const netCr = crAmount - burnCr;
-        const netTon = Number((netCr / 5000).toFixed(4));
-        return {
-            success: false,
-            reason: "early_withdraw_warning",
-            remainingMs: remainingMs,
-            burnRate: EARLY_WITHDRAW_BURN_PCT,
-            burnCr: burnCr,
-            netCr: netCr,
-            netTon: netTon,
-            crAmount: crAmount
-        };
-    }
-
-    // Proceso de Retiro:
-    let burnedCr = 0;
-    let netCrAmount = crAmount;
-    if (isEarly && forceEarly) {
-        // Quema del 50% de los tokens retirados antes de 7 días
-        burnedCr = Math.round(crAmount * EARLY_WITHDRAW_BURN_PCT);
-        netCrAmount = crAmount - burnedCr;
-        userData.totalBurnedTokens = (userData.totalBurnedTokens || 0) + burnedCr;
-    }
-
-    const tonGained = Number((netCrAmount / 5000).toFixed(4));
-    userData.credits -= crAmount; // Se deducen los tokens solicitados
-    userData.gems = (userData.gems || 0) + tonGained;
-    userData.lastWithdrawTimestamp = now;
-    saveNftUserData(userData);
-
-    return { 
-        success: true, 
-        isEarly: isEarly,
-        crSpent: crAmount, 
-        burnedCr: burnedCr,
-        netCr: netCrAmount,
-        tonGained: tonGained, 
-        credits: userData.credits, 
-        gems: userData.gems 
-    };
+    // v101: no hay integración on-chain verificada ni custodia/ledger en
+    // servidor. Las retiradas quedan deshabilitadas; $CR y TON del juego son
+    // saldos locales simulados sin valor real.
+    return { success: false, simulated: true, reason: "withdrawals_disabled_simulation_only" };
 }
 
 // =========================================================================
@@ -2247,7 +2259,7 @@ function getWeeklyTournamentInfo() {
         if (raw) savedTourney = JSON.parse(raw);
     } catch(e) {}
 
-    const isProd = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    const isProd = (typeof isProductionRelease === 'function' ? isProductionRelease() : true);
     const registeredPlayers = (savedTourney && typeof savedTourney.registeredPlayers === 'number')
         ? savedTourney.registeredPlayers
         : (isProd ? 0 : 124);

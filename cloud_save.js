@@ -50,6 +50,18 @@
     function lsSet(key, value) {
         try { localStorage.setItem(key, value); } catch (e) {}
     }
+    function generateDeviceId() {
+        try {
+            if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+                var bytes = new Uint8Array(16);
+                window.crypto.getRandomValues(bytes);
+                var hex = '';
+                for (var i = 0; i < bytes.length; i++) hex += ('0' + bytes[i].toString(16)).slice(-2);
+                return 'usr_' + hex;
+            }
+        } catch (e) {}
+        return 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+    }
     function getMeta() { return safeParse(lsGet(META_KEY)) || {}; }
     function setMeta(patch) {
         var meta = getMeta();
@@ -110,7 +122,7 @@
         }
         var deviceId = lsGet(DEVICE_KEY);
         if (!deviceId) {
-            deviceId = 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+            deviceId = generateDeviceId();
             lsSet(DEVICE_KEY, deviceId);
         }
         _cachedUserId = deviceId;

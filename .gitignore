@@ -3,3 +3,12 @@ __pycache__/
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Secretos y datos locales/de producción
+.env
+.env.*
+!.env.example
+game_database.json
+game_database.json.tmp
+game_database.json.corrupt-*
+*.log

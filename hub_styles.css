@@ -4312,3 +4312,657 @@
     border-color: #fde047 !important;
     transform: translateY(-2px);
 }
+
+/* =============================================================
+   v101 — Correcciones móviles, safe-area y objetivos táctiles
+   ============================================================= */
+:root {
+    --apex-safe-top: env(safe-area-inset-top, 0px);
+    --apex-safe-right: env(safe-area-inset-right, 0px);
+    --apex-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --apex-safe-left: env(safe-area-inset-left, 0px);
+}
+
+#game-hub-root {
+    height: 100dvh;
+    max-height: 100dvh;
+}
+
+.hub-view-container {
+    min-height: 0;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(16px + var(--apex-safe-bottom));
+}
+
+.hub-view {
+    min-height: 0;
+}
+
+.view-header-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+}
+
+.btn-nav-back {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.view-title {
+    font-size: clamp(17px, 4.5vw, 22px);
+    line-height: 1.15;
+    overflow-wrap: break-word;
+}
+
+.view-desc,
+.garage-count-tag {
+    overflow-wrap: break-word;
+}
+
+.garage-filter-tabs,
+.inventory-tabs {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    min-height: 48px;
+    align-items: stretch;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+.g-tab,
+.inv-tab-btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.zone-body {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.zone-badge,
+.zone-action-btn {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.crate-parts-bonus {
+    display: block;
+    margin-top: 4px;
+    color: #6ee7b7;
+    font-weight: 800;
+}
+
+.btn-open-box,
+.btn-buy-item,
+.btn-enter-wager,
+.btn-enter-tournament,
+.btn-claim-garage,
+.btn-open-again,
+.btn-buy-kit,
+.btn-inv-use,
+.btn-inv-market,
+.btn-inv-cta {
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.btn-open-box {
+    min-height: 48px;
+}
+
+.inventory-container {
+    min-height: 0;
+}
+
+.hub-modal-overlay,
+.settings-modal,
+.unboxing-modal,
+.track-select-modal {
+    padding: max(10px, var(--apex-safe-top)) max(10px, var(--apex-safe-right)) max(10px, var(--apex-safe-bottom)) max(10px, var(--apex-safe-left));
+    box-sizing: border-box;
+}
+
+.hub-modal-overlay {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hub-modal-overlay > * {
+    max-height: calc(100dvh - 20px - var(--apex-safe-top) - var(--apex-safe-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+}
+
+.settings-dialog {
+    max-height: calc(100dvh - 20px - var(--apex-safe-top) - var(--apex-safe-bottom));
+}
+
+.settings-body {
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+}
+
+.settings-close-x {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.wager-lobby-dialog,
+.track-modal-box {
+    max-height: calc(100dvh - 20px - var(--apex-safe-top) - var(--apex-safe-bottom));
+}
+
+.unboxing-content {
+    max-height: calc(100dvh - 20px - var(--apex-safe-top) - var(--apex-safe-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    padding-bottom: calc(6px + var(--apex-safe-bottom));
+}
+
+.reward-buttons-row {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    padding: 10px 0 calc(8px + var(--apex-safe-bottom));
+    background: linear-gradient(180deg, rgba(5, 8, 15, 0), rgba(5, 8, 15, 0.96) 32%);
+}
+
+@media (max-width: 768px) {
+    .hub-header-center {
+        min-height: 40px;
+        align-items: center;
+        scroll-snap-type: x proximity;
+        scrollbar-width: none;
+        -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent);
+        mask-image: linear-gradient(90deg, #000 92%, transparent);
+    }
+
+    .hub-header-center::-webkit-scrollbar {
+        display: none;
+    }
+
+    .currency-pill {
+        min-height: 34px;
+        scroll-snap-align: start;
+        box-sizing: border-box;
+    }
+
+    .btn-settings-gear {
+        width: 44px;
+        height: 44px;
+    }
+
+    .user-info > div:nth-child(2) {
+        flex-wrap: nowrap !important;
+        overflow: hidden;
+        max-width: 100%;
+    }
+
+    .view-header-bar {
+        margin-bottom: 12px;
+        padding-bottom: 9px;
+        column-gap: 9px;
+    }
+
+    .btn-comp-help-question {
+        width: 44px;
+        height: 44px;
+    }
+
+    .btn-comp-help-pill {
+        min-height: 44px;
+        box-sizing: border-box;
+    }
+
+    .crates-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        max-width: 430px;
+        margin: 8px auto 0;
+    }
+
+    .crate-box-card {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        grid-template-areas:
+            "visual head"
+            "visual rates"
+            "visual cost"
+            "button button";
+        align-items: center;
+        column-gap: 12px;
+        row-gap: 7px;
+        padding: 14px;
+        text-align: left;
+    }
+
+    .crate-header {
+        grid-area: head;
+        min-width: 0;
+        align-self: end;
+    }
+
+    .crate-level-tag {
+        margin-bottom: 2px;
+    }
+
+    .crate-name {
+        font-size: 16px;
+        line-height: 1.12;
+        margin: 0;
+        overflow-wrap: break-word;
+    }
+
+    .crate-visual-chest {
+        grid-area: visual;
+        width: 88px;
+        height: 88px;
+        margin: 0;
+        border-radius: 16px;
+    }
+
+    .crate-visual-chest svg {
+        width: 76px;
+        height: auto;
+        max-width: 100%;
+    }
+
+    .crate-rates-info {
+        grid-area: rates;
+        margin: 0;
+        font-size: 10.5px;
+        line-height: 1.4;
+        align-self: start;
+    }
+
+    .crate-cost-pill {
+        grid-area: cost;
+        justify-self: start;
+        margin: 0;
+        font-size: 12.5px;
+        padding: 5px 12px;
+    }
+
+    .btn-open-box {
+        grid-area: button;
+        min-height: 48px;
+    }
+
+    .inventory-container {
+        height: auto;
+        max-height: none;
+        overflow: visible;
+        padding: 10px;
+    }
+
+    .inventory-parts-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    .garage-cars-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+    }
+
+    .unboxing-content {
+        width: min(500px, 100%);
+    }
+
+    .crate-shake-icon {
+        font-size: 82px;
+    }
+
+    .reward-car-display {
+        padding: 14px;
+    }
+
+    .reward-car-card-body {
+        height: 132px;
+        margin: 10px 0;
+    }
+
+    .reward-buttons-row {
+        gap: 8px;
+    }
+
+    .wager-lobby-dialog {
+        width: 100%;
+        padding: 16px;
+    }
+}
+
+@media (max-width: 430px) {
+    .beta-badge-pill {
+        display: none !important;
+    }
+
+    .user-name {
+        max-width: 98px;
+    }
+
+    .wallet-tag {
+        max-width: 108px;
+    }
+
+    .view-title {
+        font-size: 17px;
+        letter-spacing: 0.3px;
+    }
+
+    .crate-box-card {
+        grid-template-columns: 80px minmax(0, 1fr);
+        padding: 12px;
+    }
+
+    .crate-visual-chest {
+        width: 78px;
+        height: 78px;
+    }
+
+    .crate-visual-chest svg {
+        width: 68px;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .hub-header {
+        min-height: 48px;
+        height: auto !important;
+        flex-wrap: nowrap;
+        padding: 4px max(10px, var(--apex-safe-right)) 4px max(10px, var(--apex-safe-left));
+        gap: 8px;
+    }
+
+    .avatar-ring {
+        width: 30px;
+        height: 30px;
+        font-size: 14px;
+    }
+
+    .hub-header-center {
+        order: initial;
+        width: auto;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        padding: 2px;
+    }
+
+    .btn-settings-gear {
+        width: 40px;
+        height: 40px;
+    }
+
+    .hub-view-container {
+        padding: 8px max(12px, var(--apex-safe-right)) calc(8px + var(--apex-safe-bottom)) max(12px, var(--apex-safe-left));
+    }
+
+    .hero-center-box,
+    .hero-top-branding {
+        margin: 0 0 4px !important;
+        padding-top: 0;
+    }
+
+    .game-logo-glow {
+        font-size: 19px;
+    }
+
+    .hero-cars-stage-window {
+        min-height: 34px;
+    }
+
+    .zones-grid {
+        grid-template-columns: repeat(6, 1fr);
+        max-width: 980px;
+        gap: 7px;
+    }
+
+    .zone-card {
+        min-height: 46px;
+        padding: 5px 3px;
+    }
+
+    .crates-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        max-width: none;
+        gap: 10px;
+        margin-top: 6px;
+    }
+
+    .crate-box-card {
+        grid-template-columns: 70px minmax(0, 1fr);
+        padding: 10px;
+        row-gap: 5px;
+    }
+
+    .crate-visual-chest {
+        width: 66px;
+        height: 66px;
+    }
+
+    .crate-visual-chest svg {
+        width: 58px;
+    }
+
+    .crate-rates-info {
+        font-size: 9.5px;
+        line-height: 1.3;
+    }
+
+    .unboxing-content {
+        width: min(720px, 100%);
+        max-width: 720px;
+    }
+
+    .reward-car-card-body {
+        height: 96px;
+        margin: 8px 0;
+    }
+
+    .reward-car-display {
+        padding: 12px;
+    }
+}
+
+/* v101: acciones frecuentes con objetivo táctil suficiente */
+.btn-equip-car,
+.btn-tune-open,
+.btn-ad-energy,
+.btn-shop-energy,
+.btn-story-launch-race,
+.btn-instant-race,
+.btn-upgrade-branch,
+.btn-claim-ad,
+.btn-cancel-ad,
+.btn-depleted-close,
+.btn-wallet-connect,
+.btn-opt-action {
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.badge-equipped {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+    .view-header-bar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: rgba(8, 13, 24, 0.92);
+        backdrop-filter: blur(10px);
+    }
+
+    .btn-edit-pilot-name {
+        min-width: 36px;
+        min-height: 36px;
+        justify-content: center;
+    }
+}
+
+/* v101 final: objetivos táctiles consistentes también en horizontal */
+button,
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+    min-height: 44px;
+}
+
+.btn-primary,
+.btn-secondary,
+.inv-rarity-btn,
+.btn-comp-help-pill {
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.btn-comp-help-question {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.btn-settings-gear {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    flex: 0 0 44px;
+}
+
+.btn-edit-pilot-name {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+    flex: 0 0 44px;
+}
+
+.avatar-ring {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+}
+
+.user-badge,
+.user-info,
+.user-name-row {
+    min-width: 0;
+}
+
+.wager-comp-container {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (max-width: 430px) {
+    .user-name {
+        max-width: min(48vw, 180px);
+    }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .avatar-ring {
+        flex-basis: 30px;
+    }
+
+    .user-name {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .btn-settings-gear {
+        flex-basis: 44px;
+    }
+
+    .crate-box-card {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr);
+        grid-template-areas:
+            "visual head"
+            "visual rates"
+            "visual cost"
+            "button button";
+        align-items: center;
+        column-gap: 10px;
+        row-gap: 5px;
+        padding: 10px;
+        text-align: left;
+    }
+
+    .crate-header {
+        grid-area: head;
+        min-width: 0;
+        align-self: end;
+    }
+
+    .crate-level-tag {
+        margin-bottom: 2px;
+    }
+
+    .crate-name {
+        font-size: 15px;
+        line-height: 1.12;
+        margin: 0;
+        overflow-wrap: break-word;
+    }
+
+    .crate-visual-chest {
+        grid-area: visual;
+        margin: 0;
+    }
+
+    .crate-rates-info {
+        grid-area: rates;
+        margin: 0;
+        align-self: start;
+    }
+
+    .crate-cost-pill {
+        grid-area: cost;
+        justify-self: start;
+        margin: 0;
+        padding: 4px 10px;
+    }
+
+    .btn-open-box {
+        grid-area: button;
+        width: 100%;
+        min-height: 48px;
+    }
+}

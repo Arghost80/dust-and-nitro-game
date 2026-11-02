@@ -47,6 +47,8 @@ const doc = {
 
 const sandbox = {
   window: {},
+  location: { hostname: 'localhost', search: '' },
+  URLSearchParams: URLSearchParams,
   document: doc,
   localStorage: {
     _d: {},
@@ -129,6 +131,11 @@ const sandbox = {
 };
 sandbox.window = sandbox;
 const ctx = vm.createContext(sandbox);
+
+// La suite histórica prueba herramientas y datos semilla de desarrollo.
+// En v101 eso requiere activación explícita y un host local; la sección final
+// desactiva este flag para verificar el comportamiento seguro de producción.
+sandbox.localStorage.setItem('apex_dev_mode', '1');
 
 vm.runInContext(fs.readFileSync('translations.js', 'utf8'), ctx);
 vm.runInContext(fs.readFileSync('nft_cars_data.js', 'utf8'), ctx);
@@ -293,50 +300,36 @@ const treasuryFees = vm.runInContext(`loadNftUserData().platformTreasuryFees`, c
 if (treasuryFees < 75) throw new Error('Las comisiones de la tesorería de la plataforma no se acumularon');
 console.log(`✅ Royalty del 7.5% comprobado: Venta 1000 $CR -> Royalty ${sellFeeRes.royaltyFee} $CR, Piloto neto +${sellFeeRes.earnedCr} $CR`);
 
-// 6. Test de Billetera TON Connect y Retiros Anti-Drenaje
-console.log('\n--- PROBANDO BILLETERA WEB3 & TON CONNECT ---');
+// 6. Test de billetera simulada: nunca debe fingir una conexión on-chain real
+console.log('\n--- PROBANDO BILLETERA WEB3 SIMULADA ---');
 const connectRes = vm.runInContext(`connectTonWallet('telegram_wallet')`, ctx);
-if (!connectRes.success || !connectRes.address.startsWith('EQB')) {
-    throw new Error('Fallo al conectar billetera TON');
+if (!connectRes.success || connectRes.simulated !== true || !connectRes.address.startsWith('SIM-')) {
+    throw new Error(`La billetera debe ser explícitamente simulada: ${JSON.stringify(connectRes)}`);
 }
-console.log('✅ Billetera TON conectada:', connectRes.address);
+console.log('✅ Billetera simulada activada:', connectRes.address);
 
-// Swap TON a $CR
+// Conversión local de TON simulado a $CR
 vm.runInContext(`(() => { const u = loadNftUserData(); u.gems = 10; saveNftUserData(u); })();`, ctx);
 const swapRes = vm.runInContext(`buyCrWithTon(1.0)`, ctx);
-if (!swapRes.success || swapRes.crGained !== 5000) {
-    throw new Error(`Swap TON a $CR fallido: ${JSON.stringify(swapRes)}`);
+if (!swapRes.success || swapRes.simulated !== true || swapRes.crGained !== 5000) {
+    throw new Error(`Conversión local TON-SIM a $CR fallida: ${JSON.stringify(swapRes)}`);
 }
-console.log('✅ Swap TON a $CR completado: 1 TON -> +5,000 $CR');
+console.log('✅ Conversión local completada: 1 TON-SIM -> +5,000 $CR');
 
-// Retiro Anti-Drenaje de $CR a TON
+// Las retiradas están deshabilitadas hasta que exista ledger/custodia real.
+const creditsBeforeWithdraw = vm.runInContext('loadNftUserData().credits', ctx);
+const gemsBeforeWithdraw = vm.runInContext('loadNftUserData().gems', ctx);
 const withdrawRes = vm.runInContext(`withdrawCrToTon(1000)`, ctx);
-if (!withdrawRes.success || withdrawRes.tonGained !== 0.20) {
-    throw new Error(`Retiro a TON fallido: ${JSON.stringify(withdrawRes)}`);
+const forcedWithdrawRes = vm.runInContext(`withdrawCrToTon(1000, true)`, ctx);
+if (withdrawRes.success || withdrawRes.reason !== 'withdrawals_disabled_simulation_only' ||
+    forcedWithdrawRes.success || forcedWithdrawRes.reason !== 'withdrawals_disabled_simulation_only') {
+    throw new Error(`Las retiradas deben permanecer deshabilitadas: ${JSON.stringify({ withdrawRes, forcedWithdrawRes })}`);
 }
-console.log('✅ Retiro seguro completado: 1000 $CR -> 0.20 TON transferidos a la wallet');
-
-// Test Anti-Bot 1: Reserva Mínima de Holding (500 $CR)
-const userCr = vm.runInContext('loadNftUserData().credits', ctx);
-const excessiveWithdrawRes = vm.runInContext(`withdrawCrToTon(${userCr - 400})`, ctx);
-if (excessiveWithdrawRes.success || excessiveWithdrawRes.reason !== 'holding_reserve_required') {
-    throw new Error(`Fallo en protección de reserva de holding: ${JSON.stringify(excessiveWithdrawRes)}`);
+if (vm.runInContext('loadNftUserData().credits', ctx) !== creditsBeforeWithdraw ||
+    vm.runInContext('loadNftUserData().gems', ctx) !== gemsBeforeWithdraw) {
+    throw new Error('Una retirada deshabilitada no debe modificar ningún saldo');
 }
-console.log('✅ Anti-Bot 1 superado: Reserva de holding de 500 $CR bloqueó el drenaje total');
-
-// Test Anti-Bot 2: Cooldown de 7 días con advertencia de quema
-const cooldownWarningRes = vm.runInContext(`withdrawCrToTon(1000, false)`, ctx);
-if (cooldownWarningRes.success || cooldownWarningRes.reason !== 'early_withdraw_warning') {
-    throw new Error(`Fallo en verificación de cooldown de 7 días: ${JSON.stringify(cooldownWarningRes)}`);
-}
-console.log('✅ Anti-Bot 2 superado: Cooldown de 7 días activo con aviso de penalización del 50%');
-
-// Test Anti-Bot 3: Retiro anticipado con Quema Deflacionaria del 50%
-const earlyWithdrawRes = vm.runInContext(`withdrawCrToTon(1000, true)`, ctx);
-if (!earlyWithdrawRes.success || !earlyWithdrawRes.isEarly || earlyWithdrawRes.burnedCr !== 500 || earlyWithdrawRes.tonGained !== 0.10) {
-    throw new Error(`Fallo en quema deflacionaria del 50%: ${JSON.stringify(earlyWithdrawRes)}`);
-}
-console.log('✅ Anti-Bot 3 superado: Quema deflacionaria ejecutada (500 $CR quemados, 0.10 TON transferidos)');
+console.log('✅ Retiradas deshabilitadas sin cambios de saldo');
 
 // Test Anti-Cheat 4: Telemetría Física Imposible (Speedhack / Fast-forward)
 const invalidRaceCheck = vm.runInContext(`validateRaceTelemetry('grand_prix', 3, 5.0, 1.2)`, ctx);
@@ -356,13 +349,13 @@ console.log('✅ Anti-Cheat 4 superado: Telemetría física validada contra spee
 // Renderizado del Modal de Billetera
 vm.runInContext(`openWeb3WalletModal()`, ctx);
 const walletModalHtml = doc.getElementById('wallet-modal').innerHTML;
-if (!walletModalHtml.includes('BILLETERA WEB3 &amp; TON CONNECT') && !walletModalHtml.includes('BILLETERA WEB3 & TON CONNECT')) {
-    throw new Error('El modal de la billetera no se renderizó correctamente');
+if (!walletModalHtml.includes('BILLETERA WEB3 & TON — SIMULACIÓN LOCAL')) {
+    throw new Error('El modal de la billetera no se renderizó como simulación local');
 }
-if (!walletModalHtml.includes('Holding de Seguridad') || !walletModalHtml.includes('COOLDOWN 7 DÍAS')) {
-    throw new Error('El modal de la billetera no muestra la información de Anti-Bot y Cooldown');
+if (!walletModalHtml.includes('Retiros reales: DESHABILITADOS') || !walletModalHtml.includes('No envíes TON ni ningún fondo real')) {
+    throw new Error('El modal de la billetera no avisa de que no hay fondos reales');
 }
-console.log('✅ Modal de Billetera Web3 renderizado con éxito con protecciones Anti-Bot');
+console.log('✅ Modal de Billetera Web3 renderizado como simulación sin fondos reales');
 
 // ===== VERIFICACIÓN DE LAS 12 SILUETAS VECTORIALES DE COCHES =====
 console.log('\n--- VERIFICANDO LAS 12 SILUETAS ARQUITECTÓNICAS DE COCHES ---');
@@ -1961,12 +1954,15 @@ if (vm.runInContext('NFT_CRATES.bronze.cost', ctx) !== 1000) {
 console.log('✓ Restablecimiento del Oráculo a precio base ($0.0010) verificado con éxito');
 
 // =========================================================================
-// TEST DE SEGURIDAD: MODO LANZAMIENTO OFICIAL (APP_CONFIG.IS_PRODUCTION_RELEASE)
+// TEST DE SEGURIDAD: MODO LANZAMIENTO OFICIAL (sin apex_dev explícito)
 // =========================================================================
 console.log('\n--- Probando Sistema de Seguridad de Lanzamiento Oficial ---');
 
-// 1. Activar Modo Producción
-vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = true', ctx);
+// 1. Producción es el estado seguro por defecto incluso en localhost.
+vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = true; localStorage.removeItem("apex_dev_mode")', ctx);
+if (vm.runInContext('isProductionRelease()', ctx) !== true) {
+    throw new Error('Sin activación apex_dev explícita, el juego debe permanecer en producción');
+}
 
 // Renderizar modal de Ajustes en modo Producción
 vm.runInContext('openSettingsModal()', ctx);
@@ -1994,6 +1990,16 @@ if (userCreditsBefore !== userCreditsAfter) {
 }
 console.log('✓ En Producción: Las funciones internas de inyección de fondos (grantTestingFunds, addFunds) están completamente bloqueadas');
 
+// El simulador local de precios tampoco puede abaratar la economía pública:
+// una referencia guardada o fijada por consola se ignora en producción.
+vm.runInContext('localStorage.setItem("apex_token_price_usd", "0.5")', ctx);
+const prodOraclePrice = vm.runInContext('setTokenPriceUsd(0.5); getTokenPriceUsd()', ctx);
+if (prodOraclePrice !== 0.001 || vm.runInContext('NFT_CRATES.bronze.cost', ctx) !== 1000) {
+    throw new Error(`FALLO DE SEGURIDAD: El simulador de precios no debe alterar costes en Producción (precio: ${prodOraclePrice}).`);
+}
+vm.runInContext('TOKEN_ORACLE.resetToDefault()', ctx);
+console.log('✓ En Producción: El simulador local de precios queda fijado a la referencia base');
+
 // Comprobar bloqueo de progresión estricta en producción
 vm.runInContext('localStorage.removeItem("dustrac_story_save")', ctx);
 const prodStory = vm.runInContext('loadStoryProgress()', ctx);
@@ -2010,18 +2016,21 @@ if (prodStoryAfterToggle.designerMode === true) {
 }
 console.log('✓ En Producción: toggleSetting("designer") rechazado sin cambios');
 
-// 2. Restaurar a modo desarrollo (false) para que el desarrollador continúe sus pruebas
-vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = false', ctx);
+// 2. El desarrollo requiere activación explícita y solo funciona en localhost/preview.
+vm.runInContext('localStorage.setItem("apex_dev_mode", "1")', ctx);
+if (vm.runInContext('isProductionRelease()', ctx) !== false) {
+    throw new Error('apex_dev explícito en localhost debe activar el modo de desarrollo');
+}
 vm.runInContext('openSettingsModal()', ctx);
 const modalHtmlDev = doc.getElementById('settings-modal').innerHTML;
 if (!modalHtmlDev.includes('grantTestingFunds')) {
-    throw new Error('En modo desarrollo (false), las herramientas de testing deben estar disponibles para pruebas.');
+    throw new Error('En modo desarrollo explícito, las herramientas de testing deben estar disponibles para pruebas.');
 }
 // 3. Verificar Mercado P2P vacío en producción y libre elección de precio
 console.log('\n--- VERIFICANDO MERCADO P2P Y TORNEO SEMANAL CON BOTE ACUMULATIVO (V91) ---');
 // Limpiar ofertas de tests previos para simular el inicio limpio de producción
 vm.runInContext('COMMUNITY_MARKETPLACE_LISTINGS = COMMUNITY_MARKETPLACE_LISTINGS.filter(l => !l.sellerIsMe && !l.isRealPlayer);', ctx);
-vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = true', ctx);
+vm.runInContext('localStorage.removeItem("apex_dev_mode")', ctx);
 const prodMarketListings = vm.runInContext('getMarketplaceListings()', ctx);
 if (prodMarketListings.length !== 0) {
     throw new Error(`En producción el mercado debe arrancar vacío si no hay ofertas reales. Encontradas: ${prodMarketListings.length}`);
@@ -2057,8 +2066,8 @@ if (tourneyModalHtml.includes('INSCRITOS:') || tourneyModalHtml.includes('PATROC
 }
 console.log('✓ Modal de Torneo verificado: Muestra exclusivamente el BOTE TOTAL ACUMULADO');
 
-// Restaurar desarrollo
-vm.runInContext('APP_CONFIG.IS_PRODUCTION_RELEASE = false', ctx);
+// Restaurar desarrollo explícito solo para el resto de la suite local
+vm.runInContext('localStorage.setItem("apex_dev_mode", "1")', ctx);
 
 console.log('\n--- VERIFICANDO SALAS PRIVADAS DE DUELO Y MULTIJUGADOR 60s (V99) ---');
 // 1. Verificar modal de creación de duelo privado
@@ -2073,9 +2082,9 @@ if (!createDuelModal.innerHTML.includes('input-duel-bet')) {
 console.log('✓ Modal de creación de duelo con apuesta libre renderizado correctamente');
 
 // 2. Verificar modal para unirse a duelo por código
-vm.runInContext('openJoinDuelModal("DUEL-7788")', ctx);
+vm.runInContext('openJoinDuelModal("DUEL-7788AB34")', ctx);
 const joinDuelModal = doc.getElementById('join-duel-modal');
-if (!joinDuelModal || !joinDuelModal.innerHTML.includes('DUEL-7788')) {
+if (!joinDuelModal || !joinDuelModal.innerHTML.includes('DUEL-7788AB34')) {
     throw new Error('openJoinDuelModal debe pre-rellenar el código introducido');
 }
 console.log('✓ Modal de unirse con código pre-rellenado verificado con éxito');
@@ -2083,7 +2092,7 @@ console.log('✓ Modal de unirse con código pre-rellenado verificado con éxito
 // 3. Verificar modal de sala de espera del duelo con enlace de Telegram
 vm.runInContext(`
     const mockDuel = {
-        code: 'DUEL-4455',
+        code: 'DUEL-4455CD67',
         betAmount: 500,
         circuit: { id: 'monza', name: 'Monza Speed Ring' },
         slots: [
@@ -2094,8 +2103,8 @@ vm.runInContext(`
     renderDuelWaitingModal(mockDuel, true);
 `, ctx);
 const duelLobbyModal = doc.getElementById('duel-lobby-modal');
-if (!duelLobbyModal || !duelLobbyModal.innerHTML.includes('DUEL-4455')) {
-    throw new Error('renderDuelWaitingModal debe renderizar el código de la sala DUEL-4455');
+if (!duelLobbyModal || !duelLobbyModal.innerHTML.includes('DUEL-4455CD67')) {
+    throw new Error('renderDuelWaitingModal debe renderizar el código de la sala DUEL-4455CD67');
 }
 if (!duelLobbyModal.innerHTML.includes('https://t.me/share/url?url=')) {
     throw new Error('renderDuelWaitingModal debe contener el botón para compartir en Telegram');
@@ -2113,6 +2122,33 @@ if (postCancelCredits !== preCancelCredits + 500) {
     throw new Error(`closeDuelLobbyModal(true) debe reembolsar la apuesta de 500 $CR, antes: ${preCancelCredits}, ahora: ${postCancelCredits}`);
 }
 console.log('✓ Cancelación de sala de duelo y reembolso íntegro de la apuesta verificados');
+
+// 5. Los datos de red se reducen a una lista blanca antes de renderizarlos.
+const sanitizedNetworkSlot = vm.runInContext(`sanitizeNetworkSlot({
+    id: 'x"><svg onload=alert(1)>',
+    userId: 'usr_<script>alert(1)</script>',
+    name: '<img src=x onerror=alert(1)>Piloto',
+    carName: '<b>GT</b>',
+    colorHex: 'expression(alert(1))',
+    archetype: '"><script>alert(1)</script>',
+    roleLabel: '<svg onload=alert(1)>HOST',
+    stake: '999999999',
+    isAI: 'yes',
+    isPlayer: 1,
+    evil: '<script>alert(1)</script>'
+})`, ctx);
+if (!/^[A-Za-z0-9_-]*$/.test(sanitizedNetworkSlot.id) ||
+    !/^usr_[A-Za-z0-9_-]*$/.test(sanitizedNetworkSlot.userId) ||
+    /[<>]/.test(sanitizedNetworkSlot.name + sanitizedNetworkSlot.carName + sanitizedNetworkSlot.roleLabel) ||
+    sanitizedNetworkSlot.colorHex !== '#00f5d4' ||
+    sanitizedNetworkSlot.archetype !== 'ferrari_corsa' ||
+    sanitizedNetworkSlot.stake !== 10000 ||
+    sanitizedNetworkSlot.isAI !== false ||
+    sanitizedNetworkSlot.isPlayer !== false ||
+    'evil' in sanitizedNetworkSlot) {
+    throw new Error(`sanitizeNetworkSlot debe aplicar una lista blanca estricta: ${JSON.stringify(sanitizedNetworkSlot)}`);
+}
+console.log('✓ Slots de red reducidos a lista blanca con stake acotado y sin campos arbitrarios');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

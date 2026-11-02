@@ -431,3 +431,62 @@ body, html {
     pointer-events: none !important;
     opacity: 0 !important;
 }
+
+/* v101: altura dinámica real en navegadores móviles/Telegram */
+html,
+body,
+#game-container {
+    height: 100dvh;
+    max-height: 100dvh;
+}
+
+.touch-mode-toggle {
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+    .touch-controls {
+        bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .virtual-joystick-container,
+    .joystick-base {
+        width: 104px;
+        height: 104px;
+    }
+
+    .right-group.rpg-cluster {
+        width: 154px;
+        height: 144px;
+    }
+
+    #btn-accel {
+        width: 68px;
+        height: 68px;
+    }
+
+    #btn-nitro {
+        bottom: 74px;
+        width: 56px;
+        height: 56px;
+    }
+
+    #btn-brake {
+        right: 72px;
+        bottom: 50px;
+        width: 54px;
+        height: 54px;
+    }
+
+    #btn-handbrake {
+        right: 78px;
+        width: 54px;
+        height: 54px;
+    }
+
+    .touch-mode-toggle {
+        bottom: 118px;
+        min-height: 44px;
+    }
+}

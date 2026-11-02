@@ -606,7 +606,7 @@ function loadStoryProgress() {
         if (raw) data = JSON.parse(raw);
     } catch(e) {}
 
-    const isProd = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    const isProd = (typeof isProductionRelease === 'function' ? isProductionRelease() : true);
 
     if (!data) {
         data = {
@@ -727,7 +727,7 @@ function dustPreload() {
     this.load.image('car_cyan', p + 'carCyan.png');
     this.load.image('car_orange', p + 'carOrange.png');
     this.load.image('car_pink', p + 'carPink.png');
-    this.load.image('car_grey', p + 'carGrey.png');
+    this.load.image('car_grey', 'assets/dust/carGrey.png');
 
     // Coches GT3 fotorrealistas (hoja de sprites nueva)
     this.load.image('gt_cars_sheet', 'assets/real_gt_cars.jpg');
@@ -6356,31 +6356,39 @@ function endRace() {
     try {
         if (!isTestEnvironment && typeof fetch === 'function' && Number.isFinite(totalRaceNum) && totalRaceNum > 0) {
             const trackObj = (typeof window !== 'undefined' && window.DustracTracks) ? window.DustracTracks[currentTrackId] : null;
-            let raceUserId = 'guest_user';
+            let raceUserId = '';
             try {
                 if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
-                    raceUserId = window.CloudSave.getUserId();
+                    raceUserId = String(window.CloudSave.getUserId() || '');
                 } else if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
                     raceUserId = String(window.Telegram.WebApp.initDataUnsafe.user.id);
                 }
             } catch (e) {}
+            const canSubmitRace = /^\d{3,20}$/.test(raceUserId) || /^usr_[A-Za-z0-9_-]{4,60}$/.test(raceUserId);
             let raceCarName = '';
             try {
                 const eq = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
                 if (eq && eq.name) raceCarName = eq.name;
             } catch (e) {}
-            fetch('/api/race/result', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                keepalive: true,
-                body: JSON.stringify({
-                    userId: raceUserId,
-                    username: (typeof getPlayerName === 'function') ? getPlayerName() : 'Piloto',
-                    track: trackObj ? (trackObj.name || currentTrackId) : currentTrackId,
-                    time: Math.round(totalRaceNum * 100) / 100,
-                    car: raceCarName || undefined
-                })
-            }).catch(() => {});
+            if (canSubmitRace) {
+                const raceHeaders = (typeof apexApiHeaders === 'function')
+                    ? apexApiHeaders()
+                    : { 'Content-Type': 'application/json' };
+                fetch('/api/race/result', {
+                    method: 'POST',
+                    headers: raceHeaders,
+                    keepalive: true,
+                    body: JSON.stringify({
+                        userId: raceUserId,
+                        username: (typeof getPlayerName === 'function') ? getPlayerName() : 'Piloto',
+                        trackId: currentTrackId,
+                        trackName: trackObj ? (trackObj.name || currentTrackId) : currentTrackId,
+                        track: currentTrackId,
+                        time: Math.round(totalRaceNum * 100) / 100,
+                        car: raceCarName || undefined
+                    })
+                }).catch(() => {});
+            }
         }
     } catch (e) {}
 

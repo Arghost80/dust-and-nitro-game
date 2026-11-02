@@ -56,6 +56,83 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function apexApiHeaders(extraHeaders = {}) {
+    const headers = { 'Content-Type': 'application/json', ...extraHeaders };
+    try {
+        const tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+        if (tg && typeof tg.initData === 'string' && tg.initData) {
+            headers['X-Telegram-Init-Data'] = tg.initData;
+        }
+    } catch (e) {}
+    return headers;
+}
+
+function getApexUserId() {
+    try {
+        if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
+            const cloudId = window.CloudSave.getUserId();
+            if (cloudId) return String(cloudId);
+        }
+    } catch (e) {}
+    try {
+        const data = (typeof loadNftUserData === 'function') ? loadNftUserData() : null;
+        if (data && data.userId) return String(data.userId);
+    } catch (e) {}
+    return 'usr_guest_local';
+}
+
+function safeDomId(value) {
+    return String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
+}
+
+function safeCssColor(value, fallback = '#00f5d4') {
+    const color = String(value || '').trim();
+    return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+}
+
+function createLocalDuelCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    try {
+        const bytes = new Uint8Array(8);
+        if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+            window.crypto.getRandomValues(bytes);
+            for (let i = 0; i < bytes.length; i++) suffix += alphabet[bytes[i] % alphabet.length];
+            return 'DUEL-' + suffix;
+        }
+    } catch (e) {}
+    for (let i = 0; i < 8; i++) suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return 'DUEL-' + suffix;
+}
+
+function sanitizeNetworkSlot(slot) {
+    if (!slot || typeof slot !== 'object') return slot;
+    const cleanText = (value, max, fallback) => {
+        const text = String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, max);
+        return text || fallback;
+    };
+    const archetype = String(slot.archetype || '').toLowerCase();
+    const rawStake = Number(slot.stake);
+    const stake = Number.isFinite(rawStake)
+        ? Math.round(Math.max(0, Math.min(10000, rawStake)) * 100) / 100
+        : 0;
+    // Lista blanca explícita: ningún campo arbitrario de red llega al DOM,
+    // a atributos HTML ni a la lógica de carrera.
+    return {
+        id: safeDomId(slot.id),
+        userId: safeDomId(slot.userId),
+        name: cleanText(slot.name, 40, 'PILOTO'),
+        carName: cleanText(slot.carName, 80, 'GT3 Racer'),
+        colorHex: safeCssColor(slot.colorHex),
+        archetype: /^[a-z0-9_-]{2,40}$/.test(archetype) ? archetype : 'ferrari_corsa',
+        roleLabel: cleanText(slot.roleLabel, 80, 'JUGADOR'),
+        status: cleanText(slot.status, 30, 'LISTO'),
+        stake,
+        isAI: slot.isAI === true,
+        isPlayer: slot.isPlayer === true
+    };
+}
+
 function showHubToast(msg) {
     let toast = document.getElementById('hub-toast-msg');
     if (!toast) {
@@ -73,13 +150,21 @@ function showHubToast(msg) {
 
 function copyWalletAddress() {
     hubAudio.playClick();
-    const addr = '0x7F2a89C0428B719E88A1';
+    let addr = '';
+    try {
+        const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : {};
+        addr = String(userData.walletAddress || '');
+    } catch (e) {}
+    if (!addr) {
+        showHubToast('⚠️ No hay dirección simulada para copiar');
+        return;
+    }
     try {
         if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(addr);
         }
     } catch(e) {}
-    showHubToast('🔗 Billetera Web3 copiada al portapapeles');
+    showHubToast('🔗 Dirección simulada copiada (sin valor real)');
 }
 
 function promptChangePilotName() {
@@ -217,7 +302,7 @@ function renderHubHeader() {
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                         <span class="wallet-tag ${userData.walletConnected ? 'wallet-connected' : 'wallet-disconnected'}" title="Gestionar Billetera Web3 TON Connect" onclick="event.stopPropagation(); openWeb3WalletModal();">
-                            ${userData.walletConnected ? `💎 ${userData.walletAddress}` : '💎 TON CONNECT'}
+                            ${userData.walletConnected ? `💎 SIM ${escapeHtml(userData.walletAddress || '')}` : '💎 TON SIMULADO'}
                         </span>
                         <span class="beta-badge-pill" style="font-size: 9.5px; font-weight: 800; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(59, 130, 246, 0.25)); border: 1px solid #06b6d4; color: #38bdf8; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px; cursor: pointer;" onclick="event.stopPropagation(); openWeb3WalletModal();" title="Temporada 1 Fase Beta: Acumulación de $CR activa">⚡ BETA S1</span>
                         <span id="cloud-sync-badge" style="font-size: 9.5px; font-weight: 800; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.55); color: #6ee7b7; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px;" title="Tu garaje y tu saldo se guardan en el servidor: no los pierdes al cambiar de móvil">☁️ LOCAL</span>
@@ -317,7 +402,7 @@ function renderMainHubView() {
             <div class="game-subtitle-tag">${t('game_subtitle')}</div>
             <div class="beta-season-tag" onclick="openWeb3WalletModal()" style="display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 12px; background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.35); border-radius: 999px; font-size: 11px; font-weight: 800; color: #38bdf8; letter-spacing: 0.5px; cursor: pointer; transition: transform 0.2s ease;" title="Click para ver estado del Token y Fase Beta">
                 <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #00f5d4; box-shadow: 0 0 6px #00f5d4;"></span>
-                <span>⚡ FASE BETA: TEMPORADA 1 PRE-TGE • ACUMULA $CR PARA EL LANZAMIENTO</span>
+                <span>⚡ FASE BETA: TEMPORADA 1 • ACUMULA $CR DEL JUEGO</span>
             </div>
         </div>
 
@@ -1079,7 +1164,7 @@ function renderGarageView() {
                         <div class="car-card-info">
                             <div class="car-info-headline">
                                 <h4 class="car-name">${car.name}</h4>
-                                <div class="token-hash-label">${car.isNft === false ? '🛡️ VEHÍCULO DE SERIE (F2P)' : `⛓️ ${car.tokenHash}`}</div>
+                                <div class="token-hash-label">${car.isNft === false ? '🛡️ VEHÍCULO DE SERIE (F2P)' : `🆔 ID LOCAL ${car.tokenHash}`}</div>
                             </div>
 
                             <!-- Barra de Nivel y XP del Vehículo (Hasta Nivel 50) -->
@@ -1453,6 +1538,16 @@ function closeTuningModal() {
 // -------------------------------------------------------------
 // 3. CAJAS MISTERIOSAS NFT (WEB3 GACHA)
 // -------------------------------------------------------------
+function formatCrateRatesInfo(crateKey) {
+    const rates = (typeof getCrateRates === 'function') ? getCrateRates(crateKey) : null;
+    if (!rates) return escapeHtml(t(`crate_${crateKey}_rates`));
+    const fmt = (value) => (typeof formatCrateRatePercent === 'function')
+        ? formatCrateRatePercent(value)
+        : String(Math.round(Number(value || 0) * 10) / 10).replace('.', ',');
+    const partsText = String(t('crate_parts_bonus') || '').replace('{count}', String(rates.partsBonusCount));
+    return `${fmt(rates.common)}% ${escapeHtml(t('crate_rarity_common'))} • ${fmt(rates.uncommon)}% ${escapeHtml(t('crate_rarity_uncommon'))} • ${fmt(rates.rare)}% ${escapeHtml(t('crate_rarity_rare'))} • ${fmt(rates.legendary)}% ${escapeHtml(t('crate_rarity_legendary'))}<span class="crate-parts-bonus">${escapeHtml(partsText)}</span>`;
+}
+
 function renderCratesView() {
     const container = document.getElementById('view-crates');
     if (!container) return;
@@ -1477,7 +1572,7 @@ function renderCratesView() {
                 <div class="crate-visual-chest chest-bronze">
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('bronze', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
-                <div class="crate-rates-info">${t('crate_bronze_rates')}</div>
+                <div class="crate-rates-info">${formatCrateRatesInfo('bronze')}</div>
                 <div class="crate-cost-pill">💰 ${NFT_CRATES.bronze.cost.toLocaleString()} $CR</div>
                 <button class="btn-open-box btn-bronze-action" onclick="triggerCrateOpening('bronze')">
                     ${t('btn_open_crate')}
@@ -1493,7 +1588,7 @@ function renderCratesView() {
                 <div class="crate-visual-chest chest-silver">
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('silver', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
-                <div class="crate-rates-info">${t('crate_silver_rates')}</div>
+                <div class="crate-rates-info">${formatCrateRatesInfo('silver')}</div>
                 <div class="crate-cost-pill">💰 ${NFT_CRATES.silver.cost.toLocaleString()} $CR</div>
                 <button class="btn-open-box btn-silver-action" onclick="triggerCrateOpening('silver')">
                     ${t('btn_open_crate')}
@@ -1509,7 +1604,7 @@ function renderCratesView() {
                 <div class="crate-visual-chest chest-gold">
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
-                <div class="crate-rates-info">${t('crate_gold_rates')}</div>
+                <div class="crate-rates-info">${formatCrateRatesInfo('gold')}</div>
                 <div class="crate-cost-pill">💰 ${NFT_CRATES.gold.cost.toLocaleString()} $CR</div>
                 <button class="btn-open-box btn-gold-action" onclick="triggerCrateOpening('gold')">
                     ${t('btn_open_crate')}
@@ -1607,8 +1702,8 @@ function triggerCrateOpening(crateKey) {
                 </div>
 
                 <div class="reward-meta-row">
-                    <span>MINT: #${car.mintNumber}</span>
-                    <span>BLOCKCHAIN: ${car.tokenHash}</span>
+                    <span>SERIE LOCAL: #${car.mintNumber}</span>
+                    <span>ID LOCAL: ${car.tokenHash}</span>
                 </div>
 
                 <div class="reward-10stats-grid">
@@ -1662,7 +1757,7 @@ function renderShopView() {
 
         <div class="shop-sections-wrap">
             <!-- Paquetes de fondos de prueba (SOLO VISIBLES EN DESARROLLO, NUNCA EN LANZAMIENTO PÚBLICO) -->
-            ${(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) ? '' : `
+            ${(typeof isProductionRelease === 'function' ? isProductionRelease() : true) ? '' : `
             <h3 class="shop-section-title">💰 ${t('shop_coins_title')} (MODO DESARROLLO)</h3>
             <div class="shop-items-grid">
                 <div class="shop-item-card">
@@ -2034,11 +2129,22 @@ function closeNitroRefillModal() {
 window.closeNitroRefillModal = closeNitroRefillModal;
 
 // =========================================================================
-// SIMULADOR INTERACTIVO DEL ORÁCULO DE PRECIOS $CR
-// Permite al usuario/admin probar qué pasa cuando el token sube (ej: $0.005, $0.01, $0.10)
+// SIMULADOR LOCAL DE PRECIOS $CR (SOLO DESARROLLO)
+// No consulta mercados ni representa una cotización real; sirve para balancear
+// costes internos durante el desarrollo local.
 // =========================================================================
+function oracleSimulatorAvailable() {
+    const production = (typeof isProductionRelease === 'function')
+        ? isProductionRelease()
+        : (typeof APP_CONFIG === 'undefined' || APP_CONFIG.IS_PRODUCTION_RELEASE !== false);
+    if (!production) return true;
+    showHubToast('⚠️ Simulador de precios disponible solo en desarrollo local; no es una cotización real');
+    return false;
+}
+
 function openOracleSimulatorModal() {
     hubAudio.playClick();
+    if (!oracleSimulatorAvailable()) return;
     let modal = document.getElementById('oracle-simulator-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -2061,7 +2167,7 @@ function openOracleSimulatorModal() {
         const cNitro5 = Math.max(1, Math.round(0.20 / p));
         return `
             <div style="background: rgba(15, 23, 42, 0.9); border: 1.5px solid #10b981; border-radius: 12px; padding: 12px; margin: 14px 0; text-align: left; font-size: 11.5px; line-height: 1.6;">
-                <div style="color: #6ee7b7; font-weight: 900; margin-bottom: 6px; font-size: 12px;">📊 RESULTADO DINÁMICO A $${p.toFixed(4)} USDT:</div>
+                <div style="color: #6ee7b7; font-weight: 900; margin-bottom: 6px; font-size: 12px;">📊 RESULTADO SIMULADO CON REFERENCIA $${p.toFixed(4)}:</div>
                 <div style="color: #e2e8f0;">📦 <strong>Cofre Común ($1.00):</strong> <span style="color: #fde047; font-weight: 800;">${cBronze.toLocaleString()} $CR</span></div>
                 <div style="color: #e2e8f0;">🥈 <strong>Cofre Plata ($5.00):</strong> <span style="color: #fde047; font-weight: 800;">${cSilver.toLocaleString()} $CR</span></div>
                 <div style="color: #e2e8f0;">👑 <strong>Cofre Oro ($25.00):</strong> <span style="color: #fde047; font-weight: 800;">${cGold.toLocaleString()} $CR</span></div>
@@ -2074,17 +2180,17 @@ function openOracleSimulatorModal() {
     modal.innerHTML = `
         <div class="ad-modal-card oracle-modal-card" style="border: 2px solid #10b981; box-shadow: 0 0 35px rgba(16, 185, 129, 0.45); max-width: 460px; text-align: center;">
             <div class="ad-header-row" style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="ad-badge" style="background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 800;">🟢 ORÁCULO DE COTIZACIÓN WEB3</span>
+                <span class="ad-badge" style="background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 800;">🧪 SIMULADOR LOCAL DE PRECIOS (DEV)</span>
                 <button class="modal-close-btn" onclick="closeOracleSimulatorModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 2px 6px;">✕</button>
             </div>
             <div style="padding: 10px 4px;">
-                <h3 style="color: #34d399; font-size: 17px; margin: 8px 0 4px; font-weight: 900;">PEG ESTABLE $CR / USDT</h3>
+                <h3 style="color: #34d399; font-size: 17px; margin: 8px 0 4px; font-weight: 900;">BALANCE INTERNO $CR (SIMULACIÓN)</h3>
                 <p style="color: #94a3b8; font-size: 12px; line-height: 1.45; margin-bottom: 12px;">
-                    Todos los objetos del juego están anclados a su valor real en USDT. Si el token sube de precio en DEX / GasPump, la cantidad de tokens $CR requerida disminuye automáticamente para que a los jugadores siempre les cueste exactamente lo mismo.
+                    Herramienta local de desarrollo para probar costes internos con una referencia ficticia. No consulta ningún DEX ni mercado, no representa un precio real y no está disponible en la versión pública.
                 </p>
 
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px;">
-                    <button onclick="applyOraclePreset(0.001)" style="background: #1e293b; border: 1px solid #10b981; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">🚀 Salida GasPump ($0.001)</button>
+                    <button onclick="applyOraclePreset(0.001)" style="background: #1e293b; border: 1px solid #10b981; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">Base local ($0.001)</button>
                     <button onclick="applyOraclePreset(0.005)" style="background: #1e293b; border: 1px solid #38bdf8; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">📈 5x ($0.005)</button>
                     <button onclick="applyOraclePreset(0.010)" style="background: #1e293b; border: 1px solid #f59e0b; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: bold;">🔥 10x ($0.010)</button>
                     <button onclick="applyOraclePreset(0.100)" style="background: linear-gradient(135deg, rgba(236,72,153,0.3), rgba(168,85,247,0.3)); border: 1.5px solid #ec4899; color: #fff; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; font-weight: 900;">🌕 100x Moon ($0.100)</button>
@@ -2135,7 +2241,7 @@ function updateOraclePreview(val) {
     const cNitro5 = Math.max(1, Math.round(0.20 / p));
     box.innerHTML = `
         <div style="background: rgba(15, 23, 42, 0.9); border: 1.5px solid #10b981; border-radius: 12px; padding: 12px; margin: 14px 0; text-align: left; font-size: 11.5px; line-height: 1.6;">
-            <div style="color: #6ee7b7; font-weight: 900; margin-bottom: 6px; font-size: 12px;">📊 RESULTADO DINÁMICO A $${p.toFixed(4)} USDT:</div>
+            <div style="color: #6ee7b7; font-weight: 900; margin-bottom: 6px; font-size: 12px;">📊 RESULTADO SIMULADO CON REFERENCIA $${p.toFixed(4)}:</div>
             <div style="color: #e2e8f0;">📦 <strong>Cofre Común ($1.00):</strong> <span style="color: #fde047; font-weight: 800;">${cBronze.toLocaleString()} $CR</span></div>
             <div style="color: #e2e8f0;">🥈 <strong>Cofre Plata ($5.00):</strong> <span style="color: #fde047; font-weight: 800;">${cSilver.toLocaleString()} $CR</span></div>
             <div style="color: #e2e8f0;">👑 <strong>Cofre Oro ($25.00):</strong> <span style="color: #fde047; font-weight: 800;">${cGold.toLocaleString()} $CR</span></div>
@@ -2148,21 +2254,23 @@ window.updateOraclePreview = updateOraclePreview;
 
 function applyOraclePreset(price) {
     hubAudio.playClick();
+    if (!oracleSimulatorAvailable()) return;
     const inp = document.getElementById('oracle-custom-input');
     if (inp) inp.value = price;
     updateOraclePreview(price);
     setTokenPriceUsd(price);
-    alert(`🟢 Oráculo actualizado a $${price} USDT por token. ¡Todos los cofres y nitros se han recalculado automáticamente!`);
+    alert(`🧪 Referencia local simulada fijada en $${price}. Costes de desarrollo recalculados; no es una cotización real.`);
     closeOracleSimulatorModal();
 }
 window.applyOraclePreset = applyOraclePreset;
 
 function saveOracleCustomPrice() {
     hubAudio.playClick();
+    if (!oracleSimulatorAvailable()) return;
     const inp = document.getElementById('oracle-custom-input');
     const p = inp ? parseFloat(inp.value) : 0.001;
     setTokenPriceUsd(p);
-    alert(`🟢 Cotización fijada en $${p.toFixed(4)} USDT. ¡Precios en tokens actualizados en vivo!`);
+    alert(`🧪 Referencia local simulada fijada en $${p.toFixed(4)}. Solo afecta a esta sesión de desarrollo.`);
     closeOracleSimulatorModal();
 }
 window.saveOracleCustomPrice = saveOracleCustomPrice;
@@ -2170,7 +2278,7 @@ window.saveOracleCustomPrice = saveOracleCustomPrice;
 function resetOracleDefaultPrice() {
     hubAudio.playClick();
     if (typeof TOKEN_ORACLE !== 'undefined') TOKEN_ORACLE.resetToDefault();
-    alert(`🔄 Oráculo restablecido al precio base de salida ($0.0010 USDT / token).`);
+    alert(`🔄 Simulador restablecido a la referencia local base ($0.0010).`);
     closeOracleSimulatorModal();
 }
 window.resetOracleDefaultPrice = resetOracleDefaultPrice;
@@ -2362,7 +2470,7 @@ function buyPartsKitShop(kitKey) {
 }
 
 function addFunds(credits, gems) {
-    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
         alert('⚠️ Función de pruebas deshabilitada en la versión pública oficial.');
         return;
     }
@@ -2774,7 +2882,7 @@ function openWagerLobby(roomId) {
         slots: [
             {
                 id: 'player',
-                userId: userData.userId || 'usr_me',
+                userId: getApexUserId(),
                 name: pilotName,
                 carName: equippedCar ? equippedCar.name : 'Supercar GT',
                 colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
@@ -2799,7 +2907,7 @@ function startWagerMatchmaking() {
     if (!currentWagerLobby) return;
 
     const userData = loadNftUserData();
-    const userId = userData.userId || ('usr_' + Math.random().toString(36).substring(2, 9));
+    const userId = getApexUserId();
     const room = currentWagerLobby.room;
     const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
     const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
@@ -2814,7 +2922,7 @@ function startWagerMatchmaking() {
     if (typeof fetch === 'function') {
         fetch('/api/multiplayer/public/join', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apexApiHeaders(),
             body: JSON.stringify({
                 roomId: room.id,
                 buyIn: room.buyIn,
@@ -2832,8 +2940,8 @@ function startWagerMatchmaking() {
                 if (typeof res.countdown === 'number') currentWagerLobby.countdown = res.countdown;
                 if (Array.isArray(res.slots) && res.slots.length > 0) {
                     currentWagerLobby.slots = res.slots.map(s => ({
-                        ...s,
-                        isPlayer: s.userId === userId
+                        ...sanitizeNetworkSlot(s),
+                        isPlayer: s && s.userId === userId
                     }));
                 }
                 if (res.circuit) {
@@ -2860,8 +2968,8 @@ function startWagerMatchmaking() {
                         if (typeof res.countdown === 'number') currentWagerLobby.countdown = res.countdown;
                         if (Array.isArray(res.slots)) {
                             currentWagerLobby.slots = res.slots.map(s => ({
-                                ...s,
-                                isPlayer: s.userId === userId
+                                ...sanitizeNetworkSlot(s),
+                                isPlayer: s && s.userId === userId
                             }));
                         }
                         if (res.status === 'STARTING') {
@@ -2977,18 +3085,19 @@ function renderWagerLobbyModal(isReady = false) {
                         `;
                     }
                     const isAi = slot.isAI;
+                    const safeSlot = sanitizeNetworkSlot(slot);
                     return `
                         <div class="wager-slot-card ${isAi ? 'slot-ai' : 'slot-ready'}">
-                            <div class="wager-slot-avatar" style="border: 2px solid ${slot.colorHex || '#00f5d4'};">
+                            <div class="wager-slot-avatar" style="border: 2px solid ${safeSlot.colorHex};">
                                 ${isAi ? '🤖' : (slot.isPlayer ? '👑' : '🏎️')}
                             </div>
                             <div style="flex: 1;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span class="wager-slot-name">${escapeHtml(slot.name)}</span>
-                                    <span style="font-size: 10px; font-weight: 800; color: ${isAi ? '#fbbf24' : '#00f5d4'};">${slot.stake} ${room.currency}</span>
+                                    <span class="wager-slot-name">${escapeHtml(safeSlot.name)}</span>
+                                    <span style="font-size: 10px; font-weight: 800; color: ${isAi ? '#fbbf24' : '#00f5d4'};">${escapeHtml(String(safeSlot.stake))} ${escapeHtml(room.currency)}</span>
                                 </div>
-                                <div class="wager-slot-role">${slot.roleLabel}</div>
-                                <div style="font-size: 10px; color: #cbd5e1;">Coche: ${slot.carName}</div>
+                                <div class="wager-slot-role">${escapeHtml(safeSlot.roleLabel)}</div>
+                                <div style="font-size: 10px; color: #cbd5e1;">Coche: ${escapeHtml(safeSlot.carName)}</div>
                             </div>
                         </div>
                     `;
@@ -3047,11 +3156,10 @@ function closeWagerLobby(refund = true) {
 
     if (currentWagerLobby) {
         if (typeof fetch === 'function' && currentWagerLobby.lobbyId) {
-            const userData = loadNftUserData();
-            const userId = userData.userId || 'usr_me';
+            const userId = getApexUserId();
             fetch('/api/multiplayer/public/leave', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: apexApiHeaders(),
                 body: JSON.stringify({
                     roomId: currentWagerLobby.room ? currentWagerLobby.room.id : '',
                     lobbyId: currentWagerLobby.lobbyId,
@@ -3317,7 +3425,7 @@ function handleCreateDuelSubmit() {
     const chosenTrackVal = trackSelect ? trackSelect.value : 'random';
 
     const payload = {
-        userId: userData.userId || 'usr_me',
+        userId: getApexUserId(),
         name: pilotName,
         carName: equippedCar ? equippedCar.name : 'Supercar GT',
         colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
@@ -3332,7 +3440,7 @@ function handleCreateDuelSubmit() {
     if (typeof fetch === 'function') {
         fetch('/api/multiplayer/duel/create', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apexApiHeaders(),
             body: JSON.stringify(payload)
         })
         .then(r => r.json())
@@ -3355,12 +3463,12 @@ function handleCreateDuelSubmit() {
         });
     } else {
         const fallbackDuel = {
-            code: 'DUEL-' + Math.floor(1000 + Math.random() * 9000),
+            code: createLocalDuelCode(),
             betAmount: bet,
             circuit: { id: 'rookie_ring', name: 'Rookie Ring Speedway' },
             slots: [{
                 id: 'host',
-                userId: userData.userId || 'usr_me',
+                userId: getApexUserId(),
                 name: pilotName,
                 carName: payload.carName,
                 colorHex: payload.colorHex,
@@ -3385,7 +3493,7 @@ function openJoinDuelModal(prefillCode = '') {
         document.body.appendChild(modal);
     }
 
-    const cleanPrefill = (prefillCode || '').toUpperCase().trim();
+    const cleanPrefill = String(prefillCode || '').toUpperCase().trim().replace(/[^A-Z0-9-]/g, '').slice(0, 24);
 
     modal.innerHTML = `
         <div class="settings-dialog" style="max-width: 480px; width: 95%;">
@@ -3406,7 +3514,7 @@ function openJoinDuelModal(prefillCode = '') {
                         INTRODUCE EL CÓDIGO DE SALA:
                     </label>
                     <div style="display: flex; gap: 8px;">
-                        <input id="input-join-duel-code" type="text" placeholder="EJ: DUEL-1234" value="${cleanPrefill}" style="flex: 1; padding: 12px 14px; background: rgba(15, 23, 42, 0.85); border: 1px solid #ec4899; border-radius: 8px; color: #fee440; font-size: 16px; font-weight: 900; font-family: monospace; text-transform: uppercase;" />
+                        <input id="input-join-duel-code" type="text" placeholder="EJ: DUEL-AB12CD34" value="${escapeHtml(cleanPrefill)}" style="flex: 1; padding: 12px 14px; background: rgba(15, 23, 42, 0.85); border: 1px solid #ec4899; border-radius: 8px; color: #fee440; font-size: 16px; font-weight: 900; font-family: monospace; text-transform: uppercase;" />
                         <button type="button" style="padding: 10px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; color: #fff; font-weight: 800; font-size: 12px; cursor: pointer;" onclick="handlePasteDuelCode()">
                             📋 PEGAR
                         </button>
@@ -3459,11 +3567,12 @@ function handleJoinDuelSubmit() {
     const code = (input ? input.value : '').toUpperCase().trim();
 
     if (!code) {
-        alert('⚠️ Por favor introduce un código de sala válido (ej. DUEL-1234).');
+        alert('⚠️ Por favor introduce un código de sala válido (ej. DUEL-AB12CD34).');
         return;
     }
 
     const userData = loadNftUserData();
+    const currentUserId = getApexUserId();
     const userCredits = typeof userData.credits === 'number' ? userData.credits : 1000;
     const equippedCar = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
     const pilotName = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
@@ -3479,7 +3588,7 @@ function handleJoinDuelSubmit() {
                 }
 
                 const duel = statusRes.duel;
-                if (duel.status !== 'WAITING' && duel.hostUserId !== userData.userId) {
+                if (duel.status !== 'WAITING' && duel.hostUserId !== currentUserId) {
                     alert('⚠️ La sala de duelo ya ha comenzado con otro rival o ha concluido.');
                     return;
                 }
@@ -3491,7 +3600,7 @@ function handleJoinDuelSubmit() {
                 }
 
                 // Deducir apuesta si no es el anfitrión
-                if (duel.hostUserId !== userData.userId) {
+                if (duel.hostUserId !== currentUserId) {
                     userData.credits -= duel.betAmount;
                     saveNftUserData(userData);
                     renderHubHeader();
@@ -3500,10 +3609,10 @@ function handleJoinDuelSubmit() {
                 // Unirse a la sala
                 fetch('/api/multiplayer/duel/join', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: apexApiHeaders(),
                     body: JSON.stringify({
                         code: code,
-                        userId: userData.userId || 'usr_me',
+                        userId: currentUserId,
                         name: pilotName,
                         carName: equippedCar ? equippedCar.name : 'Supercar GT',
                         colorHex: equippedCar ? (equippedCar.colorHex || '#00f5d4') : '#00f5d4',
@@ -3514,10 +3623,10 @@ function handleJoinDuelSubmit() {
                 .then(joinRes => {
                     if (joinRes && joinRes.ok && joinRes.duel) {
                         closeJoinDuelModal();
-                        renderDuelWaitingModal(joinRes.duel, joinRes.duel.hostUserId === userData.userId);
+                        renderDuelWaitingModal(joinRes.duel, joinRes.duel.hostUserId === currentUserId);
                     } else {
                         // Reembolsar si falló el join
-                        if (duel.hostUserId !== userData.userId) {
+                        if (duel.hostUserId !== currentUserId) {
                             userData.credits += duel.betAmount;
                             saveNftUserData(userData);
                             renderHubHeader();
@@ -3526,7 +3635,7 @@ function handleJoinDuelSubmit() {
                     }
                 })
                 .catch(() => {
-                    if (duel.hostUserId !== userData.userId) {
+                    if (duel.hostUserId !== currentUserId) {
                         userData.credits += duel.betAmount;
                         saveNftUserData(userData);
                         renderHubHeader();
@@ -3548,6 +3657,17 @@ function renderDuelWaitingModal(duel, isHost) {
         modal.className = 'hub-modal-overlay';
         document.body.appendChild(modal);
     }
+
+    duel = {
+        ...(duel || {}),
+        code: String((duel && duel.code) || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 24),
+        betAmount: Math.max(0, Math.min(10000, Math.round(Number(duel && duel.betAmount) || 0))),
+        circuit: {
+            id: String((duel && duel.circuit && duel.circuit.id) || 'rookie_ring').replace(/[^a-z0-9_-]/gi, '').slice(0, 60),
+            name: String((duel && duel.circuit && duel.circuit.name) || 'Circuito').replace(/[<>\u0000-\u001f\u007f]/g, '').slice(0, 80)
+        },
+        slots: Array.isArray(duel && duel.slots) ? duel.slots.map(sanitizeNetworkSlot) : []
+    };
 
     currentDuelLobby = {
         duel,
@@ -3572,7 +3692,7 @@ function renderDuelWaitingModal(duel, isHost) {
                         ⚔️ SALA DE DUELO PRIVADA • 1 VS 1
                     </span>
                     <h2 style="font-size: 20px; font-weight: 900; margin: 6px 0 2px; color: #fff;">
-                        SALA: <span style="color: #fde047; font-family: monospace;">${duel.code}</span>
+                        SALA: <span style="color: #fde047; font-family: monospace;">${escapeHtml(duel.code)}</span>
                     </h2>
                     <div style="font-size: 11.5px; color: #cbd5e1; margin-top: 3px;">
                         🏁 Trazada Oficial: <strong style="color:#00f5d4; text-transform: uppercase;">${escapeHtml(duel.circuit.name)}</strong>
@@ -3587,10 +3707,10 @@ function renderDuelWaitingModal(duel, isHost) {
                     COMPARTE ESTE CÓDIGO CON TU HIJO O AMIGO:
                 </div>
                 <div style="font-size: 32px; font-weight: 900; font-family: monospace; color: #fee440; letter-spacing: 4px; text-shadow: 0 0 15px rgba(254, 228, 64, 0.5);">
-                    ${duel.code}
+                    ${escapeHtml(duel.code)}
                 </div>
                 <div style="display: flex; gap: 8px; width: 100%; max-width: 420px;">
-                    <button class="btn-secondary" style="flex: 1; padding: 10px; font-weight: 800; font-size: 12px; border-radius: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #fff; cursor: pointer;" onclick="handleCopyDuelCode('${duel.code}')">
+                    <button class="btn-secondary" style="flex: 1; padding: 10px; font-weight: 800; font-size: 12px; border-radius: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25); color: #fff; cursor: pointer;" onclick="handleCopyDuelCode('${escapeHtml(duel.code)}')">
                         📋 COPIAR CÓDIGO
                     </button>
                     <a href="${tgShareUrl}" target="_blank" class="btn-primary" style="flex: 1.4; padding: 10px; font-weight: 900; font-size: 12px; border-radius: 8px; background: linear-gradient(135deg, #0088cc, #00b4d8); color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 12px rgba(0, 136, 204, 0.4);">
@@ -3616,7 +3736,7 @@ function renderDuelWaitingModal(duel, isHost) {
             <div class="wager-slots-grid" style="grid-template-columns: 1fr 1fr;">
                 <!-- PILOTO 1 (ANFITRIÓN) -->
                 <div class="wager-slot-card slot-ready" style="border-color: #ec4899;">
-                    <div class="wager-slot-avatar" style="border: 2px solid ${slots[0] ? slots[0].colorHex : '#00f5d4'};">
+                    <div class="wager-slot-avatar" style="border: 2px solid ${safeCssColor(slots[0] ? slots[0].colorHex : '#00f5d4')};">
                         👑
                     </div>
                     <div style="flex: 1;">
@@ -3624,15 +3744,15 @@ function renderDuelWaitingModal(duel, isHost) {
                             <span class="wager-slot-name">${escapeHtml(slots[0] ? slots[0].name : 'Anfitrión')}</span>
                             <span style="font-size: 10px; font-weight: 800; color: #f472b6;">${duel.betAmount} $CR</span>
                         </div>
-                        <div class="wager-slot-role">${slots[0] ? slots[0].roleLabel : '👑 ANFITRIÓN'}</div>
-                        <div style="font-size: 10px; color: #cbd5e1;">Coche: ${slots[0] ? slots[0].carName : 'GT3 Racer'}</div>
+                        <div class="wager-slot-role">${escapeHtml(slots[0] ? slots[0].roleLabel : '👑 ANFITRIÓN')}</div>
+                        <div style="font-size: 10px; color: #cbd5e1;">Coche: ${escapeHtml(slots[0] ? slots[0].carName : 'GT3 Racer')}</div>
                     </div>
                 </div>
 
                 <!-- PILOTO 2 (RIVAL) -->
                 ${slots[1] ? `
                     <div class="wager-slot-card slot-ready" style="border-color: #00f5d4;">
-                        <div class="wager-slot-avatar" style="border: 2px solid ${slots[1].colorHex || '#00f5d4'};">
+                        <div class="wager-slot-avatar" style="border: 2px solid ${safeCssColor(slots[1].colorHex || '#00f5d4')};">
                             ⚔️
                         </div>
                         <div style="flex: 1;">
@@ -3640,8 +3760,8 @@ function renderDuelWaitingModal(duel, isHost) {
                                 <span class="wager-slot-name">${escapeHtml(slots[1].name)}</span>
                                 <span style="font-size: 10px; font-weight: 800; color: #00f5d4;">${duel.betAmount} $CR</span>
                             </div>
-                            <div class="wager-slot-role">${slots[1].roleLabel || '⚔️ RIVAL RETADOR'}</div>
-                            <div style="font-size: 10px; color: #cbd5e1;">Coche: ${slots[1].carName || 'GT3 Racer'}</div>
+                            <div class="wager-slot-role">${escapeHtml(slots[1].roleLabel || '⚔️ RIVAL RETADOR')}</div>
+                            <div style="font-size: 10px; color: #cbd5e1;">Coche: ${escapeHtml(slots[1].carName || 'GT3 Racer')}</div>
                         </div>
                     </div>
                 ` : `
@@ -3737,8 +3857,8 @@ function closeDuelLobbyModal(refund = true) {
         if (duel && typeof fetch === 'function') {
             fetch('/api/multiplayer/duel/cancel', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: duel.code })
+                headers: apexApiHeaders(),
+                body: JSON.stringify({ code: duel.code, userId: getApexUserId() })
             }).catch(() => {});
         }
 
@@ -3764,7 +3884,7 @@ function launchDuelRace(duel, slots) {
     if (modal) modal.remove();
 
     const userData = loadNftUserData();
-    const userId = userData.userId || 'usr_me';
+    const userId = getApexUserId();
     const cleanSlots = slots || (duel ? duel.slots : []) || [];
 
     const aiBots = [
@@ -3974,7 +4094,7 @@ function openSettingsModal() {
     const musicEnabled = localStorage.getItem('dustrac_music') !== 'false';
     const graphicsHigh = localStorage.getItem('dustrac_graphics') !== 'perf';
     const controlsType = localStorage.getItem('dustrac_controls') || 'keys';
-    const isProdRelease = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true);
+    const isProdRelease = (typeof isProductionRelease === 'function' ? isProductionRelease() : true);
     const designerMode = isProdRelease ? false : (localStorage.getItem('dustrac_story_save') ? JSON.parse(localStorage.getItem('dustrac_story_save')).designerMode !== false : true);
 
     const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : {};
@@ -4069,7 +4189,7 @@ function openSettingsModal() {
                 </div>
 
                 <!-- Modo Diseñador & Fondos de Prueba (Oculto completamente en Producción) -->
-                ${(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) ? '' : `
+                ${(typeof isProductionRelease === 'function' ? isProductionRelease() : true) ? '' : `
                 <div class="setting-group">
                     <label class="setting-label">🛠️ ${t('settings_designer_mode')}</label>
                     <div class="toggle-row">
@@ -4123,7 +4243,7 @@ function toggleSetting(key) {
         const cur = localStorage.getItem('dustrac_controls') || 'keys';
         localStorage.setItem('dustrac_controls', cur === 'keys' ? 'touch' : 'keys');
     } else if (key === 'designer') {
-        if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) return;
+        if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) return;
         const prog = loadStoryProgress ? loadStoryProgress() : {};
         prog.designerMode = !prog.designerMode;
         if (prog.designerMode && typeof ALL_TRACK_IDS !== 'undefined') {
@@ -4135,7 +4255,7 @@ function toggleSetting(key) {
 }
 
 function grantTestingFunds() {
-    if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.IS_PRODUCTION_RELEASE === true) return;
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) return;
     hubAudio.playClick();
     const u = loadNftUserData();
     u.credits = (u.credits || 0) + 1000000;
@@ -4911,28 +5031,28 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                         ` : listings.map(lst => `
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.65); border: 1px solid ${lst.sellerIsMe ? '#10b981' : 'rgba(255,255,255,0.08)'}; border-radius: 10px; gap: 12px;">
                                 <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                                    <span style="font-size: 26px;">${lst.icon}</span>
+                                    <span style="font-size: 26px;">${escapeHtml(lst.icon || '📦')}</span>
                                     <div>
                                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                            <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${lst.name}</div>
-                                            <span class="badge-rarity badge-rarity-${lst.rarity}">${(lst.rarity || 'common').toUpperCase()}</span>
+                                            <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${escapeHtml(lst.name)}</div>
+                                            <span class="badge-rarity badge-rarity-${['common','uncommon','rare','legendary','starter'].includes(lst.rarity) ? lst.rarity : 'common'}">${escapeHtml(String(lst.rarity || 'common').toUpperCase())}</span>
                                             ${lst.sellerIsMe ? `
                                                 <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; padding: 2px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 900;">⭐ TU ANUNCIO</span>
                                             ` : ''}
                                         </div>
                                         <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-                                            Vendedor: <strong style="color: ${lst.sellerIsMe ? '#10b981' : '#00f5d4'};">${lst.seller}</strong> • ${lst.category} • ${lst.timeAgo}
+                                            Vendedor: <strong style="color: ${lst.sellerIsMe ? '#10b981' : '#00f5d4'};">${escapeHtml(lst.seller)}</strong> • ${escapeHtml(lst.category)} • ${escapeHtml(lst.timeAgo)}
                                         </div>
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 14px; font-weight: 900; color: #fde047; white-space: nowrap;">💰 ${lst.priceCr.toLocaleString()} $CR</span>
+                                    <span style="font-size: 14px; font-weight: 900; color: #fde047; white-space: nowrap;">💰 ${(Number(lst.priceCr) || 0).toLocaleString()} $CR</span>
                                     ${lst.sellerIsMe ? `
-                                        <button class="btn-secondary" style="padding: 7px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; white-space: nowrap;" onclick="handleCancelMarketplaceListing('${lst.id}')">
+                                        <button class="btn-secondary" style="padding: 7px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; white-space: nowrap;" onclick="handleCancelMarketplaceListing('${safeDomId(lst.id)}')">
                                             ❌ RETIRAR
                                         </button>
                                     ` : `
-                                        <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #00f5d4, #00bbf9); border:none; color:#000; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleBuyMarketplaceItem('${lst.id}')">
+                                        <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #00f5d4, #00bbf9); border:none; color:#000; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleBuyMarketplaceItem('${safeDomId(lst.id)}')">
                                             COMPRAR
                                         </button>
                                     `}
@@ -4983,7 +5103,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                                 <div style="font-size: 11px; color: #94a3b8;">Precio sugerido:</div>
                                                 <div style="font-size: 13px; font-weight: 900; color: #fde047;">~${askPrice.toLocaleString()} $CR</div>
                                             </div>
-                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${partKey}', ${askPrice})">
+                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${safeDomId(partKey)}', ${Number(askPrice) || 0})">
                                                 🏷️ PONER PRECIO Y VENDER
                                             </button>
                                         </div>
@@ -5021,7 +5141,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                                 <div style="font-size: 11px; color: #94a3b8;">Precio sugerido:</div>
                                                 <div style="font-size: 13px; font-weight: 900; color: #fde047;">~${basePrice.toLocaleString()} $CR</div>
                                             </div>
-                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${car.instanceId}', ${basePrice})">
+                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${safeDomId(car.instanceId)}', ${Number(basePrice) || 0})">
                                                 🏷️ PONER PRECIO Y VENDER
                                             </button>
                                         </div>
@@ -5278,7 +5398,7 @@ if (typeof window !== 'undefined') {
 }
 
 // =========================================================================
-// 11. MODAL BILLETERA WEB3 & TON CONNECT
+// 11. MODAL BILLETERA WEB3 & TON — SIMULACIÓN LOCAL
 // =========================================================================
 function openWeb3WalletModal() {
     hubAudio.playClick();
@@ -5304,8 +5424,8 @@ function openWeb3WalletModal() {
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">💎</span>
                     <div>
-                        <h2 style="margin: 0; font-size: 18px; color: #0098ea;">BILLETERA WEB3 & TON CONNECT</h2>
-                        <span style="font-size: 11px; color: #cbd5e1;">Gestión on-chain en The Open Network (TON) y tokens $CR del juego</span>
+                        <h2 style="margin: 0; font-size: 18px; color: #0098ea;">BILLETERA WEB3 & TON — SIMULACIÓN LOCAL</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">Sin blockchain ni fondos reales: solo una demostración local con saldos ficticios</span>
                     </div>
                 </div>
                 <button class="settings-close-x" onclick="closeWeb3WalletModal()">✖</button>
@@ -5315,20 +5435,20 @@ function openWeb3WalletModal() {
                 ${!isConnected ? `
                     <div style="text-align: center; padding: 15px 10px;">
                         <div style="font-size: 40px; margin-bottom: 12px;">🔗</div>
-                        <h3 style="margin: 0 0 8px; color: #ffffff; font-size: 16px;">VINCULA TU BILLETERA TON</h3>
+                        <h3 style="margin: 0 0 8px; color: #ffffff; font-size: 16px;">ACTIVA LA BILLETERA SIMULADA</h3>
                         <p style="font-size: 12px; color: #94a3b8; margin: 0 0 20px;">
-                            Conecta tu billetera para recibir ingresos de anuncios, comprar tokens $CR con TON y comerciar con piezas y coches NFT.
+                            Esta pantalla no conecta ninguna billetera real ni mueve fondos. Solo crea una dirección ficticia para probar la interfaz del juego.
                         </p>
 
                         <div style="display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto;">
                             <button class="btn-wallet-connect" onclick="handleConnectWallet('telegram_wallet')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #0098ea; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
-                                <span>📱</span> CONECTAR CON TELEGRAM WALLET (@wallet)
+                                <span>📱</span> SIMULAR TELEGRAM WALLET
                             </button>
                             <button class="btn-wallet-connect" onclick="handleConnectWallet('tonkeeper')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #2f8af5; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
-                                <span>🛡️</span> CONECTAR TONKEEPER
+                                <span>🛡️</span> SIMULAR TONKEEPER
                             </button>
                             <button class="btn-wallet-connect" onclick="handleConnectWallet('mytonwallet')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #ff9900; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
-                                <span>💎</span> CONECTAR MYTONWALLET
+                                <span>💎</span> SIMULAR MYTONWALLET
                             </button>
                         </div>
                     </div>
@@ -5339,9 +5459,9 @@ function openWeb3WalletModal() {
                             <img src="assets/apex_token_logo.jpg" alt="APEX $CR Token" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #00f5d4; box-shadow: 0 0 10px rgba(0, 245, 212, 0.4); object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'">
                             <div style="flex: 1;">
                                 <div style="font-size: 13.5px; font-weight: 900; color: #00f5d4; letter-spacing: 0.5px;">APEX MOTORSPORT ($CR)</div>
-                                <div style="font-size: 10.5px; color: #94a3b8; line-height: 1.3;">Token Oficial del Ecosistema de Carreras en The Open Network (TON)</div>
+                                <div style="font-size: 10.5px; color: #94a3b8; line-height: 1.3;">Moneda interna del juego. No es un token emitido en TON.</div>
                             </div>
-                            <span style="font-size: 9.5px; background: rgba(0, 245, 212, 0.15); border: 1px solid #00f5d4; color: #00f5d4; font-weight: 800; padding: 3px 8px; border-radius: 6px;">JETTON TON</span>
+                            <span style="font-size: 9.5px; background: rgba(0, 245, 212, 0.15); border: 1px solid #00f5d4; color: #00f5d4; font-weight: 800; padding: 3px 8px; border-radius: 6px;">SIMULACIÓN</span>
                         </div>
 
                         <!-- ESTADO DE CONEXIÓN -->
@@ -5349,10 +5469,10 @@ function openWeb3WalletModal() {
                             <div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
-                                    <span style="font-size: 11.5px; font-weight: 800; color: #10b981;">BILLETERA CONECTADA</span>
-                                    <span style="font-size: 10.5px; color: #94a3b8;">(${userData.walletProvider || 'Telegram Wallet'})</span>
+                                    <span style="font-size: 11.5px; font-weight: 800; color: #10b981;">BILLETERA SIMULADA ACTIVADA</span>
+                                    <span style="font-size: 10.5px; color: #94a3b8;">(${escapeHtml(userData.walletProvider || 'Telegram Wallet')})</span>
                                 </div>
-                                <div style="font-family: monospace; font-size: 13px; color: #ffffff; font-weight: bold; margin-top: 3px;">${addr}</div>
+                                <div style="font-family: monospace; font-size: 13px; color: #ffffff; font-weight: bold; margin-top: 3px;">${escapeHtml(addr)}</div>
                             </div>
                             <div style="display: flex; gap: 6px;">
                                 <button onclick="copyWalletAddress()" style="padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 10.5px; cursor: pointer;">COPIAR</button>
@@ -5368,32 +5488,30 @@ function openWeb3WalletModal() {
                                 <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Para coches, mejoras y torneos</div>
                             </div>
                             <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
-                                <div style="font-size: 10.5px; color: #94a3b8; font-weight: 800;">SALDO TON CONECTADO</div>
+                                <div style="font-size: 10.5px; color: #94a3b8; font-weight: 800;">SALDO TON SIMULADO</div>
                                 <div style="font-size: 18px; font-weight: 900; color: #0098ea; margin-top: 4px;">💎 ${tonBalance.toFixed(2)} TON</div>
-                                <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Para swaps e inscripciones</div>
+                                <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Solo para conversiones ficticias dentro del juego</div>
                             </div>
                         </div>
 
                         <!-- SWAP: COMPRAR $CR CON TON -->
                         <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(0, 245, 212, 0.2); border-radius: 10px; padding: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <span style="font-size: 12px; font-weight: 900; color: #00f5d4;">🔄 COMPRAR TOKENS $CR CON TON</span>
-                                <span style="font-size: 10px; color: #cbd5e1;">Tasa: 1 TON ≈ 5.000 $CR (~$5.00 USDT)</span>
+                                <span style="font-size: 12px; font-weight: 900; color: #00f5d4;">🔄 CONVERTIR TON SIMULADO A $CR (SOLO LOCAL)</span>
+                                <span style="font-size: 10px; color: #cbd5e1;">Conversión interna ficticia: 1 TON-SIM = 5.000 $CR</span>
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(0.5)">
-                                    0.5 TON<br><span style="color: #fde047; font-size: 9.5px;">+2.500 $CR (~$2.50)</span>
+                                    0.5 TON-SIM<br><span style="color: #fde047; font-size: 9.5px;">+2.500 $CR</span>
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(1.0)">
-                                    1.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+5.000 $CR (~$5.00)</span>
+                                    1.0 TON-SIM<br><span style="color: #fde047; font-size: 9.5px;">+5.000 $CR</span>
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(5.0)">
-                                    5.0 TON<br><span style="color: #fde047; font-size: 9.5px;">+25.000 $CR (~$25.00)</span>
+                                    5.0 TON-SIM<br><span style="color: #fde047; font-size: 9.5px;">+25.000 $CR</span>
                                 </button>
                             </div>
-                            <div style="font-size: 9.5px; color: #94a3b8; margin-top: 8px; text-align: center; word-break: break-all; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 6px;">
-                                🏛️ <strong>Tesorería Oficial (Receptora):</strong> <span style="font-family: monospace; color: #38bdf8;">UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X</span>
-                            </div>
+                            <div style="font-size: 10px; color: #fde68a; margin-top: 8px; text-align: center; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.45); padding: 7px 8px; border-radius: 6px;">⚠️ <strong>No envíes TON ni ningún fondo real.</strong> Los pagos reales están deshabilitados.</div>
                         </div>
 
                         <!-- ESTADO DE RETIROS: FASE BETA PÚBLICA TEMPORADA 1 (PRE-TGE) -->
@@ -5401,36 +5519,36 @@ function openWeb3WalletModal() {
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span style="font-size: 15px;">🔒</span>
-                                    <span style="font-size: 12.5px; font-weight: 900; color: #fbbf24;">RETIRO DE TOKENS $CR A TU BILLETERA (JETTON TON)</span>
+                                    <span style="font-size: 12.5px; font-weight: 900; color: #fbbf24;">RETIRO DE TOKENS $CR A TU BILLETERA (SIMULACIÓN)</span>
                                 </div>
-                                <span style="font-size: 9.5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde047; font-weight: 800; padding: 2px 7px; border-radius: 6px;">PRE-TGE ACTIVO</span>
+                                <span style="font-size: 9.5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde047; font-weight: 800; padding: 2px 7px; border-radius: 6px;">SIN FONDOS REALES</span>
                             </div>
 
                             <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
                                 <div style="font-size: 11px; font-weight: 800; color: #fde047; display: flex; align-items: center; gap: 6px;">
-                                    <span>⏳</span> Retiro On-Chain de Tokens $CR: BLOQUEADO HASTA EL LANZAMIENTO OFICIAL (TGE)
+                                    <span>⏳</span> Retiros reales: DESHABILITADOS
                                 </div>
                                 <div style="font-size: 10.5px; color: #cbd5e1; margin-top: 5px; line-height: 1.4;">
-                                    Estamos en la <strong>Temporada 1 Fase Beta</strong>. Todos tus tokens <strong>$CR</strong> ganados están <strong>100% asegurados y acumulados</strong> en tu perfil. Al desplegarse la pool en DEX (TGE), podrás transferir tus tokens $CR a tu billetera Tonkeeper/Telegram Wallet para conservarlos o intercambiarlos en DeDust/STON.fi.
+                                    Los <strong>$CR</strong> son una moneda interna del juego guardada con tu partida. No existe todavía una emisión en blockchain, una pool ni una promesa de conversión a dinero real.
                                 </div>
                             </div>
 
                             <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
-                                <strong style="color: #cbd5e1;">Reglas Anti-Bot del Ecosistema (Vigentes al Lanzamiento):</strong><br>
-                                • 🔒 <strong>Holding de Seguridad:</strong> Deberás mantener al menos <strong>500 $CR</strong> de reserva en tu wallet tras retirar.<br>
-                                • 📅 <strong>COOLDOWN 7 DÍAS:</strong> Límite de 1 retiro semanal. Retiros anticipados sufrirán <strong>50% de quema deflacionaria</strong>.<br>
-                                • 🏎️ <strong>Utilidad Inmediata:</strong> Usa tus $CR ahora para tunear coches, comprar cajas y ganar en el Gran Premio.
+                                <strong style="color: #cbd5e1;">Retiradas deshabilitadas en esta simulación:</strong><br>
+                                • 🔒 No se aceptan depósitos ni se procesan retiradas reales.<br>
+                                • 💎 El saldo TON mostrado es ficticio y solo sirve para probar conversiones internas.<br>
+                                • 🏎️ Usa tus $CR dentro del juego para tunear coches, abrir cofres y competir.
                             </div>
 
                             <div style="display: flex; gap: 8px;">
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(1000)">
-                                    🔒 RETIRAR 1.000 $CR (BLOQUEADO TGE)
+                                    🔒 RETIRAR 1.000 $CR (DESHABILITADO)
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(5000)">
-                                    🔒 RETIRAR 5.000 $CR (BLOQUEADO TGE)
+                                    🔒 RETIRAR 5.000 $CR (DESHABILITADO)
                                 </button>
                                 <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(10000)">
-                                    🔒 RETIRAR 10.000 $CR (BLOQUEADO TGE)
+                                    🔒 RETIRAR 10.000 $CR (DESHABILITADO)
                                 </button>
                             </div>
                         </div>
@@ -5464,7 +5582,7 @@ function handleConnectWallet(provider) {
         hubAudio.playLevelUp();
         renderHubHeader();
         openWeb3WalletModal();
-        alert(`✅ ¡Billetera vinculada con éxito!\nDirección: ${res.address}`);
+        alert(`✅ Billetera simulada activada (sin fondos reales).\nDirección ficticia: ${res.address}`);
     }
 }
 
@@ -5474,48 +5592,36 @@ function handleDisconnectWallet() {
         disconnectTonWallet();
         renderHubHeader();
         openWeb3WalletModal();
-        alert('Billetera desconectada.');
+        alert('Billetera simulada desactivada.');
     }
 }
 
 function handleSwapTonToCr(tonAmount) {
     hubAudio.playClick();
-    const treasury = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.TREASURY_WALLET_ADDRESS) ? APP_CONFIG.TREASURY_WALLET_ADDRESS : 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X';
-    
     if (typeof buyCrWithTon === 'function') {
         const res = buyCrWithTon(tonAmount);
         if (res.success) {
             hubAudio.playOpenCrate();
             renderHubHeader();
             openWeb3WalletModal();
-            alert(`🎉 ¡Swap completado! Recibiste +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} TON.`);
+            alert(`🎉 Conversión simulada completada: +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} TON ficticio. No se ha movido ningún fondo real.`);
             return;
         }
     }
 
-    // Si no tiene saldo interno de TON, ofrece transferir directamente a la Tesorería Oficial del juego:
-    const nanoTons = Math.round(tonAmount * 1e9);
-    const memo = encodeURIComponent(`Apex Motorsport Swap ${tonAmount} TON`);
-    const tonDeepLink = `ton://transfer/${treasury}?amount=${nanoTons}&text=${memo}`;
-    
-    if (confirm(`💎 Para adquirir este paquete de tokens necesitas transferir ${tonAmount} TON a la Tesorería Oficial del juego:\n\n${treasury}\n\n¿Deseas abrir tu billetera (Tonkeeper / Telegram Wallet) para confirmar el pago?`)) {
-        if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
-            window.Telegram.WebApp.openLink(tonDeepLink);
-        } else {
-            window.location.href = tonDeepLink;
-        }
-    }
+    // v101: nunca abrir una transferencia real. No hay backend de pagos ni
+    // verificación on-chain que pueda acreditar una compra.
+    alert('⚠️ No tienes suficiente TON simulado para esta conversión interna.\n\nLos pagos reales están deshabilitados: no envíes TON a ninguna dirección.');
 }
 
 function handleWithdrawCrToTon(crAmount) {
     hubAudio.playClick();
     alert(
-        "🔒 RETIROS ON-CHAIN BLOQUEADOS (FASE BETA / TEMPORADA 1 PRE-TGE)\n\n" +
-        "Actualmente APEX MOTORSPORT se encuentra en Fase Beta de Acumulación.\n\n" +
-        "• Todos los tokens $CR que ganes están 100% SEGUROS y acreditados en tu cuenta de juego.\n" +
-        "• Al llegar el Lanzamiento Oficial del Token (TGE), transferirás tus tokens $CR directamente a tu billetera de Tonkeeper/Telegram Wallet como Jetton oficial.\n" +
-        "• Si deseas cambiarlos por TON o USDT, podrás hacerlo libremente en las pools públicas de DeDust.io o STON.fi.\n\n" +
-        "🏎️ ¡Aprovecha la Fase Beta para tunear y subir de nivel tus coches GT3, dominar el Gran Premio y maximizar tu saldo de $CR para el Airdrop!"
+        "🔒 RETIRADAS REALES DESHABILITADAS\n\n" +
+        "Los $CR son una moneda interna del juego y el TON mostrado es ficticio.\n\n" +
+        "• No hay token emitido en blockchain ni pool de intercambio.\n" +
+        "• No se aceptan depósitos y no debe enviarse ningún fondo real.\n" +
+        "• Puedes seguir usando los $CR dentro del juego para coches, cofres y mejoras."
     );
 }
 
