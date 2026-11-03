@@ -56,12 +56,29 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// Logo oficial previsto para el futuro token $CR. En el juego representa
+// la moneda interna actual; se usa una copia 256×256 (~20 KB), no el JPG
+// completo de 1024×1024, para que pueda aparecer en saldos y precios.
+function crCoinIconHtml(extraClass = '') {
+    const safeClass = String(extraClass || '').replace(/[^A-Za-z0-9 _-]/g, '').trim();
+    return `<img class="cr-coin-icon${safeClass ? ' ' + safeClass : ''}" src="assets/apex_cr_coin_256.jpg" alt="$CR" loading="lazy" decoding="async">`;
+}
+
+let _fallbackApexUserId = '';
+
 function apexApiHeaders(extraHeaders = {}) {
     const headers = { 'Content-Type': 'application/json', ...extraHeaders };
     try {
         const tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
         if (tg && typeof tg.initData === 'string' && tg.initData) {
             headers['X-Telegram-Init-Data'] = tg.initData;
+        }
+    } catch (e) {}
+    try {
+        const userId = getApexUserId();
+        if (/^usr_/.test(userId) && typeof getOrCreateDeviceSecret === 'function') {
+            const deviceSecret = getOrCreateDeviceSecret();
+            if (deviceSecret) headers['X-Device-Secret'] = deviceSecret;
         }
     } catch (e) {}
     return headers;
@@ -71,14 +88,304 @@ function getApexUserId() {
     try {
         if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
             const cloudId = window.CloudSave.getUserId();
-            if (cloudId) return String(cloudId);
+            if (cloudId && String(cloudId) !== 'usr_guest_local') return String(cloudId);
         }
     } catch (e) {}
     try {
         const data = (typeof loadNftUserData === 'function') ? loadNftUserData() : null;
-        if (data && data.userId) return String(data.userId);
+        if (data && data.userId && String(data.userId) !== 'usr_guest_local') return String(data.userId);
     } catch (e) {}
-    return 'usr_guest_local';
+    // Nunca compartir un ID invitado fijo entre navegadores: colisionaría con
+    // la credencial de dispositivo de otra persona. Este fallback solo debería
+    // aparecer si CloudSave/localStorage no están disponibles.
+    if (!_fallbackApexUserId) {
+        _fallbackApexUserId = (typeof generateDeviceUserId === 'function')
+            ? generateDeviceUserId()
+            : 'usr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 14);
+    }
+    return _fallbackApexUserId;
+}
+
+// ===== ECONOMÍA AUTORITATIVA EN SERVIDOR (v104) =====
+// En producción, las compras/mejoras/recompensas ya no mutan saldos en el
+// navegador. El hub pide una acción al servidor y pinta el garaje devuelto.
+// En el entorno de desarrollo/tests sin fetch se conserva el motor local.
+let _serverEconomyQueue = Promise.resolve();
+let apexServerFeatures = null;
+let apexServerConfig = null;
+let apexServerConfigPromise = null;
+let apexNftRegistryByInstance = {};
+let apexNftRegistryPromise = null;
+let apexNftRegistryLoadedForUser = '';
+let apexNftRegistryLoading = false;
+
+function authoritativeEconomyEnabled() {
+    try {
+        return typeof window !== 'undefined'
+            && typeof fetch === 'function'
+            && !window.__IS_TEST_ENV
+            && !(typeof isApexDevMode === 'function' && isApexDevMode());
+    } catch (e) {
+        return false;
+    }
+}
+
+function createEconomyIdempotencyKey(action) {
+    let suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+    try {
+        if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            const bytes = new Uint8Array(10);
+            window.crypto.getRandomValues(bytes);
+            suffix = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+    } catch (e) {}
+    return `${action}:${suffix}`.slice(0, 180);
+}
+
+function applyAuthoritativeGarage(garage) {
+    if (!garage || typeof garage !== 'object' || Array.isArray(garage)) return false;
+    try {
+        const copy = JSON.parse(JSON.stringify(garage));
+        copy.updatedAt = Math.max(Number(copy.updatedAt) || 0, Date.now());
+        const hasUnregisteredEligibleCar = Array.isArray(copy.garage) && copy.garage.some(car => {
+            if (!car || car.rarity === 'starter' || car.instanceId === 'inst_starter_01') return false;
+            return !(car.nftRegistryId || car.globalSerial || apexNftRegistryByInstance[String(car.instanceId || '')]);
+        });
+        if (hasUnregisteredEligibleCar) apexNftRegistryLoadedForUser = '';
+        localStorage.setItem('apex_web3_garage_save', JSON.stringify(copy));
+        if (copy.pilotName) localStorage.setItem('apex_pilot_name', String(copy.pilotName));
+        try { window.dispatchEvent(new CustomEvent('apex-economy-applied')); } catch (e) {}
+        if (typeof renderHubHeader === 'function') renderHubHeader();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function performServerEconomyAction(action, args = {}, idempotencyKey = null) {
+    const run = () => fetch('/api/economy/action', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({
+            userId: getApexUserId(),
+            action,
+            args,
+            idempotencyKey: idempotencyKey || createEconomyIdempotencyKey(action)
+        })
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (data && data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+            if (!data || data.ok !== true) {
+                return (data && data.result) || { success: false, reason: (data && data.error) || 'economy_unavailable' };
+            }
+            return data.result || { success: true };
+        })
+        .catch(() => ({ success: false, reason: 'economy_unavailable' }));
+    _serverEconomyQueue = _serverEconomyQueue.then(run, run);
+    return _serverEconomyQueue;
+}
+
+function runAuthoritativeEconomyAction(action, args, localFn, finish) {
+    if (authoritativeEconomyEnabled()) {
+        performServerEconomyAction(action, args).then(res => finish(res));
+        return { success: true, pending: true };
+    }
+    const res = localFn();
+    finish(res);
+    return res;
+}
+
+function syncAuthoritativeEconomy() {
+    if (!authoritativeEconomyEnabled()) return Promise.resolve(null);
+    return fetch(`/api/economy/state?userId=${encodeURIComponent(getApexUserId())}`, { headers: apexApiHeaders() })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (data && data.ok && data.economy && data.economy.garage) {
+                applyAuthoritativeGarage(data.economy.garage);
+                return data.economy;
+            }
+            return null;
+        })
+        .catch(() => null);
+}
+
+function loadApexServerConfig() {
+    if (!authoritativeEconomyEnabled()) return Promise.resolve(null);
+    if (apexServerConfigPromise) return apexServerConfigPromise;
+    apexServerConfigPromise = fetch('/api/config', { headers: { Accept: 'application/json' } })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (data && data.features) apexServerFeatures = data.features;
+            if (data && typeof data === 'object') apexServerConfig = data;
+            return data;
+        })
+        .catch(() => null);
+    return apexServerConfigPromise;
+}
+
+function serverFeatureEnabled(name, fallback = false) {
+    if (apexServerFeatures && typeof apexServerFeatures[name] === 'boolean') return apexServerFeatures[name];
+    return fallback;
+}
+
+function getTelegramStarsPublicConfig() {
+    return apexServerConfig && apexServerConfig.telegramStars ? apexServerConfig.telegramStars : null;
+}
+
+function getNftPublicConfig() {
+    return apexServerConfig && apexServerConfig.nft ? apexServerConfig.nft : null;
+}
+
+function isTelegramNumericAccount() {
+    return /^\d{5,20}$/.test(String(getApexUserId() || ''));
+}
+
+function telegramStarsUiEnabled() {
+    const config = getTelegramStarsPublicConfig();
+    if (config && typeof config.enabled === 'boolean') return config.enabled;
+    if (apexServerFeatures && typeof apexServerFeatures.telegramStarsPurchasesEnabled === 'boolean') {
+        return apexServerFeatures.telegramStarsPurchasesEnabled;
+    }
+    try {
+        return !(typeof APP_CONFIG !== 'undefined' && APP_CONFIG.TELEGRAM_STARS_PURCHASES_ENABLED === false);
+    } catch (e) {
+        return true;
+    }
+}
+
+function nftEntitlementsUiEnabled() {
+    const config = getNftPublicConfig();
+    if (config && typeof config.entitlementsEnabled === 'boolean') return config.entitlementsEnabled;
+    return serverFeatureEnabled('nftEntitlementsEnabled', true);
+}
+
+function updateNftRegistryCache(entries) {
+    const next = {};
+    if (Array.isArray(entries)) {
+        entries.forEach(entry => {
+            const registry = entry && entry.registry ? entry.registry : null;
+            const instanceId = registry && (registry.carInstanceId || registry.instanceId);
+            if (instanceId) next[String(instanceId)] = entry;
+        });
+    }
+    apexNftRegistryByInstance = next;
+    return next;
+}
+
+function upsertNftRegistryCache(registry, claim) {
+    if (!registry) return;
+    const instanceId = registry.carInstanceId || registry.instanceId || (claim && claim.carInstanceId);
+    if (!instanceId) return;
+    apexNftRegistryByInstance[String(instanceId)] = { registry, claim: claim || null };
+}
+
+function loadNftRegistry(force = false) {
+    if (!authoritativeEconomyEnabled() || !nftEntitlementsUiEnabled()) return Promise.resolve(null);
+    const userId = getApexUserId();
+    if (!force && apexNftRegistryLoadedForUser === userId) return Promise.resolve(apexNftRegistryByInstance);
+    if (apexNftRegistryPromise) return apexNftRegistryPromise;
+    apexNftRegistryLoading = true;
+    const promise = Promise.all([loadApexServerConfig(), fetch(`/api/nft/cars?userId=${encodeURIComponent(userId)}`, { headers: apexApiHeaders() })])
+        .then(([, response]) => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true) return null;
+            if (data.config) {
+                apexServerConfig = { ...(apexServerConfig || {}), nft: data.config };
+            }
+            if (data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+            updateNftRegistryCache(data.entries || []);
+            apexNftRegistryLoadedForUser = userId;
+            if (currentHubView === 'garage' && typeof renderGarageView === 'function') renderGarageView();
+            return data;
+        })
+        .catch(() => null)
+        .then(result => {
+            apexNftRegistryLoading = false;
+            if (apexNftRegistryPromise === promise) apexNftRegistryPromise = null;
+            return result;
+        });
+    apexNftRegistryPromise = promise;
+    return promise;
+}
+
+function wagerStakesPaused() {
+    return authoritativeEconomyEnabled() && !serverFeatureEnabled('wagerStakesEnabled', false);
+}
+function marketplacePaused() {
+    return authoritativeEconomyEnabled() && !serverFeatureEnabled('marketplaceEnabled', false);
+}
+function weeklyTournamentPaused() {
+    return authoritativeEconomyEnabled() && !serverFeatureEnabled('weeklyTournamentEnabled', false);
+}
+function showFeaturePausedModal(modalId, title, message) {
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 520px;">
+            <div class="settings-header">
+                <h2>${escapeHtml(title)}</h2>
+                <button class="settings-close-x" onclick="closeFeaturePausedModal('${safeDomId(modalId)}')">✖</button>
+            </div>
+            <div class="settings-body" style="padding: 20px;">
+                <div style="font-size: 40px; text-align: center; margin-bottom: 10px;">🛠️</div>
+                <p style="color: #cbd5e1; line-height: 1.55; text-align: center;">${escapeHtml(message)}</p>
+                <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; text-align: center;">No se ha descontado ningún saldo. El Modo Historia, las carreras oficiales y el ranking por circuito siguen disponibles.</p>
+            </div>
+            <div class="settings-footer">
+                <button class="btn-settings-save" onclick="closeFeaturePausedModal('${safeDomId(modalId)}')">ENTENDIDO</button>
+            </div>
+        </div>`;
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+    return modal;
+}
+function closeFeaturePausedModal(modalId) {
+    hubAudio.playClick();
+    const modal = document.getElementById(modalId);
+    if (modal) { modal.style.display = 'none'; modal.classList.add('hidden'); }
+}
+if (typeof window !== 'undefined') window.closeFeaturePausedModal = closeFeaturePausedModal;
+
+function claimServerAdReward(rewardType, instanceId, onResult, attemptsLeft = 6) {
+    return fetch('/api/ads/claim', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId(), rewardType, instanceId: instanceId || null })
+    })
+        .then(response => response.json().catch(() => null).then(data => ({ status: response.status, data })))
+        .then(({ status, data }) => {
+            if (data && data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+            if (data && data.ok) {
+                if (typeof onResult === 'function') onResult(data.result || { success: true });
+                return data.result;
+            }
+            if (status === 202 && attemptsLeft > 0) {
+                return new Promise(resolve => setTimeout(resolve, 1500))
+                    .then(() => claimServerAdReward(rewardType, instanceId, onResult, attemptsLeft - 1));
+            }
+            const res = (data && data.result) || { success: false, reason: (data && data.error) || 'ad_reward_unavailable' };
+            if (typeof onResult === 'function') onResult(res);
+            return res;
+        })
+        .catch(() => {
+            const res = { success: false, reason: 'ad_reward_unavailable' };
+            if (typeof onResult === 'function') onResult(res);
+            return res;
+        });
+}
+
+if (typeof window !== 'undefined') {
+    window.authoritativeEconomyEnabled = authoritativeEconomyEnabled;
+    window.applyAuthoritativeGarage = applyAuthoritativeGarage;
+    window.performServerEconomyAction = performServerEconomyAction;
+    window.syncAuthoritativeEconomy = syncAuthoritativeEconomy;
+    window.loadApexServerConfig = loadApexServerConfig;
 }
 
 function safeDomId(value) {
@@ -129,7 +436,8 @@ function sanitizeNetworkSlot(slot) {
         status: cleanText(slot.status, 30, 'LISTO'),
         stake,
         isAI: slot.isAI === true,
-        isPlayer: slot.isPlayer === true
+        isPlayer: slot.isPlayer === true,
+        isSelf: slot.isSelf === true
     };
 }
 
@@ -302,7 +610,7 @@ function renderHubHeader() {
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                         <span class="wallet-tag ${userData.walletConnected ? 'wallet-connected' : 'wallet-disconnected'}" title="Gestionar Billetera Web3 TON Connect" onclick="event.stopPropagation(); openWeb3WalletModal();">
-                            ${userData.walletConnected ? `💎 SIM ${escapeHtml(userData.walletAddress || '')}` : '💎 TON SIMULADO'}
+                            ${userData.walletConnected ? `💎 SIM ${escapeHtml(userData.walletAddress || '')}` : '💎 TON · COMPRAR $CR'}
                         </span>
                         <span class="beta-badge-pill" style="font-size: 9.5px; font-weight: 800; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(59, 130, 246, 0.25)); border: 1px solid #06b6d4; color: #38bdf8; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px; cursor: pointer;" onclick="event.stopPropagation(); openWeb3WalletModal();" title="Temporada 1 Fase Beta: Acumulación de $CR activa">⚡ BETA S1</span>
                         <span id="cloud-sync-badge" style="font-size: 9.5px; font-weight: 800; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.55); color: #6ee7b7; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px;" title="Tu garaje y tu saldo se guardan en el servidor: no los pierdes al cambiar de móvil">☁️ LOCAL</span>
@@ -313,7 +621,7 @@ function renderHubHeader() {
 
         <div class="hub-header-center">
             <div class="currency-pill credits-pill">
-                <span class="curr-icon">💰</span>
+                <span class="curr-icon cr-coin-wrap">${crCoinIconHtml('cr-coin-icon-header')}</span>
                 <span class="curr-amount" id="curr-credits">${credits.toLocaleString()} $CR</span>
             </div>
             <div class="currency-pill energy-pill" onclick="showHubView('garage')" title="Energía del coche equipado (+1⚡ cada 1h)" style="cursor: pointer;">
@@ -378,6 +686,7 @@ function showHubView(viewName) {
         renderMainHubView();
     } else if (viewName === 'garage') {
         renderGarageView();
+        loadNftRegistry(false);
     } else if (viewName === 'inventory') {
         renderInventoryView();
     } else if (viewName === 'crates') {
@@ -607,7 +916,7 @@ function renderStoryMissionCardHtml(chapter, track, trackStars, isUnlocked) {
         </div>
 
         <div class="mission-rewards-row">
-            <div class="reward-pill">💰 <strong>+${crReward} $CR</strong><br><span style="font-size: 9px; color: #94a3b8;">Tokens Recompensa</span></div>
+            <div class="reward-pill">${crCoinIconHtml()} <strong>+${crReward} $CR</strong><br><span style="font-size: 9px; color: #94a3b8;">Tokens Recompensa</span></div>
             <div class="reward-pill">⚡ <strong>+${xpReward} XP</strong><br><span style="font-size: 9px; color: #94a3b8;">Nivel Coche</span></div>
             <div class="reward-pill">⚙️ <strong>Drop NFT</strong><br><span style="font-size: 9px; color: #fde047;">${rarityName.toUpperCase()}</span></div>
         </div>
@@ -1021,13 +1330,18 @@ function launchRaceDirectly(trackId = 'rookie_ring', timeOfDay = 'day') {
         const equipped = getEquippedNftCar();
         if (equipped) {
             if (typeof refreshCarEnergy === 'function') refreshCarEnergy(equipped);
-            // Si la energía llegó a 0, recargar automáticamente para que nunca bloquee la partida al jugador
+            if (authoritativeEconomyEnabled() && (equipped.energy || 0) <= 0) {
+                showEnergyDepletedModal(equipped);
+                return;
+            }
+            // En desarrollo/tests se conserva la recarga automática histórica.
+            // En producción la sesión oficial descuenta la energía en servidor
+            // y este espejo local solo anticipa el mismo -1 para la interfaz.
             if ((equipped.energy || 0) <= 0) {
                 equipped.energy = equipped.maxEnergy || 10;
                 equipped.lastEnergyUpdate = Date.now();
             }
-            // Descontar 1⚡ de energía para disputar la carrera
-            equipped.energy = Math.max(1, (equipped.energy || 10) - 1);
+            equipped.energy = Math.max(authoritativeEconomyEnabled() ? 0 : 1, (equipped.energy || 10) - 1);
             if (equipped.energy === (equipped.maxEnergy || 10) - 1) {
                 equipped.lastEnergyUpdate = Date.now();
             }
@@ -1081,6 +1395,290 @@ window.returnToGameHub = function(targetView = 'main') {
 // -------------------------------------------------------------
 // 2. GARAJE DE VEHÍCULOS NFT (10 ESTADÍSTICAS & TALLER PRO)
 // -------------------------------------------------------------
+function isStarterClientCar(car) {
+    return Boolean(car && (car.rarity === 'starter' || car.instanceId === 'inst_starter_01' || car.modelId === 's_01'));
+}
+
+function getCarNftEntry(car) {
+    if (!car || !car.instanceId) return null;
+    const cached = apexNftRegistryByInstance[String(car.instanceId)];
+    if (cached && cached.registry) return cached;
+    const embedded = car.nftRegistry && typeof car.nftRegistry === 'object' ? car.nftRegistry : null;
+    const serial = Number(car.globalSerial || (embedded && embedded.serial) || car.nftRegistrySerial || 0);
+    const registryId = car.nftRegistryId || (embedded && embedded.registryId) || '';
+    if (!serial && !registryId) return null;
+    return {
+        registry: {
+            serial: serial || null,
+            registryId: registryId || (serial ? `APEX-CAR-${String(serial).padStart(6, '0')}` : ''),
+            carInstanceId: car.instanceId,
+            status: car.chainStatus || (embedded && embedded.status) || 'offchain',
+            nftIndex: Number.isFinite(Number(car.nftIndex)) ? Number(car.nftIndex) : (embedded && embedded.nftIndex != null ? Number(embedded.nftIndex) : (serial ? serial - 1 : null)),
+            metadataHash: (embedded && embedded.metadataHash) || car.nftMetadataHash || null,
+            collectionAddress: (embedded && embedded.collectionAddress) || null,
+            nftItemAddress: (embedded && embedded.nftItemAddress) || car.nftItemAddress || null,
+            ownerWalletAddress: car.ownerWalletAddress || null,
+            mintTxHash: car.mintTxHash || null,
+            snapshot: null
+        },
+        claim: null,
+        embedded: true
+    };
+}
+
+function shortChainValue(value, prefix = 10, suffix = 8) {
+    const text = String(value || '');
+    return text.length > prefix + suffix + 3 ? `${text.slice(0, prefix)}…${text.slice(-suffix)}` : text;
+}
+
+function nftRegistryStatusInfo(car, entry) {
+    if (isStarterClientCar(car)) {
+        return { key: 'starter', chip: 'NO-NFT', label: '🛡️ VEHÍCULO DE SERIE (F2P)' };
+    }
+    const registry = entry && entry.registry ? entry.registry : null;
+    if (!registry) {
+        return { key: 'unregistered', chip: 'OFF-CHAIN', label: '🏎️ COCHE JUGABLE · REGISTRO GLOBAL PENDIENTE' };
+    }
+    const registryLabel = registry.registryId || (registry.serial ? `APEX-CAR-${String(registry.serial).padStart(6, '0')}` : 'APEX-CAR');
+    if (registry.status === 'minted') {
+        return { key: 'minted', chip: `#${registry.serial}`, label: `💎 NFT TON · ${registryLabel}` };
+    }
+    if (registry.status === 'conversion_prepared') {
+        return { key: 'conversion_prepared', chip: `#${registry.serial}`, label: `🧾 ${registryLabel} · CONVERSIÓN PREPARADA (SIN ACUÑAR)` };
+    }
+    if (registry.status === 'mint_pending') {
+        return { key: 'mint_pending', chip: `#${registry.serial}`, label: `⏳ ${registryLabel} · ACUÑACIÓN EN CURSO` };
+    }
+    return { key: registry.status || 'offchain', chip: `#${registry.serial}`, label: `🆔 ${registryLabel} · OFF-CHAIN JUGABLE` };
+}
+
+function renderNftRegistryBoxHtml(car) {
+    if (isStarterClientCar(car)) return '';
+    const encodedInstanceId = encodeURIComponent(String(car.instanceId || ''));
+    const entry = getCarNftEntry(car);
+    const registry = entry && entry.registry ? entry.registry : null;
+    const claim = entry && entry.claim ? entry.claim : null;
+    if (!authoritativeEconomyEnabled()) {
+        return `
+            <div class="nft-registry-box nft-registry-box-local">
+                <div class="nft-registry-title">🧾 REGISTRO GLOBAL NFT</div>
+                <div class="nft-registry-text">Este coche es jugable, pero todavía no es un NFT. Su número global se asigna al sincronizar el garaje con el servidor.</div>
+            </div>`;
+    }
+    if (!registry) {
+        return `
+            <div class="nft-registry-box nft-registry-box-pending">
+                <div class="nft-registry-title">🧾 REGISTRO GLOBAL NFT</div>
+                <div class="nft-registry-text">${apexNftRegistryLoading ? 'Sincronizando el registro de servidor…' : 'Todavía no consta el número global de este coche en este dispositivo.'}</div>
+                <div class="nft-registry-actions">
+                    <button class="btn-nft-secondary" onclick="refreshNftRegistryFromGarage()" ${apexNftRegistryLoading ? 'disabled' : ''}>🔄 SINCRONIZAR REGISTRO</button>
+                </div>
+            </div>`;
+    }
+    const status = nftRegistryStatusInfo(car, entry);
+    const entitlementsEnabled = nftEntitlementsUiEnabled();
+    let actions = '';
+    if (registry.status === 'minted' || registry.status === 'mint_pending') {
+        actions = `<button class="btn-nft-secondary" onclick="openNftConversionModal('${encodedInstanceId}')">💎 VER NFT</button>`;
+    } else if (registry.status === 'conversion_prepared') {
+        actions = `
+            <button class="btn-nft-primary" onclick="openNftConversionModal('${encodedInstanceId}')">🧾 VER CONVERSIÓN</button>
+            <button class="btn-nft-secondary" onclick="cancelNftConversionPreparation('${encodedInstanceId}')">CANCELAR PREPARACIÓN</button>`;
+    } else if (entitlementsEnabled) {
+        actions = `<button class="btn-nft-primary" onclick="openNftConversionModal('${encodedInstanceId}')">💎 CONVERTIR EN NFT</button>`;
+    } else {
+        actions = `<button class="btn-nft-secondary" disabled>CONVERSIÓN EN PAUSA</button>`;
+    }
+    return `
+        <div class="nft-registry-box nft-registry-box-${escapeHtml(status.key)}">
+            <div class="nft-registry-title">🧾 ${escapeHtml(registry.registryId || 'REGISTRO GLOBAL')} · ÍNDICE NFT ${registry.nftIndex != null ? escapeHtml(registry.nftIndex) : '—'}</div>
+            <div class="nft-registry-text">${escapeHtml(status.label.replace(/^[^A-ZÁÉÍÓÚ0-9]+/, ''))}${claim ? ` · Claim <code>${escapeHtml(claim.claimId || '')}</code> (${escapeHtml(claim.status || '')})` : ''}</div>
+            <div class="nft-registry-actions">${actions}</div>
+        </div>`;
+}
+
+function refreshNftRegistryFromGarage() {
+    hubAudio.playClick();
+    showHubToast('🔄 Sincronizando el registro global de coches…');
+    loadNftRegistry(true).then(data => {
+        showHubToast(data ? '✅ Registro global sincronizado.' : '⚠️ No se pudo sincronizar el registro ahora.');
+    });
+}
+
+function findCurrentGarageCar(instanceId) {
+    try {
+        const userData = loadNftUserData();
+        return (userData.garage || []).find(car => String(car.instanceId) === String(instanceId)) || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function applyNftApiResult(data) {
+    if (!data) return;
+    if (data.config) apexServerConfig = { ...(apexServerConfig || {}), nft: data.config };
+    if (data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+    if (data.registry) upsertNftRegistryCache(data.registry, data.claim || null);
+    if (Array.isArray(data.entries)) updateNftRegistryCache(data.entries);
+    apexNftRegistryLoadedForUser = getApexUserId();
+    if (currentHubView === 'garage') renderGarageView();
+}
+
+function openNftConversionModal(encodedInstanceId) {
+    hubAudio.playClick();
+    const instanceId = decodeURIComponent(String(encodedInstanceId || ''));
+    const car = findCurrentGarageCar(instanceId);
+    if (!car || isStarterClientCar(car)) {
+        showHubToast('⚠️ Ese coche no puede convertirse en NFT.');
+        return;
+    }
+    let modal = document.getElementById('nft-conversion-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'nft-conversion-modal';
+        modal.className = 'hub-modal-overlay';
+        document.body.appendChild(modal);
+    }
+    const entry = getCarNftEntry(car);
+    if (!entry && authoritativeEconomyEnabled()) {
+        modal.innerHTML = `
+            <div class="settings-dialog nft-conversion-dialog">
+                <div class="settings-header"><h2>💎 CONVERTIR EN NFT</h2><button class="settings-close-x" onclick="closeNftConversionModal()">✖</button></div>
+                <div class="settings-body nft-conversion-body"><p>Sincronizando primero el registro global de este coche…</p></div>
+            </div>`;
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+        loadNftRegistry(true).then(() => openNftConversionModal(encodeURIComponent(instanceId)));
+        return;
+    }
+
+    const registry = entry && entry.registry ? entry.registry : null;
+    const claim = entry && entry.claim ? entry.claim : null;
+    const config = getNftPublicConfig() || {};
+    const snapshot = (registry && registry.snapshot) || {};
+    const baseStats = snapshot.baseStats || car.stats || {};
+    const basePoints = Object.values(baseStats).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const prepared = registry && registry.status === 'conversion_prepared';
+    const minted = registry && registry.status === 'minted';
+    const mintPending = registry && registry.status === 'mint_pending';
+    const statusInfo = nftRegistryStatusInfo(car, entry);
+    const claimAmount = config.claimAmountTon || '0.04';
+    const network = config.network || 'ton-testnet';
+    const mintingEnabled = config.mintingEnabled === true;
+    const metadataUrl = claim && claim.metadataUri ? String(claim.metadataUri) : (registry && registry.serial && prepared ? `/api/nft/metadata/${registry.serial}` : '');
+    const primaryAction = minted
+        ? '<button class="btn-settings-save" onclick="closeNftConversionModal()">CERRAR</button>'
+        : (prepared || mintPending
+            ? `<button class="btn-settings-save" onclick="closeNftConversionModal()">ENTENDIDO</button><button class="btn-nft-secondary" onclick="cancelNftConversionPreparation('${encodeURIComponent(instanceId)}')">CANCELAR PREPARACIÓN</button>`
+            : `<button class="btn-settings-save btn-nft-prepare" onclick="prepareNftConversion('${encodeURIComponent(instanceId)}')" ${!nftEntitlementsUiEnabled() ? 'disabled' : ''}>PREPARAR CONVERSIÓN</button><button class="btn-nft-secondary" onclick="closeNftConversionModal()">AHORA NO</button>`);
+
+    modal.innerHTML = `
+        <div class="settings-dialog nft-conversion-dialog">
+            <div class="settings-header">
+                <div>
+                    <h2 style="margin:0;">💎 ${minted ? 'NFT DE TON' : 'CONVERTIR EN NFT'}</h2>
+                    <div class="nft-modal-subtitle">${escapeHtml(statusInfo.label)}</div>
+                </div>
+                <button class="settings-close-x" onclick="closeNftConversionModal()">✖</button>
+            </div>
+            <div class="settings-body nft-conversion-body">
+                <div class="nft-modal-car-preview">${typeof generateCarSvg === 'function' ? generateCarSvg(car, 260, 124) : ''}</div>
+                <h3>${escapeHtml(snapshot.name || car.name || 'Apex GT')}</h3>
+                <div class="nft-modal-grid">
+                    <div><span>Registro global</span><strong>${escapeHtml(registry ? (registry.registryId || '—') : 'Pendiente')}</strong></div>
+                    <div><span>Serie / índice NFT</span><strong>${registry && registry.serial ? `#${escapeHtml(registry.serial)} / ${escapeHtml(registry.nftIndex != null ? registry.nftIndex : '—')}` : '—'}</strong></div>
+                    <div><span>Modelo y rareza</span><strong>${escapeHtml(snapshot.modelId || car.modelId || '—')} · ${escapeHtml(snapshot.rarity || car.rarity || '—')}</strong></div>
+                    <div><span>Color base</span><strong>${escapeHtml(snapshot.colorName || car.colorName || '—')}</strong></div>
+                    <div><span>Puntos base fijados</span><strong>${escapeHtml(basePoints)} PTS</strong></div>
+                    <div><span>Progreso en servidor</span><strong>Nivel ${escapeHtml(car.level || 1)} · ${escapeHtml(car.xp || 0)} XP</strong></div>
+                    <div><span>Red prevista</span><strong>${escapeHtml(network === 'ton-mainnet' ? 'TON mainnet' : 'TON testnet')}</strong></div>
+                    <div><span>Regalía de colección</span><strong>${escapeHtml(config.royaltyPercent != null ? config.royaltyPercent : 5)}%</strong></div>
+                </div>
+                ${registry && registry.metadataHash ? `<div class="nft-modal-hash">Huella de metadatos base: <code>${escapeHtml(shortChainValue(registry.metadataHash, 14, 10))}</code></div>` : ''}
+                ${claim ? `<div class="nft-modal-claim">Claim único: <code>${escapeHtml(claim.claimId || '')}</code> · Estado: <strong>${escapeHtml(claim.status || '')}</strong>${metadataUrl ? `<br><a href="${escapeHtml(metadataUrl)}" target="_blank" rel="noopener">Ver metadatos públicos previstos</a>` : ''}</div>` : ''}
+                ${minted ? `<div class="nft-modal-note nft-modal-note-ok">✅ Este coche ya consta acuñado. ${registry.nftItemAddress ? `Ítem: <code>${escapeHtml(shortChainValue(registry.nftItemAddress))}</code>` : ''}</div>` : `
+                    <div class="nft-modal-note">
+                        <strong>Importante:</strong> preparar la conversión reserva este coche y su identidad única, pero <strong>todavía no lo acuña ni te cobra TON</strong>.
+                        El coche sigue siendo jugable. Cuando el contrato y la verificación de wallet estén activos, firmarás desde tu wallet TON y pagarás el coste de red/reservas (referencia actual: ${escapeHtml(claimAmount)} TON, sujeto a medición en testnet).
+                    </div>
+                    <div class="nft-modal-note">
+                        Estado de acuñación: <strong>${mintingEnabled ? 'configurada, pendiente de vincular una wallet verificada' : 'desactivada hasta completar contrato, wallet verificada y pruebas en testnet'}</strong>.
+                        Ninguna pantalla legítima te pedirá tu frase semilla.
+                    </div>`}
+            </div>
+            <div class="settings-footer nft-modal-footer">${primaryAction}</div>
+        </div>`;
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+}
+
+function closeNftConversionModal() {
+    hubAudio.playClick();
+    const modal = document.getElementById('nft-conversion-modal');
+    if (modal) { modal.style.display = 'none'; modal.classList.add('hidden'); }
+}
+
+function prepareNftConversion(encodedInstanceId) {
+    const instanceId = decodeURIComponent(String(encodedInstanceId || ''));
+    if (!authoritativeEconomyEnabled()) {
+        showHubToast('⚠️ La conversión NFT requiere sincronizar con el servidor.');
+        return;
+    }
+    hubAudio.playClick();
+    const button = document.querySelector('.btn-nft-prepare');
+    if (button) { button.disabled = true; button.textContent = 'PREPARANDO…'; }
+    fetch('/api/nft/prepare-conversion', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId(), instanceId })
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true) {
+                alert('⚠️ No se pudo preparar la conversión NFT. El coche sigue jugable y no se ha cobrado nada.');
+                if (button) { button.disabled = false; button.textContent = 'PREPARAR CONVERSIÓN'; }
+                return;
+            }
+            applyNftApiResult(data);
+            openNftConversionModal(encodeURIComponent(instanceId));
+            showHubToast(data.alreadyMinted ? '💎 Este coche ya consta acuñado.' : '🧾 Conversión NFT preparada. Todavía no se ha acuñado ni cobrado TON.');
+        })
+        .catch(() => {
+            alert('⚠️ Sin conexión con el servidor. No se ha preparado ni cobrado nada.');
+            if (button) { button.disabled = false; button.textContent = 'PREPARAR CONVERSIÓN'; }
+        });
+}
+
+function cancelNftConversionPreparation(encodedInstanceId) {
+    const instanceId = decodeURIComponent(String(encodedInstanceId || ''));
+    if (!confirm('¿Cancelar la preparación de conversión? El coche seguirá en tu garaje como coche jugable off-chain y podrás prepararlo otra vez.')) return;
+    hubAudio.playClick();
+    fetch('/api/nft/cancel-conversion', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId(), instanceId })
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true) {
+                alert('⚠️ No se pudo cancelar la preparación. Si ya hubiera una acuñación enviada, deberá resolverse primero en servidor.');
+                return;
+            }
+            applyNftApiResult(data);
+            closeNftConversionModal();
+            showHubToast('🧾 Preparación NFT cancelada. El coche sigue jugable.');
+        })
+        .catch(() => alert('⚠️ Sin conexión con el servidor. La preparación no ha cambiado.'));
+}
+
+if (typeof window !== 'undefined') {
+    window.refreshNftRegistryFromGarage = refreshNftRegistryFromGarage;
+    window.openNftConversionModal = openNftConversionModal;
+    window.closeNftConversionModal = closeNftConversionModal;
+    window.prepareNftConversion = prepareNftConversion;
+    window.cancelNftConversionPreparation = cancelNftConversionPreparation;
+}
+
 function renderGarageView() {
     const container = document.getElementById('view-garage');
     if (!container) return;
@@ -1136,6 +1734,8 @@ function renderGarageView() {
                 const xpPct = Math.min(100, Math.round((xp / xpNeeded) * 100));
 
                 if (typeof refreshCarEnergy === 'function') refreshCarEnergy(car);
+                const nftEntry = getCarNftEntry(car);
+                const nftStatus = nftRegistryStatusInfo(car, nftEntry);
                 const carEnergy = car.energy ?? 10;
                 const carMaxEnergy = car.maxEnergy ?? 10;
                 const timeUntilNext = (typeof getTimeUntilNextEnergy === 'function' ? getTimeUntilNextEnergy(car) : null);
@@ -1145,9 +1745,7 @@ function renderGarageView() {
                         <div class="car-card-top">
                             <span class="rarity-badge badge-${car.rarity}">${rarityLabel}</span>
                             <div class="card-chips-group">
-                                ${car.isNft === false
-                                    ? `<span class="mint-chip" style="background:#334155;color:#cbd5e1;padding:1px 6px;border-radius:4px;font-weight:900;">NO-NFT</span>`
-                                    : `<span class="mint-chip">#${car.mintNumber}</span>`}
+                                <span class="mint-chip mint-chip-${nftStatus.key}">${escapeHtml(nftStatus.chip)}</span>
                                 <span class="level-chip">⭐ NIV. ${lvl}</span>
                                 <span class="energy-chip ${carEnergy <= 1 ? 'low' : ''}">⚡ ${carEnergy}/${carMaxEnergy}</span>
                                 <span class="points-chip">🏆 ${perf.totalPoints} PTS</span>
@@ -1164,8 +1762,9 @@ function renderGarageView() {
                         <div class="car-card-info">
                             <div class="car-info-headline">
                                 <h4 class="car-name">${car.name}</h4>
-                                <div class="token-hash-label">${car.isNft === false ? '🛡️ VEHÍCULO DE SERIE (F2P)' : `🆔 ID LOCAL ${car.tokenHash}`}</div>
+                                <div class="token-hash-label">${escapeHtml(nftStatus.label)}</div>
                             </div>
+                            ${renderNftRegistryBoxHtml(car)}
 
                             <!-- Barra de Nivel y XP del Vehículo (Hasta Nivel 50) -->
                             <div class="car-xp-box">
@@ -1296,10 +1895,20 @@ function setGarageFilter(rarity) {
 
 function equipNftCar(instanceId) {
     hubAudio.playClick();
-    const userData = loadNftUserData();
-    userData.equippedInstanceId = instanceId;
-    saveNftUserData(userData);
-    renderGarageView();
+    const finish = (res) => {
+        if (res && res.success === false) {
+            alert('No se pudo equipar ese coche en tu garaje de servidor.');
+            syncAuthoritativeEconomy().then(() => renderGarageView());
+            return;
+        }
+        renderGarageView();
+    };
+    return runAuthoritativeEconomyAction('equip_car', { instanceId }, () => {
+        const userData = loadNftUserData();
+        userData.equippedInstanceId = instanceId;
+        saveNftUserData(userData);
+        return { success: true };
+    }, finish);
 }
 
 // -------------------------------------------------------------
@@ -1475,7 +2084,7 @@ function openTuningModal(instanceId) {
                                     <div class="badge-stage-max">⭐ NIVEL MÁXIMO COMPLETADO (STAGE 5)</div>
                                 ` : `
                                     <div class="part-cost-info">
-                                        <span class="cost-item">💰 ${(nextStage.cr || 0).toLocaleString()} $CR</span>
+                                        <span class="cost-item">${crCoinIconHtml()} ${(nextStage.cr || 0).toLocaleString()} $CR</span>
                                         ${nextStage.gems > 0 ? `<span class="cost-item cost-gems">💎 ${nextStage.gems} TON</span>` : ''}
                                     </div>
                                     <button class="btn-upgrade-branch ${canUpgrade ? 'btn-can-afford' : 'btn-cannot-afford'}" 
@@ -1503,7 +2112,7 @@ function openTuningModal(instanceId) {
 
 function applyStatBranchUpgrade(instanceId, branchKey) {
     hubAudio.playClick();
-    const res = upgradeCarStatBranch(instanceId, branchKey);
+    const finishUpgrade = (res) => {
     if (!res.success) {
         if (res.reason === 'credits_insufficient' || res.reason === 'gems_insufficient') {
             alert(t('shop_not_enough'));
@@ -1519,6 +2128,8 @@ function applyStatBranchUpgrade(instanceId, branchKey) {
     renderHubHeader();
     openTuningModal(instanceId);
     renderGarageView();
+    };
+    return runAuthoritativeEconomyAction('upgrade_branch', { instanceId, branchKey }, () => upgradeCarStatBranch(instanceId, branchKey), finishUpgrade);
 }
 
 function applyPartUpgrade(instanceId, partKey) {
@@ -1548,6 +2159,22 @@ function formatCrateRatesInfo(crateKey) {
     return `${fmt(rates.common)}% ${escapeHtml(t('crate_rarity_common'))} • ${fmt(rates.uncommon)}% ${escapeHtml(t('crate_rarity_uncommon'))} • ${fmt(rates.rare)}% ${escapeHtml(t('crate_rarity_rare'))} • ${fmt(rates.legendary)}% ${escapeHtml(t('crate_rarity_legendary'))}<span class="crate-parts-bonus">${escapeHtml(partsText)}</span>`;
 }
 
+function renderCratePaymentActionHtml(crateId) {
+    const safeCrateId = safeDomId(crateId || '');
+    if (typeof isTelegramPurchaseContext === 'function' && isTelegramPurchaseContext()) {
+        return `
+            <button class="btn-open-box btn-stars-crate" onclick="openWeb3WalletModal()">
+                ⭐ COMPRAR $CR CON STARS
+                <span class="crate-stars-note">Después abre el cofre con tu saldo $CR</span>
+            </button>`;
+    }
+    return `
+        <button class="btn-open-box btn-ton-crate" onclick="handleBuyCrateWithTon('${safeCrateId}')">
+            💎 PAGAR CON TON
+            <span class="crate-ton-estimate" id="crate-ton-price-${safeCrateId}">Consultando cotización…</span>
+        </button>`;
+}
+
 function renderCratesView() {
     const container = document.getElementById('view-crates');
     if (!container) return;
@@ -1573,10 +2200,13 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('bronze', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${formatCrateRatesInfo('bronze')}</div>
-                <div class="crate-cost-pill">💰 ${NFT_CRATES.bronze.cost.toLocaleString()} $CR</div>
-                <button class="btn-open-box btn-bronze-action" onclick="triggerCrateOpening('bronze')">
-                    ${t('btn_open_crate')}
-                </button>
+                <div class="crate-cost-pill">${crCoinIconHtml()} ${NFT_CRATES.bronze.cost.toLocaleString()} $CR <span class="crate-cost-usdt">· 1 USDT</span></div>
+                <div class="crate-action-buttons">
+                    <button class="btn-open-box btn-bronze-action" onclick="triggerCrateOpening('bronze')">
+                        ${t('btn_open_crate')}
+                    </button>
+                    ${renderCratePaymentActionHtml('bronze')}
+                </div>
             </div>
 
             <!-- Caja Plata (Clubman) -->
@@ -1589,10 +2219,13 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('silver', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${formatCrateRatesInfo('silver')}</div>
-                <div class="crate-cost-pill">💰 ${NFT_CRATES.silver.cost.toLocaleString()} $CR</div>
-                <button class="btn-open-box btn-silver-action" onclick="triggerCrateOpening('silver')">
-                    ${t('btn_open_crate')}
-                </button>
+                <div class="crate-cost-pill">${crCoinIconHtml()} ${NFT_CRATES.silver.cost.toLocaleString()} $CR <span class="crate-cost-usdt">· 5 USDT</span></div>
+                <div class="crate-action-buttons">
+                    <button class="btn-open-box btn-silver-action" onclick="triggerCrateOpening('silver')">
+                        ${t('btn_open_crate')}
+                    </button>
+                    ${renderCratePaymentActionHtml('silver')}
+                </div>
             </div>
 
             <!-- Caja Oro (Apex Pro NFT) -->
@@ -1605,10 +2238,13 @@ function renderCratesView() {
                     ${typeof generateChestSvg === 'function' ? generateChestSvg('gold', 96, 84) : '<div class="chest-icon">🧰</div>'}
                 </div>
                 <div class="crate-rates-info">${formatCrateRatesInfo('gold')}</div>
-                <div class="crate-cost-pill">💰 ${NFT_CRATES.gold.cost.toLocaleString()} $CR</div>
-                <button class="btn-open-box btn-gold-action" onclick="triggerCrateOpening('gold')">
-                    ${t('btn_open_crate')}
-                </button>
+                <div class="crate-cost-pill">${crCoinIconHtml()} ${NFT_CRATES.gold.cost.toLocaleString()} $CR <span class="crate-cost-usdt">· 25 USDT</span></div>
+                <div class="crate-action-buttons">
+                    <button class="btn-open-box btn-gold-action" onclick="triggerCrateOpening('gold')">
+                        ${t('btn_open_crate')}
+                    </button>
+                    ${renderCratePaymentActionHtml('gold')}
+                </div>
             </div>
         </div>
 
@@ -1628,19 +2264,23 @@ function renderCratesView() {
             </div>
         </div>
     `;
+
+    if ((!isTelegramPurchaseContext || !isTelegramPurchaseContext()) && typeof loadTonPurchaseCatalog === 'function') loadTonPurchaseCatalog();
 }
 
-// Ejecutar la apertura de caja con animación y fanfarria
-function triggerCrateOpening(crateKey) {
-    const res = openMysteryCrate(crateKey);
-    if (!res.success) {
-        if (res.reason === 'credits_insufficient' || res.reason === 'gems_insufficient') {
+// Ejecutar la apertura de caja con animación y fanfarria. El segundo
+// parámetro solo lo usa el claim TON ya verificado en servidor.
+function triggerCrateOpening(crateKey, options = {}) {
+    const finishCrateOpening = (res) => {
+    if (!res || !res.success) {
+        if (res && res.alreadyApplied) return res;
+        if (res && (res.reason === 'credits_insufficient' || res.reason === 'gems_insufficient')) {
             alert(t('shop_not_enough'));
             showHubView('shop');
         } else {
-            alert(res.reason);
+            alert((res && res.reason) || 'No se pudo abrir el cofre');
         }
-        return;
+        return res || { success: false, reason: 'crate_open_failed' };
     }
 
     renderHubHeader();
@@ -1681,6 +2321,8 @@ function triggerCrateOpening(crateKey) {
         }
 
         const car = res.car;
+        const rewardNftEntry = getCarNftEntry(car);
+        const rewardRegistry = rewardNftEntry && rewardNftEntry.registry ? rewardNftEntry.registry : null;
         const perf = calculateCarPerformance(car);
         const eff = perf.effectiveStats;
         resultBox.innerHTML = `
@@ -1702,8 +2344,8 @@ function triggerCrateOpening(crateKey) {
                 </div>
 
                 <div class="reward-meta-row">
-                    <span>SERIE LOCAL: #${car.mintNumber}</span>
-                    <span>ID LOCAL: ${car.tokenHash}</span>
+                    <span>${rewardRegistry ? `SERIE GLOBAL: #${escapeHtml(rewardRegistry.serial)}` : 'SERIE GLOBAL: AL SINCRONIZAR'}</span>
+                    <span>${rewardRegistry ? escapeHtml(rewardRegistry.registryId) : 'COCHE JUGABLE OFF-CHAIN'}</span>
                 </div>
 
                 <div class="reward-10stats-grid">
@@ -1732,6 +2374,15 @@ function triggerCrateOpening(crateKey) {
             </div>
         `;
     }, 1200);
+
+    return res;
+    };
+    if (options && options.serverResult) return finishCrateOpening(options.serverResult);
+    if (authoritativeEconomyEnabled() && !(options && options.prepaidTonOrderId)) {
+        performServerEconomyAction('open_crate', { crateKey }).then(finishCrateOpening);
+        return { success: true, pending: true };
+    }
+    return finishCrateOpening(openMysteryCrate(crateKey, options || {}));
 }
 
 function closeUnboxingModal(targetView) {
@@ -1758,7 +2409,7 @@ function renderShopView() {
         <div class="shop-sections-wrap">
             <!-- Paquetes de fondos de prueba (SOLO VISIBLES EN DESARROLLO, NUNCA EN LANZAMIENTO PÚBLICO) -->
             ${(typeof isProductionRelease === 'function' ? isProductionRelease() : true) ? '' : `
-            <h3 class="shop-section-title">💰 ${t('shop_coins_title')} (MODO DESARROLLO)</h3>
+            <h3 class="shop-section-title">${crCoinIconHtml('cr-coin-icon-title')} ${t('shop_coins_title')} (MODO DESARROLLO)</h3>
             <div class="shop-items-grid">
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🪙</div>
@@ -1767,7 +2418,7 @@ function renderShopView() {
                     <button class="btn-buy-item" onclick="addFunds(5000, 0)">${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
-                    <div class="shop-item-icon">💰</div>
+                    <div class="shop-item-icon">${crCoinIconHtml('cr-coin-icon-shop')}</div>
                     <div class="shop-item-name">Cofre de 25,000 $CR</div>
                     <div class="shop-item-price">GRATIS (TESTING)</div>
                     <button class="btn-buy-item" onclick="addFunds(25000, 0)">${t('shop_buy')}</button>
@@ -1789,21 +2440,21 @@ function renderShopView() {
                     <div class="shop-item-icon">🧪</div>
                     <div class="shop-item-name">1x Cápsula Nitro N₂O</div>
                     <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">1 cápsula individual (+4.0s boost)</div>
-                    <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.05).toLocaleString() : '50'} $CR</div>
+                    <div class="shop-item-price">${crCoinIconHtml()} ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.05).toLocaleString() : '50'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(1)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🧪🧪</div>
                     <div class="shop-item-name">5x Pack Nitros N₂O</div>
                     <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Ahorra 20% en tokens</div>
-                    <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.20).toLocaleString() : '200'} $CR</div>
+                    <div class="shop-item-price">${crCoinIconHtml()} ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.20).toLocaleString() : '200'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(5)">🛒 ${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">📦🧪</div>
                     <div class="shop-item-name">20x Stash Pro Liga</div>
                     <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">Pack torneo (Ahorra 30%)</div>
-                    <div class="shop-item-price">💰 ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.70).toLocaleString() : '700'} $CR</div>
+                    <div class="shop-item-price">${crCoinIconHtml()} ${typeof calcTokensFromUsdt === 'function' ? calcTokensFromUsdt(0.70).toLocaleString() : '700'} $CR</div>
                     <button class="btn-buy-item" onclick="handleBuyNitro(20)">🛒 ${t('shop_buy')}</button>
                 </div>
             </div>
@@ -1812,26 +2463,26 @@ function renderShopView() {
             <div class="shop-items-grid">
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🔥</div>
-                    <div class="shop-item-name">Turbocompresor Nivel 2 (+15 KM/H)</div>
+                    <div class="shop-item-name">Turbocompresor Twin-Scroll (componente de taller)</div>
                     <div class="shop-item-price">1,200 $CR</div>
                     <button class="btn-buy-item" onclick="buyUpgrade('turbo', 1200)">${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🏎️</div>
-                    <div class="shop-item-name">Neumáticos Slick Compuesto Blando (+0.3G)</div>
+                    <div class="shop-item-name">Neumáticos Slick GT3 (componente de taller)</div>
                     <div class="shop-item-price">1,500 $CR</div>
                     <button class="btn-buy-item" onclick="buyUpgrade('tires', 1500)">${t('shop_buy')}</button>
                 </div>
                 <div class="shop-item-card">
                     <div class="shop-item-icon">🛑</div>
-                    <div class="shop-item-name">Frenos Cerámicos Carbono Apex Pro</div>
+                    <div class="shop-item-name">Pinzas Apex Monobloque (componente de taller)</div>
                     <div class="shop-item-price">1,800 $CR</div>
                     <button class="btn-buy-item" onclick="buyUpgrade('brakes', 1800)">${t('shop_buy')}</button>
                 </div>
             </div>
 
             <!-- Tablón de Mercado P2P de la Comunidad Telegram -->
-            <div style="margin: 20px 0 24px; padding: 16px 20px; background: linear-gradient(135deg, rgba(0, 245, 212, 0.14), rgba(0, 187, 249, 0.14)); border: 1.5px solid #00f5d4; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 18px rgba(0, 245, 212, 0.18);">
+            <div class="shop-marketplace-banner" style="margin: 20px 0 24px; padding: 16px 20px; background: linear-gradient(135deg, rgba(0, 245, 212, 0.14), rgba(0, 187, 249, 0.14)); border: 1.5px solid #00f5d4; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 18px rgba(0, 245, 212, 0.18);">
                 <div>
                     <h4 style="margin: 0 0 4px; color: #00f5d4; font-size: 16px; font-weight: 900;">🛒 MERCADO P2P DE LA COMUNIDAD TELEGRAM</h4>
                     <p style="margin: 0; font-size: 12px; color: #cbd5e1;">Compra y vende piezas mecánicas sobrantes (frenos, turbos, bujías) con otros pilotos en vivo por tokens $CR.</p>
@@ -1861,7 +2512,7 @@ function renderShopView() {
                             }).join('')}
                         </div>
                         <div class="kit-price-row">
-                            <span class="kit-price">💰 ${kit.costCr.toLocaleString()} $CR</span>
+                            <span class="kit-price">${crCoinIconHtml()} ${kit.costCr.toLocaleString()} $CR</span>
                             <button class="btn-buy-kit" onclick="buyPartsKitShop('${kit.id}')">
                                 🛒 COMPRAR PACK
                             </button>
@@ -1879,7 +2530,7 @@ function renderShopView() {
                         <div class="shop-item-icon">${ep.icon}</div>
                         <div class="shop-item-name">${ep.name}</div>
                         <div class="shop-item-desc" style="font-size: 11px; color: #94a3b8; margin: 4px 0 8px;">${ep.desc}</div>
-                        <div class="shop-item-price">💰 ${ep.costCr.toLocaleString()} $CR</div>
+                        <div class="shop-item-price">${crCoinIconHtml()} ${ep.costCr.toLocaleString()} $CR</div>
                         <button class="btn-buy-item" onclick="buyEnergyPackShop('${ep.id}')">⚡ RECARGAR</button>
                     </div>
                 `).join('') : ''}
@@ -1890,7 +2541,7 @@ function renderShopView() {
 
 function buyEnergyPackShop(packKey) {
     hubAudio.playClick();
-    const res = buyEnergyPack(packKey);
+    const finishEnergyPack = (res) => {
     if (!res.success) {
         if (res.reason === 'credits_insufficient') {
             alert(t('shop_not_enough'));
@@ -1905,7 +2556,9 @@ function buyEnergyPackShop(packKey) {
     hubAudio.playOpenCrate();
     renderHubHeader();
     renderShopView();
-    alert(`⚡ ¡${res.pack.name} recargada con éxito en ${res.car.name}! Nueva energía: ${res.newEnergy}/10.`);
+    alert(`⚡ ¡${res.pack.name} recargada con éxito en ${res.car.name}! Nueva energía: ${res.newEnergy}/${res.car.maxEnergy || 10}.`);
+    };
+    return runAuthoritativeEconomyAction('buy_energy_pack', { packKey }, () => buyEnergyPack(packKey), finishEnergyPack);
 }
 
 // ===== INTEGRACIÓN OFICIAL ADSGRAM (REWARDED VIDEO ADS) =====
@@ -1929,8 +2582,10 @@ function launchAdsgramRewardedAd(onSuccess, onFallback) {
                 console.warn('Adsgram cerrado o sin anuncio disponible:', err);
                 if (err && err.done === false) {
                     alert('⚠️ Para recibir la recompensa debes ver el anuncio completo.');
-                } else {
-                    if (typeof onFallback === 'function') onFallback();
+                } else if (authoritativeEconomyEnabled()) {
+                    alert('📺 No hay un anuncio verificado disponible ahora. No se ha concedido ninguna recompensa.');
+                } else if (typeof onFallback === 'function') {
+                    onFallback();
                 }
             });
             return true;
@@ -1938,7 +2593,11 @@ function launchAdsgramRewardedAd(onSuccess, onFallback) {
             console.error('Error al invocar Adsgram:', e);
         }
     }
-    if (typeof onFallback === 'function') onFallback();
+    if (authoritativeEconomyEnabled()) {
+        alert('📺 Adsgram no está disponible en este entorno. Las recompensas solo se conceden tras la confirmación del servidor de Adsgram.');
+    } else if (typeof onFallback === 'function') {
+        onFallback();
+    }
     return false;
 }
 
@@ -1956,12 +2615,21 @@ function openRewardedAdModal(instanceId = null) {
     }
 
     launchAdsgramRewardedAd(() => {
-        const res = rechargeEnergyWithAd(car.instanceId);
-        if (res.success) {
-            hubAudio.playOpenCrate();
-            renderHubHeader();
-            renderGarageView();
-            alert(`⚡ ¡Anuncio completado! Recuperaste +1 punto de energía para ${res.car.name}. Ahora tienes ${res.newEnergy}/10.`);
+        const finishAdEnergy = (res) => {
+            if (res && res.success) {
+                hubAudio.playOpenCrate();
+                renderHubHeader();
+                renderGarageView();
+                alert(`⚡ ¡Anuncio verificado! Recuperaste +1 punto de energía para ${res.car.name}. Ahora tienes ${res.newEnergy}/${res.car.maxEnergy || 10}.`);
+            } else {
+                alert('📺 El anuncio terminó, pero el servidor aún no ha recibido la confirmación de Adsgram. No se ha concedido energía todavía.');
+            }
+        };
+        if (authoritativeEconomyEnabled()) {
+            showHubToast('📺 Verificando la recompensa con Adsgram…');
+            claimServerAdReward('energy', car.instanceId, finishAdEnergy);
+        } else {
+            finishAdEnergy(rechargeEnergyWithAd(car.instanceId));
         }
     }, () => {
         showLocalAdModalForEnergy(car);
@@ -1969,6 +2637,10 @@ function openRewardedAdModal(instanceId = null) {
 }
 
 function showLocalAdModalForEnergy(car) {
+    if (authoritativeEconomyEnabled()) {
+        alert('📺 Las recompensas locales de anuncio están desactivadas. Solo cuentan los anuncios verificados por Adsgram en el servidor.');
+        return;
+    }
     let modal = document.getElementById('ad-reward-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -2285,8 +2957,8 @@ window.resetOracleDefaultPrice = resetOracleDefaultPrice;
 
 function handleBuyNitro(amount = 1) {
     hubAudio.playClick();
-    if (typeof buyNitrosWithTokens !== 'function') return;
-    const res = buyNitrosWithTokens(amount);
+    if (typeof buyNitrosWithTokens !== 'function' && !authoritativeEconomyEnabled()) return;
+    const finishBuyNitro = (res) => {
     if (res.success) {
         hubAudio.playOpenCrate();
         renderHubHeader();
@@ -2294,8 +2966,10 @@ function handleBuyNitro(amount = 1) {
         if (display) display.textContent = `${res.newNitros} Cápsulas`;
         alert(`🧪 ¡Compraste +${amount} Cápsula(s) de Nitro por ${res.cost} $CR! Tienes ${res.newNitros} en tu inventario.`);
     } else {
-        alert('🪙 Saldo insuficiente de tokens $CR.');
+        alert(res.reason === 'credits_insufficient' ? '🪙 Saldo insuficiente de tokens $CR.' : 'No se pudo comprar el nitro en el servidor.');
     }
+    };
+    return runAuthoritativeEconomyAction('buy_nitros', { amount }, () => buyNitrosWithTokens(amount), finishBuyNitro);
 }
 window.handleBuyNitro = handleBuyNitro;
 
@@ -2304,14 +2978,21 @@ function startRewardedAdForNitro() {
     closeNitroRefillModal();
 
     launchAdsgramRewardedAd(() => {
-        if (typeof addNitroWithAd === 'function') {
-            const res = addNitroWithAd();
-            if (res.success) {
+        const finishAdNitro = (res) => {
+            if (res && res.success) {
                 hubAudio.playOpenCrate();
                 closeRewardedAdModal();
                 renderHubHeader();
-                alert(`🧪 ¡Anuncio completado! Ganaste +1 Cápsula de Nitro N₂O. Tienes ${res.newNitros} en tu inventario.`);
+                alert(`🧪 ¡Anuncio verificado! Ganaste +1 Cápsula de Nitro N₂O. Tienes ${res.newNitros} en tu inventario.`);
+            } else {
+                alert('📺 El anuncio terminó, pero el servidor aún no ha recibido la confirmación de Adsgram. No se ha concedido nitro todavía.');
             }
+        };
+        if (authoritativeEconomyEnabled()) {
+            showHubToast('📺 Verificando la recompensa con Adsgram…');
+            claimServerAdReward('nitro', null, finishAdNitro);
+        } else if (typeof addNitroWithAd === 'function') {
+            finishAdNitro(addNitroWithAd());
         }
     }, () => {
         showLocalAdModalForNitro();
@@ -2320,6 +3001,10 @@ function startRewardedAdForNitro() {
 window.startRewardedAdForNitro = startRewardedAdForNitro;
 
 function showLocalAdModalForNitro() {
+    if (authoritativeEconomyEnabled()) {
+        alert('📺 Las recompensas locales de anuncio están desactivadas. Solo cuentan los anuncios verificados por Adsgram en el servidor.');
+        return;
+    }
     let modal = document.getElementById('ad-reward-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -2453,7 +3138,7 @@ function closeEnergyDepletedModal() {
 
 function buyPartsKitShop(kitKey) {
     hubAudio.playClick();
-    const res = buyPartsKit(kitKey);
+    const finishPartsKit = (res) => {
     if (!res.success) {
         if (res.reason === 'credits_insufficient') {
             alert(t('shop_not_enough'));
@@ -2467,6 +3152,8 @@ function buyPartsKitShop(kitKey) {
     renderHubHeader();
     renderShopView();
     alert(`🎉 ¡${res.kit.name} adquirido con éxito! Se han añadido las piezas a tu inventario.`);
+    };
+    return runAuthoritativeEconomyAction('buy_parts_kit', { kitKey }, () => buyPartsKit(kitKey), finishPartsKit);
 }
 
 function addFunds(credits, gems) {
@@ -2485,15 +3172,30 @@ function addFunds(credits, gems) {
 
 function buyUpgrade(type, cost) {
     hubAudio.playClick();
-    const u = loadNftUserData();
-    if (u.credits < cost) {
-        alert(t('shop_not_enough'));
-        return;
-    }
-    u.credits -= cost;
-    saveNftUserData(u);
-    renderHubHeader();
-    alert(`¡Mejora adquirida y aplicada a tu garaje! (-${cost} $CR)`);
+    const componentCatalog = {
+        turbo: { costCr: 1200, partId: 'turbocharger', name: 'Turbocompresor Twin-Scroll' },
+        tires: { costCr: 1500, partId: 'slick_tires', name: 'Neumáticos Slick GT3' },
+        brakes: { costCr: 1800, partId: 'brake_calipers', name: 'Pinzas Apex Monobloque' }
+    };
+    const component = componentCatalog[type];
+    if (!component) { alert('Componente no válido.'); return; }
+    const finishComponent = (res) => {
+        if (!res || !res.success) {
+            alert(res && res.reason === 'credits_insufficient' ? t('shop_not_enough') : 'No se pudo comprar el componente.');
+            return;
+        }
+        renderHubHeader();
+        alert(`🔧 ¡${res.name || component.name} añadido a tu inventario de taller! (-${res.costCr || component.costCr} $CR). Instálalo desde el taller de mejoras.`);
+    };
+    return runAuthoritativeEconomyAction('buy_shop_component', { component: type }, () => {
+        const u = loadNftUserData();
+        if ((u.credits || 0) < component.costCr) return { success: false, reason: 'credits_insufficient', costCr: component.costCr };
+        u.credits -= component.costCr;
+        if (!u.partsInventory) u.partsInventory = {};
+        u.partsInventory[component.partId] = (u.partsInventory[component.partId] || 0) + 1;
+        saveNftUserData(u);
+        return { success: true, ...component, partId: component.partId };
+    }, finishComponent);
 }
 
 // -------------------------------------------------------------
@@ -2677,6 +3379,33 @@ function renderCompView() {
     const container = document.getElementById('view-comp');
     if (!container) return;
 
+    if (wagerStakesPaused() && weeklyTournamentPaused()) {
+        container.innerHTML = `
+        <div class="view-header-bar">
+            <button class="btn-nav-back" onclick="showHubView('main')">${t('btn_back')}</button>
+            <div>
+                <h2 class="view-title">🏁 COMPETICIÓN OFICIAL</h2>
+                <div class="garage-count-tag">CARRERAS Y RANKING EN SERVIDOR · SIN APUESTAS ACTIVAS</div>
+            </div>
+            <div></div>
+        </div>
+        <div style="max-width: 760px; margin: 24px auto; display: flex; flex-direction: column; gap: 16px;">
+            <div style="background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.5); border-radius: 14px; padding: 20px;">
+                <h3 style="color: #fde047; margin-top: 0;">🛠️ Apuestas y Grand Prix semanal en pausa</h3>
+                <p style="color: #e2e8f0; line-height: 1.55;">Estamos terminando el depósito en garantía (escrow), el resultado compartido y la liquidación autoritativa en servidor. Mientras tanto no aceptamos buy-ins ni vendemos entradas: nadie puede perder $CR en una liquidación local.</p>
+            </div>
+            <div style="background: rgba(0,245,212,0.08); border: 1px solid rgba(0,245,212,0.4); border-radius: 14px; padding: 20px;">
+                <h3 style="color: #00f5d4; margin-top: 0;">⏱️ Ranking real por circuito</h3>
+                <p style="color: #cbd5e1; line-height: 1.55;">Tus carreras oficiales siguen registrando el mejor tiempo por circuito y acreditando las recompensas fijas desde el servidor.</p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn-primary" onclick="openLeaderboardModal()">VER RANKING REAL</button>
+                    <button class="btn-primary" onclick="launchStoryMode()">MARCAR UN TIEMPO</button>
+                </div>
+            </div>
+        </div>`;
+        return;
+    }
+
     const userData = loadNftUserData() || {};
     const stats = userData.wagerStats || {
         totalRaces: 0,
@@ -2728,7 +3457,7 @@ function renderCompView() {
                     </div>
                 </div>
                 <div class="wager-stat-box">
-                    <div class="wager-stat-icon">💰</div>
+                    <div class="wager-stat-icon">${crCoinIconHtml('cr-coin-icon-stat')}</div>
                     <div>
                         <div class="wager-stat-label">Total Ganado en Botes</div>
                         <div class="wager-stat-value" style="color: #fbbf24;">${(stats.totalWon || 0).toFixed(2)} $CR</div>
@@ -2787,7 +3516,7 @@ function renderCompView() {
                                 </div>
 
                                 <div class="wager-payout-row">
-                                    💰 <strong>Bote 1H+3IA:</strong> ${aiPot.grossPot} ${room.currency} (1º: ${aiPot.p1Prize} ${room.currency})<br>
+                                    ${crCoinIconHtml()} <strong>Bote 1H+3IA:</strong> ${aiPot.grossPot} ${room.currency} (1º: ${aiPot.p1Prize} ${room.currency})<br>
                                     🏆 <strong>Premios Podio (95%):</strong> 🥇 70% • 🥈 20% • 🥉 10% (5% Fondo & Quema 🔥)
                                 </div>
                             </div>
@@ -2829,7 +3558,7 @@ function renderCompView() {
             </div>
 
             <!-- MODOS ADICIONALES: TORNEO SEMANAL & LEADERBOARD -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="comp-extra-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div class="comp-card" onclick="openWeeklyTournamentModal();">
                     <div class="comp-icon">🏆</div>
                     <h3>GRAND PRIX SEMANAL GT</h3>
@@ -2849,6 +3578,10 @@ function renderCompView() {
 
 function openWagerLobby(roomId) {
     hubAudio.playClick();
+    if (wagerStakesPaused()) {
+        alert('🛠️ Las salas con apuesta están pausadas hasta completar escrow y liquidación en servidor. No se ha descontado ningún $CR.');
+        return;
+    }
     const room = WAGER_ROOMS_CONFIG.find(r => r.id === roomId);
     if (!room) return;
 
@@ -2941,7 +3674,7 @@ function startWagerMatchmaking() {
                 if (Array.isArray(res.slots) && res.slots.length > 0) {
                     currentWagerLobby.slots = res.slots.map(s => ({
                         ...sanitizeNetworkSlot(s),
-                        isPlayer: s && s.userId === userId
+                        isPlayer: Boolean(s && (s.isSelf === true || s.userId === userId))
                     }));
                 }
                 if (res.circuit) {
@@ -2961,7 +3694,7 @@ function startWagerMatchmaking() {
 
         // Polling cada 1 segundo al servidor para sincronizar otros jugadores reales que entren a la misma sala
         if (typeof fetch === 'function' && currentWagerLobby.lobbyId) {
-            fetch(`/api/multiplayer/public/status?roomId=${room.id}&lobbyId=${currentWagerLobby.lobbyId}&userId=${userId}`)
+            fetch(`/api/multiplayer/public/status?roomId=${encodeURIComponent(room.id)}&lobbyId=${encodeURIComponent(currentWagerLobby.lobbyId)}&userId=${encodeURIComponent(userId)}`, { headers: apexApiHeaders() })
                 .then(r => r.json())
                 .then(res => {
                     if (res && res.ok && currentWagerLobby) {
@@ -2969,7 +3702,7 @@ function startWagerMatchmaking() {
                         if (Array.isArray(res.slots)) {
                             currentWagerLobby.slots = res.slots.map(s => ({
                                 ...sanitizeNetworkSlot(s),
-                                isPlayer: s && s.userId === userId
+                                isPlayer: Boolean(s && (s.isSelf === true || s.userId === userId))
                             }));
                         }
                         if (res.status === 'STARTING') {
@@ -3168,11 +3901,15 @@ function closeWagerLobby(refund = true) {
             }).catch(() => {});
         }
 
-        if (refund) {
+        if (refund && !authoritativeEconomyEnabled()) {
             const u = loadNftUserData();
             u.credits = (u.credits || 0) + currentWagerLobby.room.buyIn;
             saveNftUserData(u);
             renderHubHeader();
+        } else if (refund) {
+            // En v104 no hubo retención en servidor: jamás se “reembolsa”
+            // saldo desde el navegador. Solo se resincroniza la verdad.
+            syncAuthoritativeEconomy();
         }
     }
 
@@ -3182,6 +3919,10 @@ function closeWagerLobby(refund = true) {
 }
 
 function launchWagerRace(overrideRoom = null, overrideSlots = null, overridePot = null) {
+    if (wagerStakesPaused()) {
+        alert('🛠️ Las carreras con apuesta están pausadas hasta completar escrow y liquidación en servidor. No se ha movido ningún $CR.');
+        return;
+    }
     let room = overrideRoom;
     let slots = overrideSlots;
     let potData = overridePot;
@@ -3271,6 +4012,10 @@ let currentDuelLobby = null;
 
 function openCreateDuelModal() {
     hubAudio.playClick();
+    if (wagerStakesPaused()) {
+        showFeaturePausedModal('create-duel-modal', '⚔️ DUELOS CON APUESTA EN PAUSA', 'Los duelos no aceptan apuestas hasta que ambos pilotos compartan el mismo resultado y el servidor liquide el bote desde escrow.');
+        return;
+    }
     let modal = document.getElementById('create-duel-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -3303,7 +4048,7 @@ function openCreateDuelModal() {
 
                 <div>
                     <label style="font-size: 12px; font-weight: 800; color: #f8fafc; display: block; margin-bottom: 6px;">
-                        💰 APUESTA POR PILOTO ($CR):
+                        ${crCoinIconHtml()} APUESTA POR PILOTO ($CR):
                     </label>
                     <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
                         <button type="button" class="btn-preset-bet" style="padding: 6px 12px; background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #f472b6; border-radius: 6px; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="setDuelPresetBet(50)">50 $CR</button>
@@ -3403,6 +4148,7 @@ function closeCreateDuelModal() {
 
 function handleCreateDuelSubmit() {
     hubAudio.playClick();
+    if (wagerStakesPaused()) { alert('🛠️ Los duelos con apuesta están pausados. No se ha descontado ningún $CR.'); return; }
     const input = document.getElementById('input-duel-bet');
     const trackSelect = document.getElementById('select-duel-track');
     const bet = Math.max(10, Math.round(Number(input ? input.value : 100) || 100));
@@ -3485,6 +4231,10 @@ function handleCreateDuelSubmit() {
 
 function openJoinDuelModal(prefillCode = '') {
     hubAudio.playClick();
+    if (wagerStakesPaused()) {
+        showFeaturePausedModal('join-duel-modal', '⚔️ DUELOS CON APUESTA EN PAUSA', 'Los duelos no aceptan apuestas hasta que ambos pilotos compartan el mismo resultado y el servidor liquide el bote desde escrow.');
+        return;
+    }
     let modal = document.getElementById('join-duel-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -3563,6 +4313,7 @@ function closeJoinDuelModal() {
 
 function handleJoinDuelSubmit() {
     hubAudio.playClick();
+    if (wagerStakesPaused()) { alert('🛠️ Los duelos con apuesta están pausados. No se ha descontado ningún $CR.'); return; }
     const input = document.getElementById('input-join-duel-code');
     const code = (input ? input.value : '').toUpperCase().trim();
 
@@ -3579,7 +4330,7 @@ function handleJoinDuelSubmit() {
 
     // Consultar estado de la sala al servidor
     if (typeof fetch === 'function') {
-        fetch(`/api/multiplayer/duel/status?code=${encodeURIComponent(code)}`)
+        fetch(`/api/multiplayer/duel/status?code=${encodeURIComponent(code)}&userId=${encodeURIComponent(currentUserId)}`, { headers: apexApiHeaders() })
             .then(r => r.json())
             .then(statusRes => {
                 if (!statusRes || !statusRes.ok || !statusRes.duel) {
@@ -3588,7 +4339,8 @@ function handleJoinDuelSubmit() {
                 }
 
                 const duel = statusRes.duel;
-                if (duel.status !== 'WAITING' && duel.hostUserId !== currentUserId) {
+                const duelIsHost = duel.isHost === true || duel.hostUserId === currentUserId;
+                if (duel.status !== 'WAITING' && !duelIsHost) {
                     alert('⚠️ La sala de duelo ya ha comenzado con otro rival o ha concluido.');
                     return;
                 }
@@ -3600,7 +4352,7 @@ function handleJoinDuelSubmit() {
                 }
 
                 // Deducir apuesta si no es el anfitrión
-                if (duel.hostUserId !== currentUserId) {
+                if (!duelIsHost) {
                     userData.credits -= duel.betAmount;
                     saveNftUserData(userData);
                     renderHubHeader();
@@ -3623,10 +4375,10 @@ function handleJoinDuelSubmit() {
                 .then(joinRes => {
                     if (joinRes && joinRes.ok && joinRes.duel) {
                         closeJoinDuelModal();
-                        renderDuelWaitingModal(joinRes.duel, joinRes.duel.hostUserId === currentUserId);
+                        renderDuelWaitingModal(joinRes.duel, joinRes.duel.isHost === true || joinRes.duel.hostUserId === currentUserId);
                     } else {
                         // Reembolsar si falló el join
-                        if (duel.hostUserId !== currentUserId) {
+                        if (!duelIsHost) {
                             userData.credits += duel.betAmount;
                             saveNftUserData(userData);
                             renderHubHeader();
@@ -3635,7 +4387,7 @@ function handleJoinDuelSubmit() {
                     }
                 })
                 .catch(() => {
-                    if (duel.hostUserId !== currentUserId) {
+                    if (!duelIsHost) {
                         userData.credits += duel.betAmount;
                         saveNftUserData(userData);
                         renderHubHeader();
@@ -3808,7 +4560,7 @@ function renderDuelWaitingModal(duel, isHost) {
         currentDuelLobby.timer = setInterval(() => {
             if (!currentDuelLobby) return;
 
-            fetch(`/api/multiplayer/duel/status?code=${encodeURIComponent(duel.code)}`)
+            fetch(`/api/multiplayer/duel/status?code=${encodeURIComponent(duel.code)}&userId=${encodeURIComponent(getApexUserId())}`, { headers: apexApiHeaders() })
                 .then(r => r.json())
                 .then(res => {
                     if (res && res.ok && res.duel) {
@@ -3862,11 +4614,13 @@ function closeDuelLobbyModal(refund = true) {
             }).catch(() => {});
         }
 
-        if (refund && duel) {
+        if (refund && duel && !authoritativeEconomyEnabled()) {
             const u = loadNftUserData();
             u.credits = (u.credits || 0) + duel.betAmount;
             saveNftUserData(u);
             renderHubHeader();
+        } else if (refund && duel) {
+            syncAuthoritativeEconomy();
         }
     }
 
@@ -3876,6 +4630,10 @@ function closeDuelLobbyModal(refund = true) {
 }
 
 function launchDuelRace(duel, slots) {
+    if (wagerStakesPaused()) {
+        alert('🛠️ Los duelos con apuesta están pausados hasta completar escrow y liquidación en servidor. No se ha movido ningún $CR.');
+        return;
+    }
     if (currentDuelLobby && currentDuelLobby.timer) {
         clearInterval(currentDuelLobby.timer);
         currentDuelLobby.timer = null;
@@ -3894,9 +4652,9 @@ function launchDuelRace(duel, slots) {
 
     const final4Slots = [
         // slot 0 (local user)
-        cleanSlots.find(s => s && s.userId === userId) || cleanSlots[0],
+        cleanSlots.find(s => s && (s.isSelf === true || s.userId === userId)) || cleanSlots[0],
         // slot 1 (rival)
-        cleanSlots.find(s => s && s.userId !== userId) || cleanSlots[1] || {
+        cleanSlots.find(s => s && s.isSelf !== true && s.userId !== userId) || cleanSlots[1] || {
             name: "Rival Piloto", carName: "GT3 Challenger", colorHex: "#f59e0b", archetype: "ferrari_corsa", isAI: false, isPlayer: false, stake: duel.betAmount
         },
         // slot 2 (pacer)
@@ -3977,7 +4735,8 @@ window.returnToCompHub = function() {
     }
 };
 
-function openLeaderboardModal() {
+let leaderboardSelectedTrackId = 'rookie_ring';
+function openLeaderboardModal(requestedTrackId) {
     hubAudio.playClick();
     let modal = document.getElementById('leaderboard-modal');
     if (!modal) {
@@ -3987,77 +4746,32 @@ function openLeaderboardModal() {
         document.body.appendChild(modal);
     }
 
-    const curPilot = (typeof getPlayerName === 'function') ? getPlayerName() : 'PILOTO GT #44';
-    const equipped = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
-    const carName = equipped ? equipped.name : 'Supercar GT';
+    if (typeof requestedTrackId === 'string' && /^[a-z0-9_-]{2,80}$/i.test(requestedTrackId)) {
+        leaderboardSelectedTrackId = requestedTrackId;
+    }
+    const trackCatalog = (typeof window !== 'undefined' && window.DustracTracks && typeof window.DustracTracks === 'object')
+        ? Object.values(window.DustracTracks).filter(track => track && track.id && track.name)
+        : [{ id: 'rookie_ring', name: 'Rookie Ring Speedway' }];
+    if (!trackCatalog.some(track => track.id === leaderboardSelectedTrackId)) {
+        leaderboardSelectedTrackId = trackCatalog[0].id;
+    }
 
     modal.innerHTML = `
-        <div class="settings-dialog" style="max-width: 520px;">
+        <div class="settings-dialog" style="max-width: 560px;">
             <div class="settings-header">
-                <h2>⏱️ CLASIFICACIÓN MUNDIAL APEX GT</h2>
+                <h2>⏱️ RANKING REAL APEX GT</h2>
                 <button class="settings-close-x" onclick="closeLeaderboardModal()">✖</button>
             </div>
             <div class="settings-body" style="padding: 16px;">
-                <p style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
-                    Ranking semanal de vueltas rápidas en circuitos oficiales. ¡Los 3 mejores pilotos reciben tokens $CR y suministros para su garaje!
+                <p style="font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.5;">
+                    Mejor tiempo de cada piloto en el circuito elegido, leído directamente del servidor. No hay pilotos de demostración ni premios prometidos fuera de las recompensas fijas de carrera.
                 </p>
-                <div class="leaderboard-table-list" style="display: flex; flex-direction: column; gap: 8px;">
-                    <div class="lb-row lb-gold" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(254, 228, 64, 0.12); border: 1px solid rgba(254, 228, 64, 0.4); border-radius: 10px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">🥇</span>
-                            <div>
-                                <strong style="color: #fee440; font-size: 14px;">Phantom_Silva</strong>
-                                <div style="font-size: 11px; color: #cbd5e1;">Molsheim Chiron Pur Sport W16</div>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">38.12s</span>
-                            <div style="font-size: 10px; color: #fde047;">🏆 +300 $CR + 2 Nitros</div>
-                        </div>
-                    </div>
-
-                    <div class="lb-row lb-silver" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(226, 232, 240, 0.08); border: 1px solid rgba(226, 232, 240, 0.3); border-radius: 10px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">🥈</span>
-                            <div>
-                                <strong style="color: #e2e8f0; font-size: 14px;">Torque_Viper</strong>
-                                <div style="font-size: 11px; color: #cbd5e1;">Viper ACR Extreme V10</div>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">38.85s</span>
-                            <div style="font-size: 10px; color: #cbd5e1;">🥈 +150 $CR + 1 Nitro</div>
-                        </div>
-                    </div>
-
-                    <div class="lb-row lb-bronze" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255, 152, 0, 0.08); border: 1px solid rgba(255, 152, 0, 0.3); border-radius: 10px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">🥉</span>
-                            <div>
-                                <strong style="color: #ff9800; font-size: 14px;">Grello_Manthey</strong>
-                                <div style="font-size: 11px; color: #cbd5e1;">Stuttgart 911 GT3-RS Manthey</div>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="font-family: monospace; font-weight: 900; color: #00f5d4; font-size: 14px;">39.20s</span>
-                            <div style="font-size: 10px; color: #ff9800;">🥉 +75 $CR + Pieza</div>
-                        </div>
-                    </div>
-
-                    <!-- Fila destacada del Jugador con su nombre personalizado -->
-                    <div class="lb-row lb-player" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: linear-gradient(135deg, rgba(0, 245, 212, 0.18), rgba(0, 187, 249, 0.18)); border: 2px solid #00f5d4; border-radius: 10px; margin-top: 6px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="background: #00f5d4; color: #000; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 6px;">TÚ #4</span>
-                            <div>
-                                <strong style="color: #ffffff; font-size: 14px;">${escapeHtml(curPilot)}</strong>
-                                <div style="font-size: 11px; color: #00f5d4;">${escapeHtml(carName)} (Tu bólido)</div>
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <span style="font-family: monospace; font-weight: 900; color: #fee440; font-size: 14px;">39.64s</span>
-                            <div style="font-size: 10px; color: #a7f3d0;">⭐ A 0.44s del podio</div>
-                        </div>
-                    </div>
+                <label style="display: block; font-size: 11px; font-weight: 900; color: #cbd5e1; margin-bottom: 6px;">CIRCUITO</label>
+                <select id="leaderboard-track-select" onchange="openLeaderboardModal(this.value)" style="width: 100%; min-height: 44px; margin-bottom: 14px; border-radius: 8px; background: #0f172a; color: #fff; border: 1px solid rgba(0,245,212,0.45); padding: 8px;">
+                    ${trackCatalog.map(track => `<option value="${safeDomId(track.id)}" ${track.id === leaderboardSelectedTrackId ? 'selected' : ''}>${escapeHtml(track.name)}</option>`).join('')}
+                </select>
+                <div id="leaderboard-real-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="text-align: center; color: #94a3b8; padding: 22px;">⏳ Cargando tiempos del servidor…</div>
                 </div>
             </div>
             <div class="settings-footer" style="display: flex; justify-content: space-between; align-items: center;">
@@ -4066,10 +4780,43 @@ function openLeaderboardModal() {
                 </button>
                 <button class="btn-settings-save" onclick="closeLeaderboardModal()">CERRAR</button>
             </div>
-        </div>
-    `;
+        </div>`;
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
+
+    const listEl = document.getElementById('leaderboard-real-list');
+    if (typeof fetch !== 'function') {
+        if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#fca5a5;padding:22px;">Sin conexión con el servidor de ranking.</div>';
+        return;
+    }
+    fetch(`/api/leaderboard?trackId=${encodeURIComponent(leaderboardSelectedTrackId)}&limit=20`, { headers: { Accept: 'application/json' } })
+        .then(response => response.json().catch(() => null))
+        .then(rows => {
+            if (!listEl) return;
+            if (!Array.isArray(rows)) {
+                listEl.innerHTML = '<div style="text-align:center;color:#fca5a5;padding:22px;">No se pudo cargar el ranking ahora.</div>';
+                return;
+            }
+            if (!rows.length) {
+                listEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:22px;">📭 Todavía no hay tiempos oficiales en este circuito. Sé el primero en marcar uno.</div>';
+                return;
+            }
+            const medals = ['🥇', '🥈', '🥉'];
+            listEl.innerHTML = rows.map((row, idx) => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(15,23,42,0.65);border:1px solid rgba(255,255,255,0.10);border-radius:10px;gap:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                        <span style="font-size:18px;">${medals[idx] || `#${idx + 1}`}</span>
+                        <div style="min-width:0;">
+                            <strong style="color:#fff;font-size:14px;">${escapeHtml(row.username || 'Piloto')}</strong>
+                            <div style="font-size:11px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(row.car || 'Coche')}</div>
+                        </div>
+                    </div>
+                    <span style="font-family:monospace;font-weight:900;color:#00f5d4;font-size:14px;">${Number(row.time || 0).toFixed(2)}s</span>
+                </div>`).join('');
+        })
+        .catch(() => {
+            if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#fca5a5;padding:22px;">Sin conexión con el servidor de ranking.</div>';
+        });
 }
 
 function closeLeaderboardModal() {
@@ -4204,6 +4951,26 @@ function openSettingsModal() {
                 </div>
                 `}
 
+                <!-- Cuenta, recuperación, soporte y legal -->
+                <div class="setting-group">
+                    <label class="setting-label">🆘 CUENTA, SOPORTE Y LEGAL</label>
+                    <div style="font-size: 11px; color: #94a3b8; line-height: 1.5; margin-bottom: 10px;">
+                        ID de cuenta: <strong style="color: #e2e8f0; font-family: monospace;">${escapeHtml(getApexUserId())}</strong><br>
+                        Para una compra TON, escribe al bot <strong>/paysupport APEX-ID-DEL-PEDIDO</strong> y conserva el hash de la transacción.
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+                        ${/^usr_/.test(getApexUserId()) ? `
+                        <button class="btn-primary" style="flex:1 1 190px; min-height:44px;" onclick="handleCreateRecoveryCode()">🔐 CREAR CÓDIGO DE RECUPERACIÓN</button>
+                        <button class="btn-primary" style="flex:1 1 190px; min-height:44px;" onclick="handleRecoverDeviceAccount()">♻️ RECUPERAR OTRA CUENTA</button>` : `
+                        <div style="font-size: 11px; color: #cbd5e1;">Tu cuenta de Telegram se recupera volviendo a entrar con la misma cuenta de Telegram.</div>`}
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <a href="/support.html" target="_blank" rel="noopener" style="flex:1 1 120px; text-align:center; padding:10px; border-radius:8px; background:rgba(0,245,212,0.12); border:1px solid #00f5d4; color:#a7f3ea; font-weight:900; font-size:11px; text-decoration:none;">SOPORTE</a>
+                        <a href="/terms.html" target="_blank" rel="noopener" style="flex:1 1 120px; text-align:center; padding:10px; border-radius:8px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.2); color:#e2e8f0; font-weight:900; font-size:11px; text-decoration:none;">TÉRMINOS</a>
+                        <a href="/privacy.html" target="_blank" rel="noopener" style="flex:1 1 120px; text-align:center; padding:10px; border-radius:8px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.2); color:#e2e8f0; font-weight:900; font-size:11px; text-decoration:none;">PRIVACIDAD</a>
+                    </div>
+                </div>
+
                 <!-- Restablecer Datos -->
                 <div class="setting-group" style="border-bottom:none;">
                     <button class="btn-danger-reset" onclick="resetAllSaveData()">${t('settings_reset_data')}</button>
@@ -4262,6 +5029,65 @@ function grantTestingFunds() {
     saveNftUserData(u);
     renderHubHeader();
     alert('💰 ¡Fondos de prueba recargados con éxito! +1,000,000 $CR');
+}
+
+function handleCreateRecoveryCode() {
+    hubAudio.playClick();
+    if (!authoritativeEconomyEnabled()) { alert('El código de recuperación requiere conexión con el servidor.'); return; }
+    if (!confirm('Se creará un código de recuperación nuevo y el anterior dejará de valer. Guárdalo fuera de este dispositivo. ¿Continuar?')) return;
+    fetch('/api/account/recovery-code', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId() })
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || !data.ok || !data.recoveryCode) {
+                alert('No se pudo crear el código de recuperación. Inténtalo de nuevo con conexión.');
+                return;
+            }
+            try { if (navigator.clipboard) navigator.clipboard.writeText(data.recoveryCode); } catch (e) {}
+            alert(`🔐 CÓDIGO DE RECUPERACIÓN (se muestra una sola vez)\n\n${data.recoveryCode}\n\nID de cuenta: ${getApexUserId()}\n\nGuarda ambos fuera de este dispositivo. Quien tenga el código podrá recuperar esta cuenta de navegador.`);
+        })
+        .catch(() => alert('Sin conexión con el servidor. No se creó ningún código.'));
+}
+
+function handleRecoverDeviceAccount() {
+    hubAudio.playClick();
+    if (typeof fetch !== 'function') { alert('La recuperación requiere conexión con el servidor.'); return; }
+    const userId = prompt('ID de la cuenta de navegador que quieres recuperar (usr_...):');
+    if (!userId) return;
+    const recoveryCode = prompt('Código de recuperación APEX-RC-... asociado a esa cuenta:');
+    if (!recoveryCode) return;
+    if (!confirm('Este navegador pasará a usar la cuenta recuperada y la página se recargará. ¿Continuar?')) return;
+    const newDeviceSecret = (typeof generateDeviceSecret === 'function') ? generateDeviceSecret() : '';
+    if (!newDeviceSecret) { alert('No se pudo generar una credencial segura en este navegador.'); return; }
+    fetch('/api/account/recover-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId.trim(), recoveryCode: recoveryCode.trim().toUpperCase(), newDeviceSecret })
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || !data.ok) {
+                alert('No se pudo recuperar la cuenta. Comprueba el ID y el código; cada código solo sirve una vez.');
+                return;
+            }
+            try {
+                localStorage.setItem('apex_device_id', userId.trim());
+                localStorage.setItem('apex_device_secret_v1', newDeviceSecret);
+                localStorage.removeItem('apex_web3_garage_save');
+                localStorage.removeItem('dustrac_story_save');
+                localStorage.removeItem('apex_cloud_meta');
+            } catch (e) {}
+            alert('✅ Cuenta recuperada. La página se recargará para descargar tu garaje y tu historia del servidor.');
+            location.reload();
+        })
+        .catch(() => alert('Sin conexión con el servidor. La cuenta no se ha recuperado.'));
+}
+if (typeof window !== 'undefined') {
+    window.handleCreateRecoveryCode = handleCreateRecoveryCode;
+    window.handleRecoverDeviceAccount = handleRecoverDeviceAccount;
 }
 
 function resetAllSaveData() {
@@ -4406,7 +5232,7 @@ function openBattlePassModal() {
 function handleClaimPassTier(tierNum) {
     hubAudio.playClick();
     if (typeof claimSeasonPassTier !== 'function') return;
-    const res = claimSeasonPassTier(tierNum);
+    const finishPassTier = (res) => {
     if (!res.success) {
         alert(res.reason === 'already_claimed' ? 'Ya has reclamado este nivel.' : 'Aún no has alcanzado el nivel necesario.');
         return;
@@ -4415,18 +5241,22 @@ function handleClaimPassTier(tierNum) {
     renderHubHeader();
     openBattlePassModal();
     alert(`🎉 ¡Recompensa reclamada con éxito! ${res.tier.label}`);
+    };
+    return runAuthoritativeEconomyAction('claim_season_tier', { tier: tierNum }, () => claimSeasonPassTier(tierNum), finishPassTier);
 }
 
 function handleClaimMission(missionId) {
     hubAudio.playClick();
     if (typeof claimDailyMission !== 'function') return;
-    const res = claimDailyMission(missionId);
+    const finishMission = (res) => {
     if (res.success) {
         hubAudio.playOpenCrate();
         renderHubHeader();
         openBattlePassModal();
         alert(`⭐ ¡Misión completada! +${res.mission.xp} XP añadidos a tu Pase.`);
     }
+    };
+    return runAuthoritativeEconomyAction('claim_daily_mission', { missionId }, () => claimDailyMission(missionId), finishMission);
 }
 
 function closeBattlePassModal() {
@@ -4535,23 +5365,27 @@ function openSponsorsModal() {
 function handleSignSponsor(id) {
     hubAudio.playClick();
     if (typeof signSponsorshipContract !== 'function') return;
-    const res = signSponsorshipContract(id);
+    const finishSignSponsor = (res) => {
     if (res.success) {
         hubAudio.playOpenCrate();
         openSponsorsModal();
     }
+    };
+    return runAuthoritativeEconomyAction('sign_sponsor', { contractId: id }, () => signSponsorshipContract(id), finishSignSponsor);
 }
 
 function handleClaimSponsor(id) {
     hubAudio.playClick();
     if (typeof claimSponsorshipReward !== 'function') return;
-    const res = claimSponsorshipReward(id);
+    const finishClaimSponsor = (res) => {
     if (res.success) {
         hubAudio.playOpenCrate();
         renderHubHeader();
         openSponsorsModal();
         alert(`🎉 ¡Recompensa de patrocinio cobrada! +${res.contract.rewardXP || 100} XP y ${res.contract.rewardPartName} añadidos a tu cuenta.`);
     }
+    };
+    return runAuthoritativeEconomyAction('claim_sponsor', { contractId: id }, () => claimSponsorshipReward(id), finishClaimSponsor);
 }
 
 function closeSponsorsModal() {
@@ -4568,6 +5402,10 @@ function closeSponsorsModal() {
 // -------------------------------------------------------------
 function openWeeklyTournamentModal() {
     hubAudio.playClick();
+    if (weeklyTournamentPaused()) {
+        showFeaturePausedModal('weekly-tournament-modal', '🏆 GRAND PRIX SEMANAL EN PAUSA', 'El torneo semanal no vende entradas hasta tener periodo, ranking por circuito, cierre y pago de premios ejecutados íntegramente en servidor.');
+        return;
+    }
     let modal = document.getElementById('weekly-tournament-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -4616,7 +5454,7 @@ function openWeeklyTournamentModal() {
                         </div>
                         <div style="text-align: right;">
                             <div style="font-size: 24px; font-weight: 900; color: #fde047; text-shadow: 0 0 12px rgba(253, 224, 71, 0.4);">
-                                💰 ${(tInfo.netPrizePotCr || 0).toLocaleString()} $CR
+                                ${crCoinIconHtml('cr-coin-icon-large')} ${(tInfo.netPrizePotCr || 0).toLocaleString()} $CR
                             </div>
                             <div style="font-size: 10px; color: #10b981; font-weight: 700;">Reparto íntegro entre los mejores tiempos</div>
                         </div>
@@ -4673,6 +5511,7 @@ function openWeeklyTournamentModal() {
 
 function handleEnterWeeklyTournament() {
     hubAudio.playClick();
+    if (weeklyTournamentPaused()) { alert('🛠️ El Grand Prix semanal está en pausa. No se ha cobrado ninguna entrada.'); return; }
     if (typeof enterWeeklyTournament === 'function') {
         const res = enterWeeklyTournament();
         if (!res.success && res.reason === 'credits_insufficient') {
@@ -4894,7 +5733,7 @@ function openCarMilestoneModal(instanceId) {
             </div>
 
             <div class="settings-footer" style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 12px; color: #fde047; font-weight: 800;">💰 Saldo: ${(userCr).toLocaleString()} $CR</span>
+                <span style="font-size: 12px; color: #fde047; font-weight: 800;">${crCoinIconHtml()} Saldo: ${(userCr).toLocaleString()} $CR</span>
                 <button class="btn-settings-save" onclick="closeCarMilestoneModal()">CERRAR</button>
             </div>
         </div>
@@ -4915,8 +5754,8 @@ function closeCarMilestoneModal() {
 
 function handleClaimCarMilestone(instanceId, mLevel, statKey) {
     hubAudio.playClick();
-    if (typeof claimCarMilestoneStat === 'function') {
-        const res = claimCarMilestoneStat(instanceId, mLevel, statKey);
+    if (typeof claimCarMilestoneStat === 'function' || authoritativeEconomyEnabled()) {
+        const finishMilestone = (res) => {
         if (!res.success) {
             if (res.reason === 'credits_insufficient') {
                 alert(`No tienes suficientes créditos $CR. Necesitas ${res.costCr.toLocaleString()} $CR.`);
@@ -4933,6 +5772,8 @@ function handleClaimCarMilestone(instanceId, mLevel, statKey) {
         renderGarageView();
         openCarMilestoneModal(instanceId);
         alert(`🎉 ¡Hito de Nivel ${mLevel} Desbloqueado!\n+1 punto permanente añadido a ${statKey.toUpperCase()}.`);
+        };
+        return runAuthoritativeEconomyAction('claim_milestone', { instanceId, milestoneLevel: mLevel, statName: statKey }, () => claimCarMilestoneStat(instanceId, mLevel, statKey), finishMilestone);
     }
 }
 
@@ -4957,6 +5798,10 @@ function setMarketplaceSellType(sellType) {
 
 function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
     hubAudio.playClick();
+    if (marketplacePaused()) {
+        showFeaturePausedModal('marketplace-modal', '🤝 MERCADO P2P EN PAUSA', 'El mercado permanece cerrado hasta persistir anuncios, bloquear el objeto vendido y transferir saldo/objeto en una única transacción de servidor. Tus piezas y coches están a salvo en tu inventario.');
+        return;
+    }
     marketplaceActiveTab = activeTab;
     if (sellType) marketplaceSellType = sellType;
 
@@ -5046,7 +5891,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 12px;">
-                                    <span style="font-size: 14px; font-weight: 900; color: #fde047; white-space: nowrap;">💰 ${(Number(lst.priceCr) || 0).toLocaleString()} $CR</span>
+                                    <span style="font-size: 14px; font-weight: 900; color: #fde047; white-space: nowrap;">${crCoinIconHtml()} ${(Number(lst.priceCr) || 0).toLocaleString()} $CR</span>
                                     ${lst.sellerIsMe ? `
                                         <button class="btn-secondary" style="padding: 7px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; font-size: 11px; font-weight: 800; border-radius: 6px; cursor: pointer; white-space: nowrap;" onclick="handleCancelMarketplaceListing('${safeDomId(lst.id)}')">
                                             ❌ RETIRAR
@@ -5165,6 +6010,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
 
 function handleBuyMarketplaceItem(listingId) {
     hubAudio.playClick();
+    if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
     if (typeof buyMarketplaceItem !== 'function') return;
     const res = buyMarketplaceItem(listingId);
     if (!res.success) {
@@ -5190,6 +6036,7 @@ function handleBuyMarketplacePart(listingId) {
 
 function handleListMarketplacePart(partKey, defaultPrice) {
     hubAudio.playClick();
+    if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
     if (typeof listPartOnMarketplace !== 'function') return;
     const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey };
     const promptMsg = `¿Qué precio en $CR deseas fijar para vender "${pDef.name}"?\n\n(Tú eliges libremente el precio. Mínimo: 10 $CR)`;
@@ -5213,6 +6060,7 @@ function handleListMarketplacePart(partKey, defaultPrice) {
 
 function handleListMarketplaceCar(instanceId, defaultPrice) {
     hubAudio.playClick();
+    if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
     if (typeof listCarOnMarketplace !== 'function') return;
     const userData = loadNftUserData();
     const car = (userData.garage || []).find(c => c.instanceId === instanceId);
@@ -5239,6 +6087,7 @@ function handleListMarketplaceCar(instanceId, defaultPrice) {
 
 function handleCancelMarketplaceListing(listingId) {
     hubAudio.playClick();
+    if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
     if (typeof cancelMarketplaceListing !== 'function') return;
     const res = cancelMarketplaceListing(listingId);
     if (!res.success) {
@@ -5398,8 +6247,1056 @@ if (typeof window !== 'undefined') {
 }
 
 // =========================================================================
-// 11. MODAL BILLETERA WEB3 & TON — SIMULACIÓN LOCAL
+// 11. MODAL BILLETERA WEB3 & TON — COMPRA REAL DE $CR (v103)
+// El servidor crea el pedido, el jugador paga TON a la tesorería oficial con
+// el comentario = id de pedido, el servidor verifica el pago on-chain y solo
+// entonces /api/purchases/claim entrega los $CR que aquí se suman al saldo.
 // =========================================================================
+const APEX_PENDING_PURCHASE_KEY = 'apex_pending_ton_purchase';
+const APEX_CLAIMED_PURCHASES_KEY = 'apex_claimed_ton_purchases';
+const TON_CR_PACKAGE_FALLBACK = [
+    { id: 'cr_ton_001', amountTon: '0.01', ton: '0.01' },
+    { id: 'cr_ton_1', amountTon: '1', ton: '1' },
+    { id: 'cr_ton_5', amountTon: '5', ton: '5' }
+];
+let tonPurchasePollTimer = null;
+let tonPurchaseCatalogCache = null;
+let tonPurchaseCatalogFetchedAt = 0;
+let tonPurchaseCatalogPromise = null;
+
+const APEX_PENDING_STARS_PURCHASE_KEY = 'apex_pending_stars_purchase';
+const APEX_SEEN_STARS_PURCHASES_KEY = 'apex_seen_stars_purchases';
+const TELEGRAM_STARS_PACKAGE_FALLBACK = [
+    { id: 'cr_stars_100', stars: 100, priceStars: 100, cr: 1000, label: '1.000 $CR' },
+    { id: 'cr_stars_500', stars: 500, priceStars: 500, cr: 5000, label: '5.000 $CR' },
+    { id: 'cr_stars_1000', stars: 1000, priceStars: 1000, cr: 10000, label: '10.000 $CR' },
+    { id: 'cr_stars_2500', stars: 2500, priceStars: 2500, cr: 25000, label: '25.000 $CR' }
+];
+let telegramStarsPollTimer = null;
+let telegramStarsCatalogCache = null;
+let telegramStarsCatalogFetchedAt = 0;
+let telegramStarsCatalogPromise = null;
+let telegramStarsRecoveryPromise = null;
+let telegramStarsCreateInFlight = false;
+let telegramStarsClaimNoticeOrderId = '';
+
+function getTreasuryWalletAddress() {
+    try {
+        if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.TREASURY_WALLET_ADDRESS) {
+            return String(APP_CONFIG.TREASURY_WALLET_ADDRESS);
+        }
+    } catch (e) {}
+    return 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X';
+}
+
+function formatTonAmountForDisplay(value, maxFractionDigits = 6) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return String(value || '0');
+    return amount.toLocaleString('es-ES', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxFractionDigits
+    });
+}
+
+function formatPurchaseExpiry(order) {
+    if (!order) return '';
+    const time = Number(order.expiresAtMs || Date.parse(order.expiresAt || '') || 0);
+    if (!time) return '';
+    try {
+        return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        return '';
+    }
+}
+
+function hasAppliedTonPurchaseLocally(orderId) {
+    if (!orderId) return false;
+    if (getClaimedTonPurchases().includes(orderId)) return true;
+    try {
+        const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : null;
+        return Boolean(userData && Array.isArray(userData.tonPurchaseOrderIds) && userData.tonPurchaseOrderIds.includes(orderId));
+    } catch (e) {
+        return false;
+    }
+}
+
+function renderTonCrPackageButtonsHtml(packages) {
+    const list = Array.isArray(packages) && packages.length ? packages : TON_CR_PACKAGE_FALLBACK;
+    return list.map(pkg => {
+        const productId = safeDomId(pkg.id || pkg.packageId || '');
+        const amountTon = formatTonAmountForDisplay(pkg.amountTon || pkg.ton || '0');
+        const crText = Number.isFinite(Number(pkg.cr))
+            ? `≈ +${Number(pkg.cr).toLocaleString('es-ES')} $CR`
+            : '+ $CR según cotización';
+        return `
+            <button class="btn-primary ton-package-btn" onclick="handleBuyCrPackage('${productId}')">
+                ${escapeHtml(amountTon)} TON<br><span class="ton-package-cr">${crCoinIconHtml()} ${escapeHtml(crText)}</span>
+            </button>
+        `;
+    }).join('');
+}
+
+function isTelegramPurchaseContext() {
+    try {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        return Boolean(tg && typeof tg.initData === 'string' && tg.initData);
+    } catch (e) { return false; }
+}
+
+// ===== TELEGRAM STARS (v105) =====
+// La factura se abre con Telegram, pero su estado de cierre es solo una
+// pista de interfaz. El saldo solo cambia cuando /status devuelve el garaje
+// autoritativo tras el successful_payment procesado por el bot.
+let telegramStarsStatusInFlight = false;
+
+function getPendingTelegramStarsPurchase() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(APEX_PENDING_STARS_PURCHASE_KEY) || 'null');
+        return parsed && typeof parsed.id === 'string' ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function setPendingTelegramStarsPurchase(order) {
+    try {
+        if (!order) {
+            localStorage.removeItem(APEX_PENDING_STARS_PURCHASE_KEY);
+            return;
+        }
+        localStorage.setItem(APEX_PENDING_STARS_PURCHASE_KEY, JSON.stringify(order));
+    } catch (e) {}
+}
+
+function getSeenTelegramStarsPurchases() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(APEX_SEEN_STARS_PURCHASES_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function markTelegramStarsPurchaseSeen(orderId) {
+    if (!orderId) return;
+    try {
+        const list = getSeenTelegramStarsPurchases();
+        if (!list.includes(String(orderId))) {
+            list.push(String(orderId));
+            localStorage.setItem(APEX_SEEN_STARS_PURCHASES_KEY, JSON.stringify(list.slice(-100)));
+        }
+    } catch (e) {}
+}
+
+function hasSeenTelegramStarsPurchase(orderId) {
+    if (!orderId) return false;
+    try {
+        const userData = (typeof loadNftUserData === 'function') ? loadNftUserData() : null;
+        if (userData && Array.isArray(userData.starsPurchaseOrderIds) && userData.starsPurchaseOrderIds.includes(orderId)) {
+            return getSeenTelegramStarsPurchases().includes(String(orderId));
+        }
+    } catch (e) {}
+    return getSeenTelegramStarsPurchases().includes(String(orderId));
+}
+
+function isValidTelegramInvoiceUrl(value) {
+    try {
+        const url = new URL(String(value || ''));
+        return url.protocol === 'https:' && ['t.me', 'telegram.me'].includes(url.hostname) && url.href.length <= 500;
+    } catch (e) {
+        return false;
+    }
+}
+
+function telegramStarsOrderExpired(order) {
+    if (!order || order.status !== 'pending') return false;
+    const expires = Number(order.expiresAtMs || Date.parse(order.expiresAt || '') || 0);
+    return Boolean(expires && Date.now() > expires);
+}
+
+function renderTelegramStarsPackageButtonsHtml(packages, enabled = true) {
+    const list = Array.isArray(packages) && packages.length ? packages : TELEGRAM_STARS_PACKAGE_FALLBACK;
+    return list.map(pkg => {
+        const productId = safeDomId(pkg.id || pkg.packageId || '');
+        const stars = Math.floor(Number(pkg.priceStars || pkg.stars) || 0);
+        const cr = Math.floor(Number(pkg.cr) || 0);
+        return `
+            <button class="btn-primary stars-package-btn" onclick="handleBuyStarsPackage('${productId}')" ${enabled ? '' : 'disabled'}>
+                ⭐ ${stars.toLocaleString('es-ES')} Stars<br><span class="stars-package-cr">${crCoinIconHtml()} +${cr.toLocaleString('es-ES')} $CR</span>
+            </button>`;
+    }).join('');
+}
+
+function updateTelegramStarsCatalogUi(catalog) {
+    const data = catalog || getTelegramStarsPublicConfig() || telegramStarsCatalogCache;
+    const enabled = data && typeof data.enabled === 'boolean' ? data.enabled : telegramStarsUiEnabled();
+    const rateEl = document.getElementById('telegram-stars-rate-line');
+    if (rateEl) {
+        rateEl.textContent = enabled
+            ? '1 ⭐ = 10 $CR · precios lineales, sin descuentos'
+            : 'Telegram Stars no está disponible en este servidor ahora';
+    }
+    const container = document.getElementById('telegram-stars-packages');
+    if (!container) return;
+    if (!enabled) {
+        container.innerHTML = '<div class="stars-unavailable-note">⭐ Las compras con Telegram Stars están pausadas o el bot aún no está configurado. No envíes TON dentro de Telegram para comprar $CR.</div>';
+        return;
+    }
+    container.innerHTML = renderTelegramStarsPackageButtonsHtml(data && data.packages, true);
+}
+
+function loadTelegramStarsCatalog(force = false) {
+    if (!isTelegramPurchaseContext()) return Promise.resolve(null);
+    const now = Date.now();
+    if (!force && telegramStarsCatalogCache && now - telegramStarsCatalogFetchedAt < 60000) {
+        updateTelegramStarsCatalogUi(telegramStarsCatalogCache);
+        return Promise.resolve(telegramStarsCatalogCache);
+    }
+    if (telegramStarsCatalogPromise) return telegramStarsCatalogPromise;
+    if (typeof fetch !== 'function') {
+        updateTelegramStarsCatalogUi(null);
+        return Promise.resolve(null);
+    }
+    const promise = fetch('/api/telegram-stars/packages', { headers: { Accept: 'application/json' } })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true) {
+                updateTelegramStarsCatalogUi(getTelegramStarsPublicConfig());
+                return null;
+            }
+            telegramStarsCatalogCache = data;
+            telegramStarsCatalogFetchedAt = Date.now();
+            apexServerConfig = { ...(apexServerConfig || {}), telegramStars: data };
+            updateTelegramStarsCatalogUi(data);
+            return data;
+        })
+        .catch(() => {
+            updateTelegramStarsCatalogUi(getTelegramStarsPublicConfig());
+            return null;
+        })
+        .then(result => {
+            if (telegramStarsCatalogPromise === promise) telegramStarsCatalogPromise = null;
+            return result;
+        });
+    telegramStarsCatalogPromise = promise;
+    return promise;
+}
+
+function telegramStarsStatusText(order) {
+    if (!order) return '';
+    if (telegramStarsOrderExpired(order)) return '⌛ Esta factura ha caducado. Si no pagaste, olvídala y crea un pedido nuevo; si Telegram cobró Stars, conserva el recibo y el ID para /paysupport.';
+    return {
+        pending: '⏳ Esperando el pago en Telegram… El saldo solo se acreditará cuando el servidor confirme el successful_payment del bot.',
+        paid_unfulfilled: '✅ Pago confirmado por Telegram. El servidor está acreditando tus $CR; no pagues otra vez.',
+        claimed: '🎉 Entregado: el servidor ya acreditó este pedido una sola vez.',
+        expired: '⌛ Pedido caducado. No reutilices esta factura.',
+        invoice_failed: 'Telegram no llegó a crear la factura; no debería existir ningún cargo por este pedido.',
+        refunded: '↩️ Pedido reembolsado. Este pedido ya no entregará $CR.',
+        refund_required: '⚠️ Cargo en revisión/reembolso. No vuelvas a pagar y conserva el ID para soporte.'
+    }[order.status] || 'Estado registrado en el servidor.';
+}
+
+function renderTelegramStarsPurchasePanelHtml(order) {
+    if (!order) return '';
+    const expired = telegramStarsOrderExpired(order);
+    const effectiveStatus = expired ? 'expired' : order.status;
+    const expiryTime = formatPurchaseExpiry(order);
+    const canOpenInvoice = effectiveStatus === 'pending' && isValidTelegramInvoiceUrl(order.invoiceUrl);
+    return `
+        <div class="stars-purchase-panel">
+            <div class="stars-purchase-title">🧾 PEDIDO ${escapeHtml(order.id)} · ${crCoinIconHtml()} +${Number(order.cr || 0).toLocaleString('es-ES')} $CR</div>
+            <div class="stars-purchase-details">
+                <div>Importe: <strong>⭐ ${Number(order.priceStars || order.stars || 0).toLocaleString('es-ES')} Telegram Stars (XTR)</strong></div>
+                ${expiryTime ? `<div>Factura válida hasta las <strong>${escapeHtml(expiryTime)}</strong></div>` : ''}
+                ${order.telegramPaymentChargeId ? `<div>Cargo Telegram: <code>${escapeHtml(shortChainValue(order.telegramPaymentChargeId, 12, 8))}</code></div>` : ''}
+            </div>
+            <div id="telegram-stars-purchase-status" class="stars-purchase-status">${escapeHtml(telegramStarsStatusText(order))}</div>
+            <div class="stars-purchase-actions">
+                ${canOpenInvoice ? '<button class="btn-primary stars-open-invoice-btn" onclick="openTelegramStarsInvoice()">⭐ ABRIR FACTURA DE TELEGRAM</button>' : ''}
+                <button class="btn-primary stars-check-btn" onclick="checkTelegramStarsPurchaseNow()">🔄 COMPROBAR EN SERVIDOR</button>
+                <button class="btn-nft-secondary" onclick="copyTelegramStarsOrderId()">COPIAR ID</button>
+                <button class="stars-forget-btn" onclick="forgetTelegramStarsPurchase()">✖ OLVIDAR</button>
+            </div>
+            <div class="stars-purchase-note">Si Telegram ya cobró las Stars, no olvides este pedido. Puedes consultar su estado con <strong>/paysupport ${escapeHtml(order.id)}</strong>.</div>
+        </div>`;
+}
+
+function refreshTelegramStarsPurchasePanel(shouldScroll = false) {
+    const panel = document.getElementById('telegram-stars-purchase-panel');
+    if (panel) panel.innerHTML = renderTelegramStarsPurchasePanelHtml(getPendingTelegramStarsPurchase());
+    if (shouldScroll && panel && panel.innerHTML.trim() && typeof panel.scrollIntoView === 'function') {
+        setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+    }
+}
+
+function setTelegramStarsPurchaseStatusText(text) {
+    const el = document.getElementById('telegram-stars-purchase-status');
+    if (el) el.textContent = text;
+}
+
+function copyTelegramStarsOrderId() {
+    const pending = getPendingTelegramStarsPurchase();
+    if (pending) copyTextWithToast(pending.id, '🧾 ID del pedido Stars copiado');
+}
+
+function handleBuyStarsPackage(packageId) {
+    hubAudio.playClick();
+    if (telegramStarsCreateInFlight) return;
+    if (!isTelegramPurchaseContext() || !isTelegramNumericAccount()) {
+        alert('⭐ Telegram Stars solo puede usarse dentro de Telegram con tu cuenta verificada de Telegram. En el navegador, esta cuenta conserva su propio garaje y no puede recibir una compra Stars de otra cuenta.');
+        return;
+    }
+    if (!telegramStarsUiEnabled()) {
+        alert('⭐ Las compras con Telegram Stars están pausadas en el servidor. No envíes TON dentro de Telegram para comprar $CR.');
+        return;
+    }
+    const safePackageId = safeDomId(packageId || '');
+    if (!TELEGRAM_STARS_PACKAGE_FALLBACK.some(pkg => pkg.id === safePackageId)) {
+        showHubToast('⚠️ Paquete de Stars no válido.');
+        return;
+    }
+
+    const existing = getPendingTelegramStarsPurchase();
+    if (existing) {
+        if (existing.status === 'claimed') {
+            markTelegramStarsPurchaseSeen(existing.id);
+            setPendingTelegramStarsPurchase(null);
+        } else {
+            if (!isWeb3WalletModalOpen()) openWeb3WalletModal();
+            refreshTelegramStarsPurchasePanel(true);
+            if (existing.status === 'paid_unfulfilled') {
+                checkTelegramStarsPurchaseStatus(true);
+            } else if (existing.status === 'pending' && !telegramStarsOrderExpired(existing) && existing.packageId === safePackageId) {
+                openTelegramStarsInvoice(existing);
+            } else {
+                showHubToast('⏳ Ya tienes un pedido Stars guardado: complétalo, compruébalo u olvídalo antes de crear otro.');
+                startTelegramStarsPolling();
+            }
+            return;
+        }
+    }
+
+    telegramStarsCreateInFlight = true;
+    showHubToast('🧾 Creando tu factura de Telegram Stars…');
+    fetch('/api/telegram-stars/create', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId(), packageId: safePackageId })
+    })
+        .then(response => response.json().catch(() => null).then(data => ({ status: response.status, data })))
+        .then(({ data }) => {
+            telegramStarsCreateInFlight = false;
+            const order = data && data.order ? data.order : null;
+            const invoiceUrl = data && (data.invoiceUrl || (data.payment && data.payment.invoiceUrl) || (order && order.invoiceUrl));
+            if (!data || data.ok !== true || !order || !isValidTelegramInvoiceUrl(invoiceUrl)) {
+                alert('⚠️ No se pudo crear la factura de Telegram Stars' + (data && data.message ? ': ' + data.message : '') + '\n\nNo se ha cobrado nada y no debes pagar por otra vía dentro de Telegram.');
+                return;
+            }
+            const storedOrder = { ...order, invoiceUrl };
+            setPendingTelegramStarsPurchase(storedOrder);
+            if (!isWeb3WalletModalOpen()) openWeb3WalletModal();
+            refreshTelegramStarsPurchasePanel(true);
+            openTelegramStarsInvoice(storedOrder);
+        })
+        .catch(() => {
+            telegramStarsCreateInFlight = false;
+            alert('⚠️ Sin conexión con el servidor. No se ha creado ninguna factura ni se ha cobrado nada.');
+        });
+}
+
+function normalizeTelegramInvoiceStatus(value) {
+    if (value && typeof value === 'object') return String(value.status || value.result || '').toLowerCase();
+    return String(value || '').toLowerCase();
+}
+
+function handleTelegramInvoiceClosed(orderId, rawStatus) {
+    const pending = getPendingTelegramStarsPurchase();
+    if (!pending || pending.id !== orderId) return;
+    const status = normalizeTelegramInvoiceStatus(rawStatus);
+    if (status === 'cancelled' || status === 'canceled') {
+        setTelegramStarsPurchaseStatusText('Factura cerrada/cancelada en Telegram. No se ha acreditado nada; el pedido queda guardado hasta caducar por si quieres reabrirla.');
+        checkTelegramStarsPurchaseStatus(false);
+        return;
+    }
+    if (status === 'paid') {
+        setTelegramStarsPurchaseStatusText('Telegram indicó “pagado”. Confirmando ahora con el servidor antes de acreditar…');
+    } else if (status === 'pending') {
+        setTelegramStarsPurchaseStatusText('Telegram dejó el pago pendiente. Confirmando el estado real con el servidor…');
+    } else if (status === 'failed') {
+        setTelegramStarsPurchaseStatusText('Telegram indicó que el pago falló. Confirmando con el servidor; no pagues dos veces sin comprobar.');
+    } else {
+        setTelegramStarsPurchaseStatusText('Factura cerrada. Confirmando el estado real con el servidor…');
+    }
+    startTelegramStarsPolling();
+    checkTelegramStarsPurchaseStatus(false);
+}
+
+function openTelegramStarsInvoice(order = null) {
+    hubAudio.playClick();
+    const pending = order || getPendingTelegramStarsPurchase();
+    if (!pending || !isValidTelegramInvoiceUrl(pending.invoiceUrl)) {
+        showHubToast('⚠️ Este pedido no tiene una factura válida de Telegram.');
+        return;
+    }
+    if (telegramStarsOrderExpired(pending)) {
+        refreshTelegramStarsPurchasePanel(true);
+        showHubToast('⌛ Esta factura ya caducó. Olvídala y crea un pedido nuevo.');
+        return;
+    }
+    let tg = null;
+    try { tg = window.Telegram && window.Telegram.WebApp; } catch (e) {}
+    if (!tg || typeof tg.openInvoice !== 'function') {
+        try { window.open(pending.invoiceUrl, '_blank'); } catch (e) {}
+        setTelegramStarsPurchaseStatusText('Abre este enlace solo dentro de Telegram. Al volver, pulsa COMPROBAR EN SERVIDOR.');
+        startTelegramStarsPolling();
+        return;
+    }
+    let finished = false;
+    const done = status => {
+        if (finished) return;
+        finished = true;
+        handleTelegramInvoiceClosed(pending.id, status);
+    };
+    try {
+        const result = tg.openInvoice(pending.invoiceUrl, done);
+        if (result && typeof result.then === 'function') {
+            result.then(done).catch(() => done('failed'));
+        }
+    } catch (e) {
+        done('failed');
+    }
+    startTelegramStarsPolling();
+}
+
+function startTelegramStarsPolling() {
+    stopTelegramStarsPolling();
+    telegramStarsPollTimer = setInterval(() => checkTelegramStarsPurchaseStatus(false), 4000);
+}
+
+function stopTelegramStarsPolling() {
+    if (telegramStarsPollTimer) {
+        clearInterval(telegramStarsPollTimer);
+        telegramStarsPollTimer = null;
+    }
+}
+
+function checkTelegramStarsPurchaseNow() {
+    hubAudio.playClick();
+    checkTelegramStarsPurchaseStatus(true);
+}
+
+function checkTelegramStarsPurchaseStatus(manual = false) {
+    const pending = getPendingTelegramStarsPurchase();
+    if (!pending) {
+        stopTelegramStarsPolling();
+        return Promise.resolve(null);
+    }
+    if (telegramStarsStatusInFlight) return Promise.resolve(null);
+    if (typeof fetch !== 'function') return Promise.resolve(null);
+    telegramStarsStatusInFlight = true;
+    return fetch(`/api/telegram-stars/status?orderId=${encodeURIComponent(pending.id)}&userId=${encodeURIComponent(getApexUserId())}`, {
+        headers: apexApiHeaders()
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true || !data.order) {
+                if (manual) setTelegramStarsPurchaseStatusText('⚠️ No se pudo comprobar ahora. Tu pedido sigue guardado; no pagues otra vez sin revisar.');
+                return null;
+            }
+            if (data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+            const order = { ...pending, ...data.order };
+            if (order.status === 'claimed') {
+                stopTelegramStarsPolling();
+                const alreadySeen = hasSeenTelegramStarsPurchase(order.id);
+                markTelegramStarsPurchaseSeen(order.id);
+                setPendingTelegramStarsPurchase(null);
+                refreshTelegramStarsPurchasePanel(false);
+                renderHubHeader();
+                if (isWeb3WalletModalOpen()) openWeb3WalletModal();
+                if (!alreadySeen && telegramStarsClaimNoticeOrderId !== order.id) {
+                    telegramStarsClaimNoticeOrderId = order.id;
+                    hubAudio.playOpenCrate();
+                    alert(`🎉 ¡Compra con Telegram Stars confirmada!\n\n+${Number(order.cr || 0).toLocaleString('es-ES')} $CR acreditados por el servidor.\nPedido: ${order.id}\n\nGracias por apoyar APEX Motorsport.`);
+                }
+                return order;
+            }
+
+            setPendingTelegramStarsPurchase(order);
+            refreshTelegramStarsPurchasePanel(false);
+            if (order.status === 'paid_unfulfilled' || order.status === 'pending') {
+                if (telegramStarsOrderExpired(order)) {
+                    stopTelegramStarsPolling();
+                    setTelegramStarsPurchaseStatusText(telegramStarsStatusText(order));
+                } else {
+                    if (!telegramStarsPollTimer && isWeb3WalletModalOpen()) startTelegramStarsPolling();
+                    if (manual && order.status === 'pending') {
+                        setTelegramStarsPurchaseStatusText('⏳ El servidor todavía no ha recibido el successful_payment de Telegram. Si acabas de pagar, espera unos segundos y vuelve a comprobar.');
+                    }
+                }
+            } else {
+                stopTelegramStarsPolling();
+            }
+            return order;
+        })
+        .catch(() => {
+            if (manual) setTelegramStarsPurchaseStatusText('⚠️ Sin conexión para comprobar. Tu pedido sigue guardado; no pagues otra vez sin revisar.');
+            return null;
+        })
+        .then(result => {
+            telegramStarsStatusInFlight = false;
+            return result;
+        });
+}
+
+function forgetTelegramStarsPurchase() {
+    hubAudio.playClick();
+    const pending = getPendingTelegramStarsPurchase();
+    if (!pending) return;
+    const paidWarning = pending.status === 'paid_unfulfilled'
+        ? '\n\n⚠️ Este pedido ya consta pagado y pendiente de entrega. NO deberías olvidarlo.'
+        : '\n\nSolo olvídalo si Telegram no te cobró las Stars. Olvidar no cancela el pedido en el servidor; caducará solo.';
+    if (!confirm(`¿Olvidar el pedido Stars ${pending.id} en este dispositivo?${paidWarning}`)) return;
+    if (pending.status === 'claimed') markTelegramStarsPurchaseSeen(pending.id);
+    setPendingTelegramStarsPurchase(null);
+    stopTelegramStarsPolling();
+    refreshTelegramStarsPurchasePanel(false);
+    showHubToast('🧾 Pedido Stars olvidado en este dispositivo.');
+}
+
+function recoverTelegramStarsPurchasesFromServer() {
+    if (!isTelegramPurchaseContext() || typeof fetch !== 'function' || getPendingTelegramStarsPurchase()) return Promise.resolve(null);
+    if (telegramStarsRecoveryPromise) return telegramStarsRecoveryPromise;
+    telegramStarsRecoveryPromise = fetch(`/api/telegram-stars/list?userId=${encodeURIComponent(getApexUserId())}&limit=50`, {
+        headers: apexApiHeaders()
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true || !Array.isArray(data.orders)) return null;
+            const orders = data.orders.map(entry => entry && entry.order ? entry.order : entry).filter(order => order && order.id);
+            const selected = orders.find(order => order.status === 'paid_unfulfilled')
+                || orders.find(order => order.status === 'claimed' && !hasSeenTelegramStarsPurchase(order.id))
+                || orders.find(order => order.status === 'pending' && !telegramStarsOrderExpired(order) && isValidTelegramInvoiceUrl(order.invoiceUrl));
+            if (!selected) return null;
+            setPendingTelegramStarsPurchase(selected);
+            refreshTelegramStarsPurchasePanel(true);
+            showHubToast(`🧾 Pedido Stars ${selected.id} recuperado desde el servidor.`);
+            if (selected.status === 'pending') {
+                startTelegramStarsPolling();
+                checkTelegramStarsPurchaseStatus(false);
+            } else {
+                checkTelegramStarsPurchaseStatus(false);
+            }
+            return selected;
+        })
+        .catch(() => null)
+        .then(result => {
+            telegramStarsRecoveryPromise = null;
+            return result;
+        });
+    return telegramStarsRecoveryPromise;
+}
+
+if (typeof window !== 'undefined') {
+    window.handleBuyStarsPackage = handleBuyStarsPackage;
+    window.openTelegramStarsInvoice = openTelegramStarsInvoice;
+    window.checkTelegramStarsPurchaseNow = checkTelegramStarsPurchaseNow;
+    window.forgetTelegramStarsPurchase = forgetTelegramStarsPurchase;
+    window.copyTelegramStarsOrderId = copyTelegramStarsOrderId;
+    window.recoverTelegramStarsPurchasesFromServer = recoverTelegramStarsPurchasesFromServer;
+}
+
+function updateTonPurchaseCatalogUi(catalog) {
+    if (!catalog) return;
+    const telegramTonBlocked = isTelegramPurchaseContext();
+    if (telegramTonBlocked) {
+        const rateEl = document.getElementById('ton-rate-line');
+        if (rateEl) rateEl.textContent = 'Dentro de Telegram usa Telegram Stars; no envíes TON para comprar $CR';
+        const packageContainer = document.getElementById('ton-cr-packages');
+        if (packageContainer) {
+            packageContainer.innerHTML = '<div style="grid-column:1/-1;padding:14px;border:1px solid rgba(245,158,11,0.55);background:rgba(245,158,11,0.10);border-radius:10px;color:#fde68a;font-size:12px;line-height:1.5;text-align:center;">⭐ Dentro de Telegram, compra $CR en la sección <strong>Telegram Stars</strong> de arriba y abre cofres con tu saldo $CR. <strong>No envíes TON desde esta pantalla.</strong></div>';
+        }
+        try {
+            document.querySelectorAll('.crate-ton-estimate').forEach(el => { el.textContent = 'TON en Telegram: en pausa'; });
+            document.querySelectorAll('.btn-ton-crate').forEach(el => { el.disabled = true; el.style.opacity = '0.55'; });
+        } catch (e) {}
+        return;
+    }
+    const rateEl = document.getElementById('ton-rate-line');
+    if (rateEl) {
+        rateEl.textContent = `1 TON ≈ ${formatTonAmountForDisplay(catalog.tonUsdtRate, 6)} USDT · 1.000 $CR = 1 USDT`;
+    }
+
+    const packageContainer = document.getElementById('ton-cr-packages');
+    if (packageContainer && Array.isArray(catalog.packages)) {
+        packageContainer.innerHTML = renderTonCrPackageButtonsHtml(catalog.packages);
+    }
+
+    const crates = Array.isArray(catalog.crates) ? catalog.crates : [];
+    crates.forEach(product => {
+        const crateId = safeDomId(product.crateId || '');
+        const el = document.getElementById('crate-ton-price-' + crateId);
+        if (el) {
+            el.textContent = `≈ ${formatTonAmountForDisplay(product.amountTon || product.ton, 6)} TON · ${formatTonAmountForDisplay(product.priceUsdt, 2)} USDT`;
+        }
+    });
+}
+
+function setTonCatalogUnavailableUi() {
+    if (isTelegramPurchaseContext()) {
+        updateTonPurchaseCatalogUi({ telegramTonPurchasesEnabled: false });
+        return;
+    }
+    const rateEl = document.getElementById('ton-rate-line');
+    if (rateEl) rateEl.textContent = '1.000 $CR = 1 USDT · Cotización TON al crear el pedido';
+    try {
+        document.querySelectorAll('.crate-ton-estimate').forEach(el => {
+            el.textContent = 'Precio TON al crear el pedido';
+        });
+    } catch (e) {}
+}
+
+function loadTonPurchaseCatalog(force = false) {
+    if (isTelegramPurchaseContext()) {
+        updateTonPurchaseCatalogUi({ telegramTonPurchasesEnabled: false });
+        return Promise.resolve(null);
+    }
+    const now = Date.now();
+    if (!force && tonPurchaseCatalogCache && now - tonPurchaseCatalogFetchedAt < 60000) {
+        updateTonPurchaseCatalogUi(tonPurchaseCatalogCache);
+        return Promise.resolve(tonPurchaseCatalogCache);
+    }
+    if (tonPurchaseCatalogPromise) return tonPurchaseCatalogPromise;
+    if (typeof fetch !== 'function') {
+        setTonCatalogUnavailableUi();
+        return Promise.resolve(null);
+    }
+
+    let request;
+    try {
+        request = fetch('/api/purchases/packages', { headers: { Accept: 'application/json' } });
+    } catch (e) {
+        setTonCatalogUnavailableUi();
+        return Promise.resolve(null);
+    }
+
+    const promise = Promise.resolve(request)
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || data.ok !== true) {
+                setTonCatalogUnavailableUi();
+                return null;
+            }
+            tonPurchaseCatalogCache = data;
+            tonPurchaseCatalogFetchedAt = Date.now();
+            updateTonPurchaseCatalogUi(data);
+            return data;
+        })
+        .catch(() => {
+            setTonCatalogUnavailableUi();
+            return null;
+        });
+    tonPurchaseCatalogPromise = promise;
+    promise.then(() => {
+        if (tonPurchaseCatalogPromise === promise) tonPurchaseCatalogPromise = null;
+    });
+    return promise;
+}
+
+function getPendingTonPurchase() {
+    try {
+        const raw = localStorage.getItem(APEX_PENDING_PURCHASE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed.id === 'string' ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function setPendingTonPurchase(order, payment) {
+    try {
+        if (!order) {
+            localStorage.removeItem(APEX_PENDING_PURCHASE_KEY);
+            return;
+        }
+        localStorage.setItem(APEX_PENDING_PURCHASE_KEY, JSON.stringify({
+            ...order,
+            payment: payment || order.payment || null
+        }));
+    } catch (e) {}
+}
+
+function getClaimedTonPurchases() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(APEX_CLAIMED_PURCHASES_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function markTonPurchaseClaimedLocally(orderId) {
+    try {
+        const list = getClaimedTonPurchases();
+        if (!list.includes(orderId)) {
+            list.push(orderId);
+            localStorage.setItem(APEX_CLAIMED_PURCHASES_KEY, JSON.stringify(list.slice(-50)));
+        }
+    } catch (e) {}
+}
+
+function copyTextWithToast(text, toastMessage) {
+    hubAudio.playClick();
+    try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(String(text || ''));
+        }
+    } catch (e) {}
+    showHubToast(toastMessage);
+}
+
+function copyTreasuryAddress() {
+    copyTextWithToast(getTreasuryWalletAddress(), '🏦 Dirección de tesorería copiada');
+}
+
+function copyPurchaseAddress() {
+    const pending = getPendingTonPurchase();
+    const address = (pending && pending.payment && pending.payment.address) || getTreasuryWalletAddress();
+    copyTextWithToast(address, '🏦 Dirección de tesorería copiada');
+}
+
+function copyPurchaseComment() {
+    const pending = getPendingTonPurchase();
+    if (pending) copyTextWithToast(pending.id, '🧾 Comentario del pedido copiado');
+}
+
+function renderTonPurchasePanelHtml(order) {
+    if (!order) return '';
+    const payment = order.payment || {};
+    const address = payment.address || getTreasuryWalletAddress();
+    const shortAddress = address.slice(0, 10) + '…' + address.slice(-8);
+    const isCrate = order.productType === 'crate';
+    const productTitle = isCrate
+        ? escapeHtml(order.label || 'COFRE NFT')
+        : `${crCoinIconHtml()} +${Number(order.cr || 0).toLocaleString('es-ES')} $CR`;
+    const expiryTime = formatPurchaseExpiry(order);
+    const quoteLine = order.tonUsdtRate
+        ? `<div>Cotización bloqueada: <strong style="color: #ffffff;">1 TON = ${escapeHtml(formatTonAmountForDisplay(order.tonUsdtRate, 6))} USDT</strong>${expiryTime ? ` · pagar antes de las ${escapeHtml(expiryTime)}` : ''}</div>`
+        : (expiryTime ? `<div>Pagar antes de las <strong style="color: #ffffff;">${escapeHtml(expiryTime)}</strong></div>` : '');
+    const statusText = order.quoteExpired
+        ? '⌛ Esta cotización ha caducado. Si aún no has pagado, olvida este pedido y crea uno nuevo.'
+        : ((order.status === 'paid' || order.status === 'claimed')
+            ? (isCrate ? '✅ Pago confirmado on-chain. Abriendo tu cofre…' : '✅ Pago confirmado on-chain. Acreditando tus $CR…')
+            : '⏳ Esperando tu pago… el servidor comprueba la blockchain automáticamente.');
+    return `
+        <div style="margin-top: 10px; background: rgba(2, 132, 199, 0.10); border: 1px solid rgba(0, 152, 234, 0.5); border-radius: 10px; padding: 12px;">
+            <div style="font-size: 12px; font-weight: 900; color: #38bdf8; margin-bottom: 8px;">🧾 PEDIDO ${escapeHtml(order.id)} · ${productTitle}</div>
+            <div style="font-size: 11.5px; color: #e2e8f0; line-height: 1.6;">
+                <div>Importe exacto: <strong style="color: #ffffff;">${escapeHtml(order.amountTon)} TON</strong></div>
+                ${quoteLine}
+                <div class="ton-detail-row">
+                    <span class="ton-detail-value">Enviar a: <span style="font-family: monospace; color: #ffffff;">${escapeHtml(shortAddress)}</span></span>
+                    <button class="ton-copy-btn" onclick="copyPurchaseAddress()">COPIAR</button>
+                </div>
+                <div class="ton-detail-row">
+                    <span class="ton-detail-value">Comentario (obligatorio): <strong style="font-family: monospace; color: #fde047;">${escapeHtml(order.id)}</strong></span>
+                    <button class="ton-copy-btn" onclick="copyPurchaseComment()">COPIAR</button>
+                </div>
+            </div>
+            <div id="ton-purchase-status" style="font-size: 11px; color: #bae6fd; margin: 10px 0;">${statusText}</div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn-primary" onclick="openTonPaymentLink()" style="flex: 1 1 150px; min-height: 44px; padding: 10px 8px; background: #0098ea; border: none; border-radius: 8px; color: #fff; font-weight: 900; font-size: 12px; cursor: pointer;">💎 ABRIR MI WALLET PARA PAGAR</button>
+                <button class="btn-primary" onclick="checkTonPurchaseNow()" style="flex: 1 1 130px; min-height: 44px; padding: 10px 8px; background: rgba(0, 245, 212, 0.18); border: 1px solid #00f5d4; border-radius: 8px; color: #a7f3ea; font-weight: 900; font-size: 12px; cursor: pointer;">🔄 YA PAGUÉ · COMPROBAR</button>
+                <button onclick="forgetTonPurchase()" style="min-height: 44px; padding: 10px 8px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 8px; color: #fca5a5; font-weight: 800; font-size: 11px; cursor: pointer;">✖ OLVIDAR</button>
+            </div>
+            <div style="font-size: 10px; color: #94a3b8; margin-top: 8px; line-height: 1.4;">Si el botón no abre tu wallet, envía manualmente el importe exacto a la dirección indicada con ese mismo comentario. No olvides este pedido hasta ver la compra aplicada.</div>
+        </div>
+    `;
+}
+
+function scrollTonPurchasePanelIntoView() {
+    setTimeout(() => {
+        const panel = document.getElementById('ton-purchase-panel');
+        if (panel && panel.innerHTML.trim() && typeof panel.scrollIntoView === 'function') {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }, 60);
+}
+
+function refreshTonPurchasePanel(shouldScroll = false) {
+    const panel = document.getElementById('ton-purchase-panel');
+    if (panel) panel.innerHTML = renderTonPurchasePanelHtml(getPendingTonPurchase());
+    if (shouldScroll) scrollTonPurchasePanelIntoView();
+}
+
+function setTonPurchaseStatusText(text) {
+    const el = document.getElementById('ton-purchase-status');
+    if (el) el.textContent = text;
+}
+
+function isWeb3WalletModalOpen() {
+    const modal = document.getElementById('wallet-modal');
+    return Boolean(modal && modal.style.display !== 'none' && !modal.classList.contains('hidden'));
+}
+
+function handleBuyTonProduct(packageId) {
+    hubAudio.playClick();
+    if (isTelegramPurchaseContext()) {
+        if (!isWeb3WalletModalOpen()) openWeb3WalletModal();
+        showHubToast('⭐ Dentro de Telegram compra $CR con Telegram Stars y luego abre cofres con $CR. No envíes TON.');
+        return;
+    }
+    const existing = getPendingTonPurchase();
+    if (existing && existing.status === 'pending') {
+        if (!isWeb3WalletModalOpen()) openWeb3WalletModal();
+        showHubToast('⏳ Ya tienes un pedido pendiente: págalo u olvídalo antes de crear otro.');
+        refreshTonPurchasePanel(true);
+        startTonPurchasePolling();
+        return;
+    }
+    if (existing && (existing.status === 'paid' || existing.status === 'claimed')) {
+        // Nunca sobrescribir localmente un pago confirmado aún sin aplicar:
+        // primero se reclama ese pedido y después ya podrá crear otro.
+        if (!isWeb3WalletModalOpen()) {
+            // Al abrirse, la billetera detecta paid/claimed y hace el claim.
+            openWeb3WalletModal();
+            return;
+        }
+        refreshTonPurchasePanel(true);
+        claimTonPurchase(existing);
+        return;
+    }
+    showHubToast('🧾 Creando tu pedido y bloqueando la cotización…');
+    fetch('/api/purchases/create', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId(), packageId })
+    })
+        .then(response => response.json().then(data => data).catch(() => null))
+        .then(data => {
+            if (!data || !data.ok || !data.order) {
+                alert('⚠️ No se pudo crear el pedido de compra' + (data && data.message ? ': ' + data.message : '') + '.\n\nComprueba tu conexión e inténtalo de nuevo. No envíes TON sin un pedido creado.');
+                return;
+            }
+            setPendingTonPurchase(data.order, data.payment);
+            openWeb3WalletModal();
+            refreshTonPurchasePanel(true);
+            startTonPurchasePolling();
+            showHubToast('🧾 Pedido creado: paga con el comentario ' + data.order.id);
+        })
+        .catch(() => {
+            alert('⚠️ Sin conexión con el servidor. No se ha creado ningún pedido; no envíes TON todavía.');
+        });
+}
+
+function handleBuyCrPackage(packageId) {
+    handleBuyTonProduct(packageId);
+}
+
+function handleBuyCrateWithTon(crateId) {
+    const safeCrateId = safeDomId(crateId);
+    if (!['bronze', 'silver', 'gold'].includes(safeCrateId)) {
+        showHubToast('⚠️ Cofre no válido.');
+        return;
+    }
+    handleBuyTonProduct('crate_' + safeCrateId);
+}
+
+function openTonPaymentLink() {
+    hubAudio.playClick();
+    if (isTelegramPurchaseContext()) {
+        showHubToast('⭐ Dentro de Telegram no se abre ningún pago TON para $CR o cofres. Usa Telegram Stars.');
+        if (!isWeb3WalletModalOpen()) openWeb3WalletModal();
+        return;
+    }
+    const pending = getPendingTonPurchase();
+    if (!pending) return;
+    const url = (pending.payment && pending.payment.tonkeeperUrl) || '';
+    if (!url) {
+        showHubToast('⚠️ Este pedido no tiene enlace de pago; envía el TON manualmente con el comentario.');
+        return;
+    }
+    try {
+        if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+            window.Telegram.WebApp.openLink(url);
+            return;
+        }
+    } catch (e) {}
+    window.open(url, '_blank');
+}
+
+function startTonPurchasePolling() {
+    stopTonPurchasePolling();
+    tonPurchasePollTimer = setInterval(() => checkTonPurchaseStatus(false), 6000);
+}
+
+function stopTonPurchasePolling() {
+    if (tonPurchasePollTimer) {
+        clearInterval(tonPurchasePollTimer);
+        tonPurchasePollTimer = null;
+    }
+}
+
+function checkTonPurchaseNow() {
+    hubAudio.playClick();
+    checkTonPurchaseStatus(true);
+}
+
+function checkTonPurchaseStatus(manual) {
+    const pending = getPendingTonPurchase();
+    if (!pending) {
+        stopTonPurchasePolling();
+        return;
+    }
+    fetch(`/api/purchases/status?orderId=${encodeURIComponent(pending.id)}&userId=${encodeURIComponent(getApexUserId())}`, {
+        headers: apexApiHeaders()
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || !data.ok || !data.order) {
+                if (manual) setTonPurchaseStatusText('⚠️ No se pudo comprobar ahora. Tu pedido sigue guardado; inténtalo en unos segundos.');
+                return;
+            }
+            const order = data.order;
+            setPendingTonPurchase(order, data.payment || pending.payment);
+            if (order.status === 'paid' || order.status === 'claimed') {
+                claimTonPurchase(order);
+                return;
+            }
+            if (order.quoteExpired) {
+                refreshTonPurchasePanel();
+                setTonPurchaseStatusText('⌛ Cotización caducada sin pago dentro de la ventana. Si no pagaste, olvida este pedido y crea uno nuevo; si pagaste, conserva el hash para soporte.');
+                stopTonPurchasePolling();
+                return;
+            }
+            refreshTonPurchasePanel();
+            setTonPurchaseStatusText(data.verificationPending
+                ? '⏳ Verificando en la blockchain…'
+                : '⏳ Pago aún no detectado. Si acabas de enviar el TON, espera unos 30 s y pulsa COMPROBAR.');
+        })
+        .catch(() => {
+            if (manual) setTonPurchaseStatusText('⚠️ Sin conexión para comprobar. Tu pedido sigue guardado.');
+        });
+}
+
+function claimTonPurchase(order) {
+    fetch('/api/purchases/claim', {
+        method: 'POST',
+        headers: apexApiHeaders(),
+        body: JSON.stringify({ userId: getApexUserId(), orderId: order.id })
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || !data.ok) {
+                setTonPurchaseStatusText('✅ Pago confirmado. Reintentando aplicar tu compra…');
+                return;
+            }
+
+            if (data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+            const claimedOrder = data.order || order;
+            const storedPending = getPendingTonPurchase();
+            if (data.order) {
+                // Conservar el pedido como claimed hasta terminar de aplicar
+                // el saldo o el cofre. Si la app se cierra justo aquí, al
+                // reabrir la billetera se reintenta sin duplicar nada.
+                setPendingTonPurchase(data.order, storedPending ? storedPending.payment : null);
+            }
+
+            const productType = data.productType || claimedOrder.productType || order.productType || 'cr';
+            if (productType === 'crate') {
+                const crateId = safeDomId(data.crateId || claimedOrder.crateId || order.crateId || '');
+                if (!['bronze', 'silver', 'gold'].includes(crateId)) {
+                    showHubToast('⚠️ Pago confirmado, pero el pedido no identifica el cofre. Conserva el ID del pedido para soporte.');
+                    return;
+                }
+
+                const alreadyApplied = hasAppliedTonPurchaseLocally(order.id);
+                const serverCrateResult = data.economyResult || null;
+                if (!alreadyApplied && (!serverCrateResult || !serverCrateResult.success)) {
+                    showHubToast('✅ Pago confirmado y guardado en servidor. Vuelve a abrir la billetera para recuperar el resultado del cofre sin pagar otra vez.');
+                    return;
+                }
+                stopTonPurchasePolling();
+                closeWeb3WalletModal();
+                showHubView('crates');
+                const res = alreadyApplied
+                    ? { success: false, alreadyApplied: true }
+                    : triggerCrateOpening(crateId, { serverResult: serverCrateResult });
+                if (!res || (!res.success && !res.alreadyApplied)) {
+                    showHubToast('✅ Pago confirmado. No se pudo abrir el cofre ahora; vuelve a la billetera para reintentarlo sin pagar otra vez.');
+                    return;
+                }
+
+                markTonPurchaseClaimedLocally(order.id);
+                setPendingTonPurchase(null);
+                renderHubHeader();
+                if (alreadyApplied || res.alreadyApplied) {
+                    showHubToast('✅ Este cofre TON ya estaba aplicado en tu garaje.');
+                }
+                return;
+            }
+
+            const cr = Number(data.cr || claimedOrder.cr || order.cr || 0);
+            // v104: el servidor ya acreditó los $CR dentro de la transacción
+            // de claim y devolvió el garaje autoritativo aplicado arriba.
+            // El cliente solo marca el aviso local como visto; no suma saldo.
+            if (cr > 0) markTonPurchaseClaimedLocally(order.id);
+            setPendingTonPurchase(null);
+            stopTonPurchasePolling();
+            renderHubHeader();
+            openWeb3WalletModal();
+            hubAudio.playOpenCrate();
+            alert(`🎉 ¡Compra confirmada!\n\n+${cr.toLocaleString()} $CR acreditados en tu cuenta.\nPedido: ${order.id}\n\nPago verificado en la blockchain de TON. ¡Gracias por apoyar APEX Motorsport!`);
+        })
+        .catch(() => {
+            setTonPurchaseStatusText('✅ Pago confirmado. Sin conexión para aplicar la compra ahora; pulsa COMPROBAR en unos segundos.');
+        });
+}
+
+function forgetTonPurchase() {
+    hubAudio.playClick();
+    const pending = getPendingTonPurchase();
+    if (!pending) return;
+    if (!confirm(`¿Olvidar el pedido ${pending.id}?\n\nSi ya enviaste el TON con ese comentario, NO lo olvides: lo necesitas para aplicar tu compra. Solo olvídalo si aún no has pagado.`)) return;
+    setPendingTonPurchase(null);
+    stopTonPurchasePolling();
+    refreshTonPurchasePanel();
+    showHubToast('🧾 Pedido olvidado en este dispositivo.');
+}
+
+let tonPurchaseRecoveryPromise = null;
+function recoverTonPurchasesFromServer() {
+    if (isTelegramPurchaseContext() || typeof fetch !== 'function' || getPendingTonPurchase()) return Promise.resolve(null);
+    if (tonPurchaseRecoveryPromise) return tonPurchaseRecoveryPromise;
+    tonPurchaseRecoveryPromise = fetch(`/api/purchases/list?userId=${encodeURIComponent(getApexUserId())}&limit=50`, {
+        headers: apexApiHeaders()
+    })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!data || !data.ok || !Array.isArray(data.orders)) return null;
+            const entries = data.orders.filter(entry => entry && entry.order && entry.order.id);
+            const paid = entries.find(entry => entry.order.status === 'paid');
+            const claimedUnseen = entries.find(entry => entry.order.status === 'claimed' && !hasAppliedTonPurchaseLocally(entry.order.id));
+            const pending = entries.find(entry => entry.order.status === 'pending' && !entry.order.quoteExpired);
+            const selected = paid || claimedUnseen || pending;
+            if (!selected) return null;
+            setPendingTonPurchase(selected.order, selected.payment || null);
+            refreshTonPurchasePanel(true);
+            showHubToast(`🧾 Pedido ${selected.order.id} recuperado desde el servidor.`);
+            if (selected.order.status === 'pending') {
+                startTonPurchasePolling();
+                checkTonPurchaseStatus(false);
+            } else {
+                claimTonPurchase(selected.order);
+            }
+            return selected.order;
+        })
+        .catch(() => null)
+        .then(result => { tonPurchaseRecoveryPromise = null; return result; });
+    return tonPurchaseRecoveryPromise;
+}
+if (typeof window !== 'undefined') window.recoverTonPurchasesFromServer = recoverTonPurchasesFromServer;
+
 function openWeb3WalletModal() {
     hubAudio.playClick();
     let modal = document.getElementById('wallet-modal');
@@ -5414,9 +7311,12 @@ function openWeb3WalletModal() {
     const isConnected = !!userData.walletConnected;
     const addr = userData.walletAddress || '';
     const crBalance = userData.credits || 0;
-    const tonBalance = typeof userData.gems === 'number' ? userData.gems : 0;
-    const pilotLvl = (userData.equippedCarId && userData.carLevels && userData.carLevels[userData.equippedCarId]) || 1;
-    const canWithdraw = pilotLvl >= 3 && crBalance >= 1000;
+    const gemsBalance = typeof userData.gems === 'number' ? userData.gems : 0;
+    const treasuryAddress = getTreasuryWalletAddress();
+    const treasuryShort = treasuryAddress.slice(0, 8) + '…' + treasuryAddress.slice(-6);
+    const inTelegram = isTelegramPurchaseContext();
+    const pendingPurchase = inTelegram ? null : getPendingTonPurchase();
+    const pendingStarsPurchase = inTelegram ? getPendingTelegramStarsPurchase() : null;
 
     modal.innerHTML = `
         <div class="settings-dialog" style="max-width: 600px;">
@@ -5424,136 +7324,156 @@ function openWeb3WalletModal() {
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 28px;">💎</span>
                     <div>
-                        <h2 style="margin: 0; font-size: 18px; color: #0098ea;">BILLETERA WEB3 & TON — SIMULACIÓN LOCAL</h2>
-                        <span style="font-size: 11px; color: #cbd5e1;">Sin blockchain ni fondos reales: solo una demostración local con saldos ficticios</span>
+                        <h2 style="margin: 0; font-size: 18px; color: #0098ea;">${inTelegram ? 'BILLETERA & TELEGRAM STARS' : 'BILLETERA WEB3 & TON'}</h2>
+                        <span style="font-size: 11px; color: #cbd5e1;">${inTelegram ? 'Dentro de Telegram: compra $CR con Stars y abre cofres con tu saldo' : `Compra $CR y cofres con TON real · Tesorería oficial ${escapeHtml(treasuryShort)}`}</span>
                     </div>
                 </div>
                 <button class="settings-close-x" onclick="closeWeb3WalletModal()">✖</button>
             </div>
 
-            <div class="settings-body" style="padding: 20px; max-height: 480px; overflow-y: auto;">
-                ${!isConnected ? `
-                    <div style="text-align: center; padding: 15px 10px;">
-                        <div style="font-size: 40px; margin-bottom: 12px;">🔗</div>
-                        <h3 style="margin: 0 0 8px; color: #ffffff; font-size: 16px;">ACTIVA LA BILLETERA SIMULADA</h3>
-                        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 20px;">
-                            Esta pantalla no conecta ninguna billetera real ni mueve fondos. Solo crea una dirección ficticia para probar la interfaz del juego.
-                        </p>
+            <div class="settings-body wallet-modal-body" style="padding: 20px; overflow-y: auto;">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- MINI BANNER APEX MOTORSPORT TOKEN -->
+                    <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+                        <img src="assets/apex_cr_coin_256.jpg" alt="APEX $CR" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid #00f5d4; box-shadow: 0 0 10px rgba(0, 245, 212, 0.4); object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'">
+                        <div style="flex: 1;">
+                            <div style="font-size: 13.5px; font-weight: 900; color: #00f5d4; letter-spacing: 0.5px;">APEX MOTORSPORT ($CR)</div>
+                            <div style="font-size: 10.5px; color: #94a3b8; line-height: 1.3;">Moneda interna del juego. Se compra con Telegram Stars dentro de Telegram o con TON en la web; no es un token emitido en blockchain.</div>
+                        </div>
+                        <span style="font-size: 9.5px; background: rgba(0, 245, 212, 0.15); border: 1px solid #00f5d4; color: #00f5d4; font-weight: 800; padding: 3px 8px; border-radius: 6px;">MONEDA INTERNA</span>
+                    </div>
 
-                        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 360px; margin: 0 auto;">
-                            <button class="btn-wallet-connect" onclick="handleConnectWallet('telegram_wallet')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #0098ea; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
-                                <span>📱</span> SIMULAR TELEGRAM WALLET
-                            </button>
-                            <button class="btn-wallet-connect" onclick="handleConnectWallet('tonkeeper')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #2f8af5; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
-                                <span>🛡️</span> SIMULAR TONKEEPER
-                            </button>
-                            <button class="btn-wallet-connect" onclick="handleConnectWallet('mytonwallet')" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px; background: #ff9900; color: #ffffff; border: none; border-radius: 10px; font-weight: 900; font-size: 13px; cursor: pointer;">
-                                <span>💎</span> SIMULAR MYTONWALLET
-                            </button>
+                    <!-- BALANCES -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px;">
+                            <div style="font-size: 10.5px; color: #94a3b8; font-weight: 800;">SALDO DEL JUEGO</div>
+                            <div style="font-size: 18px; font-weight: 900; color: #fde047; margin-top: 4px;">${crCoinIconHtml('cr-coin-icon-wallet-balance')} ${crBalance.toLocaleString()} $CR</div>
+                            <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Para coches, mejoras y torneos</div>
+                        </div>
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px;">
+                            <div style="font-size: 10.5px; color: #94a3b8; font-weight: 800;">GEMAS (INTERNAS)</div>
+                            <div style="font-size: 18px; font-weight: 900; color: #0098ea; margin-top: 4px;">💎 ${gemsBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                            <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Moneda premium interna para mejoras especiales</div>
                         </div>
                     </div>
-                ` : `
-                    <div style="display: flex; flex-direction: column; gap: 14px;">
-                        <!-- MINI BANNER APEX MOTORSPORT TOKEN -->
-                        <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
-                            <img src="assets/apex_token_logo.jpg" alt="APEX $CR Token" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid #00f5d4; box-shadow: 0 0 10px rgba(0, 245, 212, 0.4); object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'">
-                            <div style="flex: 1;">
-                                <div style="font-size: 13.5px; font-weight: 900; color: #00f5d4; letter-spacing: 0.5px;">APEX MOTORSPORT ($CR)</div>
-                                <div style="font-size: 10.5px; color: #94a3b8; line-height: 1.3;">Moneda interna del juego. No es un token emitido en TON.</div>
-                            </div>
-                            <span style="font-size: 9.5px; background: rgba(0, 245, 212, 0.15); border: 1px solid #00f5d4; color: #00f5d4; font-weight: 800; padding: 3px 8px; border-radius: 6px;">SIMULACIÓN</span>
-                        </div>
 
-                        <!-- ESTADO DE CONEXIÓN -->
-                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(0, 152, 234, 0.3); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;">
+                    ${inTelegram ? `
+                    <!-- COMPRA DE $CR CON TELEGRAM STARS -->
+                    <div class="telegram-stars-section">
+                        <div class="telegram-stars-heading">
+                            <span>⭐ COMPRAR CON TELEGRAM STARS</span>
+                            <span id="telegram-stars-rate-line">1 ⭐ = 10 $CR · precios lineales, sin descuentos</span>
+                        </div>
+                        <p>
+                            Telegram abrirá su factura oficial en XTR. El bot debe confirmar el pago y el servidor acreditará los $CR una sola vez; cerrar la factura como “pagada” no basta sin esa confirmación.
+                        </p>
+                        <div id="telegram-stars-packages" class="stars-package-grid">
+                            ${renderTelegramStarsPackageButtonsHtml(telegramStarsCatalogCache ? telegramStarsCatalogCache.packages : (getTelegramStarsPublicConfig() || {}).packages, telegramStarsUiEnabled())}
+                        </div>
+                        <div id="telegram-stars-purchase-panel">${pendingStarsPurchase ? renderTelegramStarsPurchasePanelHtml(pendingStarsPurchase) : ''}</div>
+                        <div class="telegram-stars-warning">⭐ Usa Stars para comprar $CR aquí y después abre cofres con tu saldo $CR. <strong>No envíes TON dentro de Telegram para esta compra.</strong></div>
+                    </div>
+                    ` : ''}
+
+                    <!-- COMPRA REAL DE $CR Y COFRES CON TON -->
+                    <div id="ton-purchase-section" style="${inTelegram ? 'display:none;' : ''}background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(0, 152, 234, 0.35); border-radius: 10px; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 900; color: #00f5d4;">💎 COMPRAR CON TON (PAGO REAL)</span>
+                            <span id="ton-rate-line" style="font-size: 10px; color: #cbd5e1;">1.000 $CR = 1 USDT · Consultando TON/USDT…</span>
+                        </div>
+                        <p style="font-size: 11px; color: #cbd5e1; margin: 0 0 6px; line-height: 1.45;">
+                            Compra paquetes de $CR aquí o paga un cofre directamente desde la pantalla de cofres. El servidor consulta TON/USDT, bloquea el importe al crear tu pedido y verifica la transferencia en la blockchain antes de aplicar la compra.
+                        </p>
+                        <div class="ton-detail-row" style="margin: 0 0 10px;">
+                            <span class="ton-detail-value" style="font-size: 11px; color: #cbd5e1;">Dirección: <span style="font-family: monospace; color: #ffffff;">${escapeHtml(treasuryShort)}</span></span>
+                            <button class="ton-copy-btn" onclick="copyTreasuryAddress()">COPIAR</button>
+                        </div>
+                        <div id="ton-cr-packages" class="ton-package-grid">
+                            ${renderTonCrPackageButtonsHtml(tonPurchaseCatalogCache ? tonPurchaseCatalogCache.packages : null)}
+                        </div>
+                        <div id="ton-purchase-panel">${pendingPurchase ? renderTonPurchasePanelHtml(pendingPurchase) : ''}</div>
+                        <div style="font-size: 10px; color: #fde68a; margin-top: 8px; text-align: center; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.45); padding: 7px 8px; border-radius: 6px; line-height: 1.45;">⚠️ Incluye <strong>SIEMPRE el comentario exacto de tu pedido</strong> y envía el <strong>importe exacto</strong> en TON (red TON). Sin comentario, el servidor no puede aplicar la compra automáticamente.</div>
+                    </div>
+
+                    <!-- DIRECCIÓN DE DEMOSTRACIÓN (NO NECESARIA PARA COMPRAR) -->
+                    ${authoritativeEconomyEnabled() ? `
+                        <div style="background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 14px;">
+                            <div style="font-size: 11.5px; font-weight: 900; color: #e2e8f0; margin-bottom: 6px;">🧾 PEDIDOS, SOPORTE Y CONDICIONES</div>
+                            <p style="font-size: 11px; color: #94a3b8; margin: 0 0 10px; line-height: 1.5;">
+                                ${inTelegram
+                                    ? 'Dentro de Telegram no se conecta ninguna wallet para comprar $CR: pagas la factura oficial de Stars y el bot confirma el cargo al servidor. Tus pedidos pueden recuperarse con esta misma cuenta de Telegram.'
+                                    : 'No se conecta ninguna wallet dentro del juego. Pagas desde tu app externa con el enlace/comentario de tu pedido. Si cambias de dispositivo, tus pedidos se recuperan desde el servidor con tu misma cuenta.'}
+                            </p>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button class="btn-primary" style="flex:1 1 170px;min-height:44px;" onclick="${inTelegram ? 'recoverTelegramStarsPurchasesFromServer()' : 'recoverTonPurchasesFromServer()'}">🔄 RECUPERAR PEDIDOS</button>
+                                <a href="/support.html" target="_blank" rel="noopener" style="flex:1 1 120px;text-align:center;padding:12px;border-radius:8px;background:rgba(0,245,212,0.12);border:1px solid #00f5d4;color:#a7f3ea;font-weight:900;font-size:11px;text-decoration:none;">SOPORTE</a>
+                                <a href="/terms.html" target="_blank" rel="noopener" style="flex:1 1 120px;text-align:center;padding:12px;border-radius:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.2);color:#e2e8f0;font-weight:900;font-size:11px;text-decoration:none;">TÉRMINOS</a>
+                            </div>
+                            <div style="font-size:10.5px;color:#94a3b8;margin-top:9px;">Bot: <strong>/paysupport APEX-ID-DEL-PEDIDO</strong>. ${inTelegram ? 'Conserva el ID y el recibo/cargo de Telegram Stars.' : 'Conserva el hash de la transacción TON.'}</div>
+                        </div>
+                    ` : (!isConnected ? `
+                        <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; text-align: center;">
+                            <div style="font-size: 11.5px; font-weight: 900; color: #e2e8f0; margin-bottom: 6px;">🔗 DIRECCIÓN DE DEMOSTRACIÓN (OPCIONAL)</div>
+                            <p style="font-size: 11px; color: #94a3b8; margin: 0 0 12px; line-height: 1.45;">
+                                No necesitas conectar ninguna billetera para comprar: pagas desde tu app (Tonkeeper, Wallet de Telegram…) con el enlace de tu pedido.
+                                Estos botones solo crean una dirección ficticia de interfaz.
+                            </p>
+                            <div style="display: flex; flex-direction: column; gap: 8px; max-width: 360px; margin: 0 auto;">
+                                <button class="btn-wallet-connect" onclick="handleConnectWallet('telegram_wallet')" style="min-height: 44px; padding: 12px; background: rgba(0, 152, 234, 0.25); color: #ffffff; border: 1px solid #0098ea; border-radius: 10px; font-weight: 900; font-size: 12px; cursor: pointer;">📱 SIMULAR TELEGRAM WALLET</button>
+                                <button class="btn-wallet-connect" onclick="handleConnectWallet('tonkeeper')" style="min-height: 44px; padding: 12px; background: rgba(47, 138, 245, 0.25); color: #ffffff; border: 1px solid #2f8af5; border-radius: 10px; font-weight: 900; font-size: 12px; cursor: pointer;">🛡️ SIMULAR TONKEEPER</button>
+                                <button class="btn-wallet-connect" onclick="handleConnectWallet('mytonwallet')" style="min-height: 44px; padding: 12px; background: rgba(255, 153, 0, 0.2); color: #ffffff; border: 1px solid #ff9900; border-radius: 10px; font-weight: 900; font-size: 12px; cursor: pointer;">💎 SIMULAR MYTONWALLET</button>
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(0, 152, 234, 0.3); border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <div>
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
-                                    <span style="font-size: 11.5px; font-weight: 800; color: #10b981;">BILLETERA SIMULADA ACTIVADA</span>
+                                    <span style="font-size: 11.5px; font-weight: 800; color: #10b981;">DIRECCIÓN SIMULADA ACTIVADA</span>
                                     <span style="font-size: 10.5px; color: #94a3b8;">(${escapeHtml(userData.walletProvider || 'Telegram Wallet')})</span>
                                 </div>
                                 <div style="font-family: monospace; font-size: 13px; color: #ffffff; font-weight: bold; margin-top: 3px;">${escapeHtml(addr)}</div>
+                                <div style="font-size: 9.5px; color: #94a3b8;">Solo interfaz: los pagos reales se hacen desde tu app de wallet.</div>
                             </div>
                             <div style="display: flex; gap: 6px;">
-                                <button onclick="copyWalletAddress()" style="padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 10.5px; cursor: pointer;">COPIAR</button>
-                                <button onclick="handleDisconnectWallet()" style="padding: 5px 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 10.5px; cursor: pointer;">DESCONECTAR</button>
+                                <button onclick="copyWalletAddress()" style="min-height: 36px; padding: 5px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 10.5px; cursor: pointer;">COPIAR</button>
+                                <button onclick="handleDisconnectWallet()" style="min-height: 36px; padding: 5px 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; border-radius: 6px; color: #f87171; font-size: 10.5px; cursor: pointer;">DESCONECTAR</button>
+                            </div>
+                        </div>
+                    `)}
+
+                    <!-- RETIROS: NO DISPONIBLES -->
+                    <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 14px; position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 15px;">🔒</span>
+                                <span style="font-size: 12.5px; font-weight: 900; color: #fbbf24;">RETIRO DE $CR A TON</span>
+                            </div>
+                            <span style="font-size: 9.5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde047; font-weight: 800; padding: 2px 7px; border-radius: 6px;">NO DISPONIBLE</span>
+                        </div>
+
+                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; font-weight: 800; color: #fde047; display: flex; align-items: center; gap: 6px;">
+                                <span>⏳</span> Retiros reales: DESHABILITADOS
+                            </div>
+                            <div style="font-size: 10.5px; color: #cbd5e1; margin-top: 5px; line-height: 1.4;">
+                                Puedes <strong>comprar $CR con Telegram Stars dentro de Telegram o con TON en la web</strong>, pero los $CR no se pueden convertir de vuelta a Stars, TON ni dinero. Los reembolsos de cargos duplicados o no entregados se revisan con el ID del pedido; revisa siempre el importe antes de pagar.
                             </div>
                         </div>
 
-                        <!-- BALANCES -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
-                                <div style="font-size: 10.5px; color: #94a3b8; font-weight: 800;">SALDO DEL JUEGO (SEGURO)</div>
-                                <div style="font-size: 18px; font-weight: 900; color: #fde047; margin-top: 4px;">💰 ${crBalance.toLocaleString()} $CR</div>
-                                <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Para coches, mejoras y torneos</div>
-                            </div>
-                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px;">
-                                <div style="font-size: 10.5px; color: #94a3b8; font-weight: 800;">SALDO TON SIMULADO</div>
-                                <div style="font-size: 18px; font-weight: 900; color: #0098ea; margin-top: 4px;">💎 ${tonBalance.toFixed(2)} TON</div>
-                                <div style="font-size: 9.5px; color: #cbd5e1; margin-top: 2px;">Solo para conversiones ficticias dentro del juego</div>
-                            </div>
-                        </div>
-
-                        <!-- SWAP: COMPRAR $CR CON TON -->
-                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(0, 245, 212, 0.2); border-radius: 10px; padding: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <span style="font-size: 12px; font-weight: 900; color: #00f5d4;">🔄 CONVERTIR TON SIMULADO A $CR (SOLO LOCAL)</span>
-                                <span style="font-size: 10px; color: #cbd5e1;">Conversión interna ficticia: 1 TON-SIM = 5.000 $CR</span>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(0.5)">
-                                    0.5 TON-SIM<br><span style="color: #fde047; font-size: 9.5px;">+2.500 $CR</span>
-                                </button>
-                                <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(1.0)">
-                                    1.0 TON-SIM<br><span style="color: #fde047; font-size: 9.5px;">+5.000 $CR</span>
-                                </button>
-                                <button class="btn-primary" style="flex: 1; padding: 8px 6px; background: rgba(0, 152, 234, 0.2); border: 1px solid #0098ea; border-radius: 8px; color: #fff; font-weight: 800; font-size: 10.5px; cursor: pointer;" onclick="handleSwapTonToCr(5.0)">
-                                    5.0 TON-SIM<br><span style="color: #fde047; font-size: 9.5px;">+25.000 $CR</span>
-                                </button>
-                            </div>
-                            <div style="font-size: 10px; color: #fde68a; margin-top: 8px; text-align: center; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.45); padding: 7px 8px; border-radius: 6px;">⚠️ <strong>No envíes TON ni ningún fondo real.</strong> Los pagos reales están deshabilitados.</div>
-                        </div>
-
-                        <!-- ESTADO DE RETIROS: FASE BETA PÚBLICA TEMPORADA 1 (PRE-TGE) -->
-                        <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 12px; padding: 14px; position: relative;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="font-size: 15px;">🔒</span>
-                                    <span style="font-size: 12.5px; font-weight: 900; color: #fbbf24;">RETIRO DE TOKENS $CR A TU BILLETERA (SIMULACIÓN)</span>
-                                </div>
-                                <span style="font-size: 9.5px; background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fde047; font-weight: 800; padding: 2px 7px; border-radius: 6px;">SIN FONDOS REALES</span>
-                            </div>
-
-                            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
-                                <div style="font-size: 11px; font-weight: 800; color: #fde047; display: flex; align-items: center; gap: 6px;">
-                                    <span>⏳</span> Retiros reales: DESHABILITADOS
-                                </div>
-                                <div style="font-size: 10.5px; color: #cbd5e1; margin-top: 5px; line-height: 1.4;">
-                                    Los <strong>$CR</strong> son una moneda interna del juego guardada con tu partida. No existe todavía una emisión en blockchain, una pool ni una promesa de conversión a dinero real.
-                                </div>
-                            </div>
-
-                            <div style="font-size: 10.5px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
-                                <strong style="color: #cbd5e1;">Retiradas deshabilitadas en esta simulación:</strong><br>
-                                • 🔒 No se aceptan depósitos ni se procesan retiradas reales.<br>
-                                • 💎 El saldo TON mostrado es ficticio y solo sirve para probar conversiones internas.<br>
-                                • 🏎️ Usa tus $CR dentro del juego para tunear coches, abrir cofres y competir.
-                            </div>
-
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(1000)">
-                                    🔒 RETIRAR 1.000 $CR (DESHABILITADO)
-                                </button>
-                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(5000)">
-                                    🔒 RETIRAR 5.000 $CR (DESHABILITADO)
-                                </button>
-                                <button class="btn-primary" style="flex: 1; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(10000)">
-                                    🔒 RETIRAR 10.000 $CR (DESHABILITADO)
-                                </button>
-                            </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" style="flex: 1; min-height: 44px; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(1000)">
+                                🔒 RETIRAR 1.000 $CR (DESHABILITADO)
+                            </button>
+                            <button class="btn-primary" style="flex: 1; min-height: 44px; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(5000)">
+                                🔒 RETIRAR 5.000 $CR (DESHABILITADO)
+                            </button>
+                            <button class="btn-primary" style="flex: 1; min-height: 44px; padding: 10px 8px; background: rgba(245, 158, 11, 0.15); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 8px; color: #fbbf24; font-weight: 800; font-size: 11px; cursor: pointer;" onclick="handleWithdrawCrToTon(10000)">
+                                🔒 RETIRAR 10.000 $CR (DESHABILITADO)
+                            </button>
                         </div>
                     </div>
-                `}
+                </div>
             </div>
 
             <div class="settings-footer">
@@ -5564,10 +7484,44 @@ function openWeb3WalletModal() {
 
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
+
+    if (inTelegram) {
+        const tonPurchaseSection = document.getElementById('ton-purchase-section');
+        if (tonPurchaseSection) tonPurchaseSection.remove();
+        loadApexServerConfig().then(() => updateTelegramStarsCatalogUi(getTelegramStarsPublicConfig()));
+        loadTelegramStarsCatalog();
+        recoverTelegramStarsPurchasesFromServer();
+        if (pendingStarsPurchase) {
+            refreshTelegramStarsPurchasePanel(true);
+            if (pendingStarsPurchase.status === 'pending' && !telegramStarsOrderExpired(pendingStarsPurchase)) {
+                startTelegramStarsPolling();
+                checkTelegramStarsPurchaseStatus(false);
+            } else if (pendingStarsPurchase.status === 'paid_unfulfilled' || pendingStarsPurchase.status === 'claimed') {
+                checkTelegramStarsPurchaseStatus(false);
+            }
+        }
+    } else {
+        loadTonPurchaseCatalog();
+        recoverTonPurchasesFromServer();
+
+        if (pendingPurchase) {
+            scrollTonPurchasePanelIntoView();
+            if (pendingPurchase.status === 'pending') {
+                startTonPurchasePolling();
+                checkTonPurchaseStatus(false);
+            } else if (pendingPurchase.status === 'paid' || pendingPurchase.status === 'claimed') {
+                // Si la app se cerró tras confirmar el pago pero antes de aplicar
+                // el saldo o el cofre, al volver a abrir se completa el claim.
+                claimTonPurchase(pendingPurchase);
+            }
+        }
+    }
 }
 
 function closeWeb3WalletModal() {
     hubAudio.playClick();
+    stopTonPurchasePolling();
+    stopTelegramStarsPolling();
     const modal = document.getElementById('wallet-modal');
     if (modal) {
         modal.style.display = 'none';
@@ -5577,6 +7531,10 @@ function closeWeb3WalletModal() {
 
 function handleConnectWallet(provider) {
     hubAudio.playClick();
+    if (authoritativeEconomyEnabled()) {
+        alert('🔒 No hay conexión de wallet dentro del juego para comprar $CR. Dentro de Telegram usa Telegram Stars; en la web, los pagos TON se hacen desde tu app externa con el enlace de tu pedido.');
+        return;
+    }
     if (typeof connectTonWallet === 'function') {
         const res = connectTonWallet(provider);
         hubAudio.playLevelUp();
@@ -5588,6 +7546,7 @@ function handleConnectWallet(provider) {
 
 function handleDisconnectWallet() {
     hubAudio.playClick();
+    if (authoritativeEconomyEnabled()) { alert('No hay ninguna wallet conectada dentro del juego.'); return; }
     if (typeof disconnectTonWallet === 'function') {
         disconnectTonWallet();
         renderHubHeader();
@@ -5598,30 +7557,34 @@ function handleDisconnectWallet() {
 
 function handleSwapTonToCr(tonAmount) {
     hubAudio.playClick();
+    if (authoritativeEconomyEnabled()) {
+        alert('🔒 Esta conversión interna heredada está desactivada. Compra $CR solo mediante pedidos verificados por el servidor.');
+        return;
+    }
     if (typeof buyCrWithTon === 'function') {
         const res = buyCrWithTon(tonAmount);
         if (res.success) {
             hubAudio.playOpenCrate();
             renderHubHeader();
             openWeb3WalletModal();
-            alert(`🎉 Conversión simulada completada: +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} TON ficticio. No se ha movido ningún fondo real.`);
+            alert(`🎉 Conversión interna completada: +${res.crGained.toLocaleString()} $CR por ${res.tonSpent} gemas internas.`);
             return;
         }
     }
 
-    // v101: nunca abrir una transferencia real. No hay backend de pagos ni
-    // verificación on-chain que pueda acreditar una compra.
-    alert('⚠️ No tienes suficiente TON simulado para esta conversión interna.\n\nLos pagos reales están deshabilitados: no envíes TON a ninguna dirección.');
+    // Conversión heredada de gemas internas (sin interfaz desde v103). Para
+    // comprar $CR con TON real se usan los paquetes verificados en servidor.
+    alert('⚠️ No tienes gemas internas suficientes para esta conversión.\n\nPara comprar $CR con TON real, usa los paquetes de la billetera: el servidor verifica tu pago en la blockchain antes de acreditar.');
 }
 
 function handleWithdrawCrToTon(crAmount) {
     hubAudio.playClick();
     alert(
-        "🔒 RETIRADAS REALES DESHABILITADAS\n\n" +
-        "Los $CR son una moneda interna del juego y el TON mostrado es ficticio.\n\n" +
+        "🔒 RETIRADAS A TON DESHABILITADAS\n\n" +
+        "Los $CR son una moneda interna del juego: puedes comprarlos pagando con TON, pero no se convierten de vuelta a TON ni a dinero.\n\n" +
         "• No hay token emitido en blockchain ni pool de intercambio.\n" +
-        "• No se aceptan depósitos y no debe enviarse ningún fondo real.\n" +
-        "• Puedes seguir usando los $CR dentro del juego para coches, cofres y mejoras."
+        "• Las compras con TON son definitivas; no hay reembolsos automáticos.\n" +
+        "• Usa tus $CR dentro del juego para coches, cofres y mejoras."
     );
 }
 
@@ -5636,6 +7599,11 @@ function openReferralTournamentModal() {
         modal.id = 'referral-tournament-modal';
         modal.className = 'hub-modal-overlay';
         document.body.appendChild(modal);
+    }
+
+    if (authoritativeEconomyEnabled()) {
+        renderServerReferralModal(modal);
+        return;
     }
 
     const tData = (typeof getReferralTournamentData === 'function') ? getReferralTournamentData() : {
@@ -5804,6 +7772,67 @@ function openReferralTournamentModal() {
     modal.classList.remove('hidden');
 }
 
+function renderServerReferralModal(modal) {
+    const userData = loadNftUserData();
+    const userCode = userData.referralCode || 'APEX-CÓDIGO';
+    const botUsername = 'argho_racing_test_bot';
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=ref_${userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${userCode} para ganar +2 Nitros N₂O de bienvenida.`)}`;
+    modal.innerHTML = `
+        <div class="settings-dialog" style="max-width: 580px;">
+            <div class="settings-header" style="background: linear-gradient(135deg, rgba(236,72,153,0.25), rgba(139,92,246,0.25)); border-bottom: 1px solid rgba(236,72,153,0.4);">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:26px;">👥</span>
+                    <div>
+                        <h2 style="margin:0;font-size:18px;color:#f9a8d4;">INVITA A TU ESCUDERÍA</h2>
+                        <span style="font-size:11px;color:#cbd5e1;">Referidos reales registrados en servidor · sin torneo simulado</span>
+                    </div>
+                </div>
+                <button class="settings-close-x" onclick="closeReferralTournamentModal()">✖</button>
+            </div>
+            <div class="settings-body" style="padding:18px;max-height:520px;overflow-y:auto;">
+                <p style="color:#cbd5e1;font-size:12px;line-height:1.55;">Cuando un piloto nuevo canjea tu código, el servidor le acredita <strong>+2 Nitro</strong> y a ti <strong>+1 Nitro</strong>. Cada cuenta solo puede canjear un código una vez.</p>
+                <div style="background:rgba(15,23,42,0.65);border:1px dashed #ec4899;border-radius:10px;padding:14px;margin:14px 0;">
+                    <div style="font-size:10px;color:#94a3b8;font-weight:900;">TU CÓDIGO</div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;">
+                        <strong style="font-family:monospace;color:#fde047;font-size:18px;">${escapeHtml(userCode)}</strong>
+                        <div style="display:flex;gap:6px;">
+                            <button class="btn-primary" onclick="handleCopyReferralCode('${escapeHtml(userCode)}')">📋 COPIAR</button>
+                            <a href="${tgShareUrl}" target="_blank" rel="noopener" style="padding:9px 12px;border-radius:8px;background:#229ed9;color:#fff;font-weight:900;font-size:11px;text-decoration:none;">COMPARTIR</a>
+                        </div>
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:8px;">Tus referidos confirmados: <strong style="color:#fff;">${Number(userData.referralsCount || 0)}</strong></div>
+                </div>
+                ${userData.invitedBy ? `<div style="color:#34d399;font-size:12px;margin-bottom:14px;">✔ Ya canjeaste el código ${escapeHtml(userData.invitedBy)}.</div>` : `
+                <label style="display:block;font-size:11px;font-weight:900;color:#cbd5e1;margin-bottom:6px;">CANJEAR EL CÓDIGO DE UN AMIGO</label>
+                <div style="display:flex;gap:8px;margin-bottom:16px;">
+                    <input id="input-redeem-code" type="text" maxlength="30" placeholder="APEX-XXXXXXXX" style="flex:1;min-height:44px;border-radius:8px;border:1px solid rgba(236,72,153,0.5);background:#0f172a;color:#fff;padding:8px;">
+                    <button class="btn-primary" onclick="handleRedeemReferralCode()">CANJEAR +2 NITRO</button>
+                </div>`}
+                <h3 style="color:#fff;font-size:13px;">🏆 PILOTOS QUE MÁS INVITAN</h3>
+                <div id="referral-real-leaderboard" style="display:flex;flex-direction:column;gap:7px;margin-top:10px;">
+                    <div style="color:#94a3b8;text-align:center;padding:16px;">⏳ Cargando referidos reales…</div>
+                </div>
+                <p style="color:#64748b;font-size:10.5px;line-height:1.5;margin-top:14px;">El antiguo “torneo de referidos” con premios está en pausa: no mostramos una clasificación ni premios que el servidor no vaya a pagar.</p>
+            </div>
+            <div class="settings-footer"><button class="btn-settings-save" onclick="closeReferralTournamentModal()">CERRAR</button></div>
+        </div>`;
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+    const listEl = document.getElementById('referral-real-leaderboard');
+    fetch('/api/referrals/leaderboard?limit=20', { headers: { Accept: 'application/json' } })
+        .then(response => response.json().catch(() => null))
+        .then(data => {
+            if (!listEl) return;
+            const leaders = data && Array.isArray(data.leaders) ? data.leaders : [];
+            listEl.innerHTML = leaders.length ? leaders.map((leader, idx) => `
+                <div style="display:flex;justify-content:space-between;padding:9px 12px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.09);border-radius:8px;">
+                    <span style="color:#e2e8f0;">#${idx + 1} ${escapeHtml(leader.pilotName || 'Piloto')}</span>
+                    <strong style="color:#f9a8d4;">${Number(leader.referrals || 0)} referidos</strong>
+                </div>`).join('') : '<div style="color:#94a3b8;text-align:center;padding:16px;">Todavía no hay referidos confirmados.</div>';
+        })
+        .catch(() => { if (listEl) listEl.innerHTML = '<div style="color:#fca5a5;text-align:center;padding:16px;">No se pudo cargar la clasificación.</div>'; });
+}
+
 function closeReferralTournamentModal() {
     hubAudio.playClick();
     const modal = document.getElementById('referral-tournament-modal');
@@ -5829,6 +7858,31 @@ function handleRedeemReferralCode(customCode) {
     const code = customCode || (input ? input.value : '');
     if (typeof redeemInviteCode !== 'function') return;
 
+    if (authoritativeEconomyEnabled()) {
+        fetch('/api/referrals/redeem', {
+            method: 'POST',
+            headers: apexApiHeaders(),
+            body: JSON.stringify({ userId: getApexUserId(), code: String(code || '').trim().toUpperCase() })
+        })
+            .then(response => response.json().catch(() => null))
+            .then(data => {
+                if (data && data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+                if (!data || !data.ok) {
+                    const error = data && data.error;
+                    if (error === 'cannot_refer_self') alert('⚠️ No puedes canjear tu propio código de invitación.');
+                    else if (error === 'referral_already_redeemed') alert('⚠️ Esta cuenta ya canjeó un código de invitación.');
+                    else if (error === 'referral_code_not_found') alert('⚠️ Ese código no pertenece a ninguna cuenta registrada en el servidor.');
+                    else alert('⚠️ Código no válido o sin conexión con el servidor.');
+                    return;
+                }
+                hubAudio.playOpenCrate();
+                renderHubHeader();
+                openReferralTournamentModal();
+                alert(`🎉 ¡Código canjeado en servidor! Has recibido +${data.inviteeNitrosGranted || 2} Cápsulas de Nitro N₂O.`);
+            })
+            .catch(() => alert('⚠️ Sin conexión con el servidor. El código no se ha canjeado.'));
+        return;
+    }
     const res = redeemInviteCode(code);
     if (!res.success) {
         if (res.reason === 'cannot_invite_self') alert('⚠️ No puedes canjear tu propio código de invitación.');
@@ -5847,9 +7901,9 @@ function handleLinkEmail(customEmail) {
     hubAudio.playClick();
     const input = document.getElementById('input-link-email') || document.getElementById('setting-input-email');
     const email = customEmail || (input ? input.value : '');
-    if (typeof linkUserEmail !== 'function') return;
+    if (typeof linkUserEmail !== 'function' && !authoritativeEconomyEnabled()) return;
 
-    const res = linkUserEmail(email);
+    const finishLinkEmail = (res) => {
     if (!res.success) {
         alert('⚠️ Por favor introduce un correo electrónico válido (ej. usuario@gmail.com).');
         return;
@@ -5864,14 +7918,20 @@ function handleLinkEmail(customEmail) {
         openSettingsModal();
     }
     if (res.isFirstTime) {
-        alert(`🎉 ¡Correo vinculado con éxito!\nHas recibido +${res.bonusNitros} Cápsulas de Nitro N₂O (4s) por asegurar tu cuenta.`);
+        alert(`🎉 ¡Correo vinculado con éxito!\nHas recibido +${res.bonusNitros} Cápsulas de Nitro N₂O (4s). El correo no sustituye a tu código de recuperación.`);
     } else {
         alert(`✅ Correo actualizado con éxito: ${res.email}`);
     }
+    };
+    return runAuthoritativeEconomyAction('link_email', { email: String(email || '').trim().toLowerCase() }, () => linkUserEmail(email), finishLinkEmail);
 }
 
 function handleSimulateInvite() {
     hubAudio.playClick();
+    if (authoritativeEconomyEnabled() || (typeof isProductionRelease === 'function' && isProductionRelease())) {
+        alert('🚫 La simulación de amigos está desactivada en la versión oficial. Solo cuentan referidos reales confirmados por el servidor.');
+        return;
+    }
     if (typeof simulateFriendJoined !== 'function') return;
     const res = simulateFriendJoined();
     hubAudio.playOpenCrate();
@@ -5892,6 +7952,16 @@ if (typeof window !== 'undefined') {
     window.handleDisconnectWallet = handleDisconnectWallet;
     window.handleSwapTonToCr = handleSwapTonToCr;
     window.handleWithdrawCrToTon = handleWithdrawCrToTon;
+    window.handleBuyTonProduct = handleBuyTonProduct;
+    window.handleBuyCrPackage = handleBuyCrPackage;
+    window.handleBuyCrateWithTon = handleBuyCrateWithTon;
+    window.loadTonPurchaseCatalog = loadTonPurchaseCatalog;
+    window.openTonPaymentLink = openTonPaymentLink;
+    window.checkTonPurchaseNow = checkTonPurchaseNow;
+    window.forgetTonPurchase = forgetTonPurchase;
+    window.copyTreasuryAddress = copyTreasuryAddress;
+    window.copyPurchaseAddress = copyPurchaseAddress;
+    window.copyPurchaseComment = copyPurchaseComment;
     window.openWeeklyTournamentModal = openWeeklyTournamentModal;
     window.closeWeeklyTournamentModal = closeWeeklyTournamentModal;
     window.handleEnterWeeklyTournament = handleEnterWeeklyTournament;
@@ -6057,6 +8127,8 @@ function initGameHub() {
         } catch (e) {}
         renderHubHeader();
         showHubView('main');
+        loadApexServerConfig();
+        setTimeout(() => { syncAuthoritativeEconomy(); }, 1100);
         runRacingPreloaderSequence();
         checkTelegramDeepLinkParams();
     } catch(e) {

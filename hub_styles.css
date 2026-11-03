@@ -4966,3 +4966,647 @@ textarea {
         min-height: 48px;
     }
 }
+
+/* v102: iOS/Safari puede hacer zoom automático al enfocar controles con
+   texto menor de 16px. Se fuerza ese mínimo solo en punteros táctiles,
+   incluidos los pocos controles con font-size inline. */
+@media (pointer: coarse) {
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* v102: pantallas estrechas (320px). El banner P2P pasa a dos filas y las
+   rejillas usan minmax(0,1fr) para que el contenido no fuerce scroll X. */
+.shop-marketplace-banner {
+    flex-wrap: wrap;
+    gap: 12px;
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.shop-marketplace-banner > div {
+    flex: 1 1 180px;
+    min-width: 0;
+}
+
+.shop-marketplace-banner > button {
+    flex: 0 1 auto;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.comp-extra-grid,
+.comp-card,
+.wager-stat-box,
+.wager-stat-box > * {
+    min-width: 0;
+}
+
+.comp-card {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+.comp-card h3,
+.comp-card p,
+.wager-stat-label,
+.wager-stat-value {
+    overflow-wrap: break-word;
+}
+
+.comp-action-btn {
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+@media (max-width: 430px) {
+    .shop-marketplace-banner {
+        align-items: stretch;
+    }
+
+    .shop-marketplace-banner > button {
+        flex-basis: 100%;
+        width: 100%;
+    }
+
+    .wager-stats-banner {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .wager-stat-box {
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .wager-stat-icon {
+        font-size: 20px;
+        flex: 0 0 auto;
+    }
+
+    .comp-extra-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px;
+    }
+
+    .comp-card {
+        padding: 18px 14px;
+    }
+}
+
+/* v103: compra TON en la billetera. Los botones de copiar conservan el
+   objetivo táctil de 44 px, pero viven en filas propias para no deformar
+   los párrafos. El cuerpo del modal aprovecha mejor las pantallas altas. */
+.wallet-modal-body {
+    max-height: min(68dvh, 620px);
+}
+
+.ton-detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.ton-detail-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ton-copy-btn {
+    min-height: 44px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* v103: moneda $CR con el logo oficial optimizado y compra directa de
+   cofres con TON. La imagen es cuadrada pero se presenta como moneda. */
+.cr-coin-icon {
+    width: 1.35em;
+    height: 1.35em;
+    min-width: 18px;
+    min-height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    vertical-align: -0.28em;
+    flex: 0 0 auto;
+    box-shadow: 0 0 0 1px rgba(0, 245, 212, 0.45), 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.cr-coin-wrap {
+    line-height: 0;
+}
+
+.cr-coin-icon-header {
+    width: 24px;
+    height: 24px;
+    vertical-align: middle;
+}
+
+.cr-coin-icon-title,
+.cr-coin-icon-large {
+    width: 28px;
+    height: 28px;
+}
+
+.cr-coin-icon-shop,
+.cr-coin-icon-stat {
+    width: 42px;
+    height: 42px;
+    vertical-align: middle;
+}
+
+.cr-coin-icon-wallet-balance {
+    width: 26px;
+    height: 26px;
+}
+
+.crate-cost-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.crate-cost-usdt {
+    font-size: 0.78em;
+    color: #bae6fd;
+    font-weight: 800;
+}
+
+.crate-action-buttons {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    grid-area: button;
+    min-width: 0;
+}
+
+.btn-ton-crate {
+    background: linear-gradient(135deg, rgba(0, 152, 234, 0.34), rgba(0, 245, 212, 0.20));
+    border: 1px solid #38bdf8 !important;
+    color: #e0f2fe;
+    line-height: 1.25;
+}
+
+.btn-ton-crate .crate-ton-estimate {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #a5f3fc;
+    overflow-wrap: anywhere;
+}
+
+.btn-stars-crate {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.36), rgba(250, 204, 21, 0.20));
+    border: 1px solid #facc15 !important;
+    color: #fef3c7;
+    line-height: 1.25;
+}
+
+.btn-stars-crate .crate-stars-note {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fde68a;
+    overflow-wrap: anywhere;
+}
+
+.ton-package-grid {
+    display: flex;
+    gap: 8px;
+}
+
+.ton-package-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 56px;
+    padding: 8px 6px;
+    background: rgba(0, 152, 234, 0.2);
+    border: 1px solid #0098ea;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 800;
+    font-size: 12px;
+    line-height: 1.35;
+    cursor: pointer;
+}
+
+.ton-package-btn .ton-package-cr {
+    color: #fde047;
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 430px) {
+    .ton-package-grid {
+        flex-wrap: wrap;
+    }
+
+    .ton-package-btn {
+        flex-basis: calc(33.333% - 6px);
+        font-size: 11px;
+    }
+
+    .crate-action-buttons .btn-open-box {
+        width: 100%;
+    }
+}
+
+/* ===== v105: Telegram Stars y registro NFT ===== */
+.telegram-stars-section {
+    background: linear-gradient(145deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.72) 55%);
+    border: 1px solid rgba(250, 204, 21, 0.45);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.telegram-stars-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    color: #fde68a;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.telegram-stars-heading span:last-child {
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.telegram-stars-section p {
+    font-size: 11px;
+    color: #cbd5e1;
+    margin: 0 0 10px;
+    line-height: 1.5;
+}
+
+.stars-package-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.stars-package-btn {
+    min-width: 0;
+    min-height: 58px;
+    padding: 8px 6px;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid #facc15;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 900;
+    font-size: 12px;
+    line-height: 1.35;
+    cursor: pointer;
+}
+
+.stars-package-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.stars-package-btn .stars-package-cr {
+    color: #fde047;
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+
+.stars-unavailable-note,
+.telegram-stars-warning {
+    grid-column: 1 / -1;
+    padding: 10px;
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.10);
+    border-radius: 8px;
+    color: #fde68a;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.telegram-stars-warning {
+    margin-top: 8px;
+}
+
+.stars-purchase-panel {
+    margin-top: 10px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(250, 204, 21, 0.5);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.stars-purchase-title {
+    font-size: 12px;
+    font-weight: 900;
+    color: #fde68a;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+}
+
+.stars-purchase-details {
+    font-size: 11.5px;
+    color: #e2e8f0;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.stars-purchase-status {
+    font-size: 11px;
+    color: #fef3c7;
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+.stars-purchase-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.stars-open-invoice-btn,
+.stars-check-btn,
+.stars-forget-btn {
+    min-height: 44px;
+    padding: 10px 8px;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.stars-open-invoice-btn {
+    flex: 1 1 170px;
+    background: #f59e0b;
+    border: 1px solid #fde047;
+    color: #111827;
+}
+
+.stars-check-btn {
+    flex: 1 1 150px;
+    background: rgba(0, 245, 212, 0.16);
+    border: 1px solid #00f5d4;
+    color: #a7f3ea;
+}
+
+.stars-forget-btn {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+}
+
+.stars-purchase-note {
+    font-size: 10px;
+    color: #94a3b8;
+    margin-top: 8px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.mint-chip-starter {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+.mint-chip-unregistered {
+    background: rgba(245, 158, 11, 0.18) !important;
+    color: #fde68a !important;
+}
+
+.mint-chip-conversion_prepared,
+.mint-chip-mint_pending {
+    background: rgba(59, 130, 246, 0.22) !important;
+    color: #bfdbfe !important;
+}
+
+.mint-chip-minted {
+    background: rgba(16, 185, 129, 0.22) !important;
+    color: #a7f3d0 !important;
+}
+
+.nft-registry-box {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 245, 212, 0.30);
+    background: rgba(0, 245, 212, 0.07);
+}
+
+.nft-registry-box-pending,
+.nft-registry-box-local {
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.07);
+}
+
+.nft-registry-box-conversion_prepared,
+.nft-registry-box-mint_pending {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.nft-registry-box-minted {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.nft-registry-title {
+    color: #a7f3ea;
+    font-size: 10.5px;
+    font-weight: 900;
+    letter-spacing: 0.35px;
+    overflow-wrap: anywhere;
+}
+
+.nft-registry-text {
+    color: #cbd5e1;
+    font-size: 10.5px;
+    line-height: 1.45;
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+}
+
+.nft-registry-actions {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.btn-nft-primary,
+.btn-nft-secondary {
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 10.5px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.btn-nft-primary {
+    flex: 1 1 150px;
+    background: linear-gradient(135deg, rgba(0, 152, 234, 0.85), rgba(0, 245, 212, 0.55));
+    border: 1px solid #38bdf8;
+    color: #fff;
+}
+
+.btn-nft-secondary {
+    flex: 1 1 130px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #e2e8f0;
+}
+
+.btn-nft-secondary:disabled,
+.btn-settings-save:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.nft-conversion-dialog {
+    width: min(94vw, 620px);
+    max-width: 620px;
+}
+
+.nft-modal-subtitle {
+    color: #93c5fd;
+    font-size: 10.5px;
+    font-weight: 800;
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+}
+
+.nft-conversion-body {
+    overflow-y: auto;
+    color: #e2e8f0;
+}
+
+.nft-conversion-body h3 {
+    margin: 8px 0 12px;
+    text-align: center;
+    color: #fff;
+}
+
+.nft-modal-car-preview {
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.nft-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.nft-modal-grid > div {
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(15, 23, 42, 0.62);
+    border-radius: 8px;
+}
+
+.nft-modal-grid span {
+    display: block;
+    color: #94a3b8;
+    font-size: 9.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.nft-modal-grid strong {
+    display: block;
+    margin-top: 3px;
+    color: #fff;
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+}
+
+.nft-modal-hash,
+.nft-modal-claim,
+.nft-modal-note {
+    margin-top: 9px;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.nft-modal-hash,
+.nft-modal-claim {
+    background: rgba(0, 152, 234, 0.10);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    color: #bae6fd;
+}
+
+.nft-modal-claim a {
+    color: #7dd3fc;
+    font-weight: 800;
+}
+
+.nft-modal-note {
+    background: rgba(245, 158, 11, 0.09);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fde68a;
+}
+
+.nft-modal-note-ok {
+    background: rgba(16, 185, 129, 0.10);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #a7f3d0;
+}
+
+.nft-modal-footer {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.nft-modal-footer .btn-settings-save {
+    flex: 1 1 190px;
+}
+
+.nft-modal-footer .btn-nft-secondary {
+    flex: 1 1 170px;
+}
+
+@media (max-width: 560px) {
+    .stars-package-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .nft-modal-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .nft-conversion-dialog {
+        width: min(96vw, 620px);
+    }
+}

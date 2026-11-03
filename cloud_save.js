@@ -21,6 +21,7 @@
     var GARAGE_KEY = 'apex_web3_garage_save';
     var STORY_KEY = 'dustrac_story_save';
     var DEVICE_KEY = 'apex_device_id';
+    var DEVICE_SECRET_KEY = 'apex_device_secret_v1';
     var META_KEY = 'apex_cloud_meta';
     var EXTRA_KEYS = [
         'apex_pilot_name', 'dustrac_lang', 'dustrac_music', 'dustrac_sfx',
@@ -62,6 +63,29 @@
         } catch (e) {}
         return 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
     }
+    function getDeviceSecret() {
+        try {
+            if (typeof window.getOrCreateDeviceSecret === 'function') {
+                return window.getOrCreateDeviceSecret();
+            }
+        } catch (e) {}
+        var existing = lsGet(DEVICE_SECRET_KEY);
+        if (typeof existing === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(existing)) return existing;
+        var secret = '';
+        try {
+            if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+                var bytes = new Uint8Array(32);
+                window.crypto.getRandomValues(bytes);
+                for (var i = 0; i < bytes.length; i++) secret += ('0' + bytes[i].toString(16)).slice(-2);
+            }
+        } catch (e) {}
+        while (secret.length < 64) {
+            secret += Date.now().toString(36) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        }
+        secret = secret.replace(/[^A-Za-z0-9_-]/g, '').substring(0, 64);
+        lsSet(DEVICE_SECRET_KEY, secret);
+        return secret;
+    }
     function getMeta() { return safeParse(lsGet(META_KEY)) || {}; }
     function setMeta(patch) {
         var meta = getMeta();
@@ -81,6 +105,12 @@
         var h = { 'Content-Type': 'application/json' };
         var initData = telegramInitData();
         if (initData) h['X-Telegram-Init-Data'] = initData;
+        // Para cuentas usr_..., el ID puede verse en salas; la credencial es
+        // este secreto separado, persistente solo en este dispositivo.
+        if (typeof _cachedUserId === 'string' && _cachedUserId.indexOf('usr_') === 0) {
+            var deviceSecret = getDeviceSecret();
+            if (deviceSecret) h['X-Device-Secret'] = deviceSecret;
+        }
         return h;
     }
     function fetchWithTimeout(url, options, timeoutMs) {
@@ -116,7 +146,7 @@
             return _cachedUserId;
         }
         var garage = safeParse(lsGet(GARAGE_KEY));
-        if (garage && garage.userId) {
+        if (garage && garage.userId && String(garage.userId) !== 'usr_guest_local') {
             _cachedUserId = String(garage.userId);
             return _cachedUserId;
         }
@@ -206,11 +236,26 @@
                 }).catch(function () { return false; });
             }
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            var after = readLocalBundle();
-            if (after.updatedAt <= sentTs) _dirty = false;
-            setMeta({ lastSyncAt: Date.now(), lastRemoteUpdatedAt: sentTs });
-            setStatus('saved');
-            return true;
+            return res.clone().json().then(function (data) {
+                // v104: la economía del paquete subido no es autoritativa.
+                // Si el servidor devuelve su garaje sellado, sustituye solo
+                // ese espejo local; historia y ajustes enviados no cambian.
+                if (data && data.save && data.save.garage) {
+                    applyRemote({ garage: data.save.garage, updatedAt: sentTs });
+                    notifyApplied();
+                }
+                var after = readLocalBundle();
+                if (after.updatedAt <= sentTs) _dirty = false;
+                setMeta({ lastSyncAt: Date.now(), lastRemoteUpdatedAt: sentTs, localUpdatedAt: sentTs });
+                setStatus('saved');
+                return true;
+            }).catch(function () {
+                var after = readLocalBundle();
+                if (after.updatedAt <= sentTs) _dirty = false;
+                setMeta({ lastSyncAt: Date.now(), lastRemoteUpdatedAt: sentTs });
+                setStatus('saved');
+                return true;
+            });
         }).catch(function () {
             setStatus('offline'); // el progreso sigue a salvo en local y se reintentará
             return false;
@@ -300,6 +345,7 @@
         clearRemote: clearRemote,
         refreshBadge: refreshBadge,
         getUserId: getUserId,
+        getAuthHeaders: headers,
         get appliedRemote() { return appliedRemote; },
         get status() { return _status; }
     };

@@ -6,13 +6,21 @@ const APP_CONFIG = {
     // desarrollo solo se activan explícitamente en localhost/preview con
     // ?apex_dev=1; nunca por defecto en el dominio público.
     IS_PRODUCTION_RELEASE: true,
-    WEB3_SIMULATION_ONLY: true,
+    // v103: las compras de paquetes $CR con TON son reales. Los $CR siguen
+    // siendo moneda interna del juego: no hay token emitido ni retiradas.
+    WEB3_SIMULATION_ONLY: false,
+    TON_PURCHASES_ENABLED: true,
+    TELEGRAM_STARS_PURCHASES_ENABLED: true,
+    NFT_ENTITLEMENTS_ENABLED: true,
+    TON_NFT_MINTING_ENABLED: false,
 
-    VERSION: '1.0.1',
+    VERSION: '1.0.5',
     DEFAULT_TRACK: 'rookie_ring',
     DEFAULT_STARTING_CREDITS: 100,
     DEFAULT_STARTING_GEMS: 0,
-    // Billetera Oficial de Tesorería del Proyecto (Receptora de pagos de Swaps, Tienda y Ads)
+    // Billetera oficial de tesorería del proyecto (receptora de los pagos TON
+    // de paquetes $CR). Es pública: el servidor verifica cada pago on-chain
+    // por importe + comentario de pedido antes de acreditar ningún $CR.
     TREASURY_WALLET_ADDRESS: 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X'
 };
 
@@ -56,9 +64,46 @@ function generateDeviceUserId() {
     return 'usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
 }
 
+const APEX_DEVICE_SECRET_KEY = 'apex_device_secret_v1';
+
+function generateDeviceSecret() {
+    try {
+        if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            const bytes = new Uint8Array(32);
+            window.crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+    } catch (e) {}
+    // Solo para navegadores antiguos sin Web Crypto. En HTTPS/localhost se usa
+    // siempre la ruta criptográfica anterior.
+    let fallback = '';
+    while (fallback.length < 64) {
+        fallback += Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    }
+    return fallback.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+}
+
+function getOrCreateDeviceSecret() {
+    try {
+        const storage = (typeof window !== 'undefined' && window.localStorage)
+            ? window.localStorage
+            : (typeof localStorage !== 'undefined' ? localStorage : null);
+        if (!storage) return '';
+        const existing = storage.getItem(APEX_DEVICE_SECRET_KEY);
+        if (typeof existing === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(existing)) return existing;
+        const secret = generateDeviceSecret();
+        storage.setItem(APEX_DEVICE_SECRET_KEY, secret);
+        return secret;
+    } catch (e) {
+        return '';
+    }
+}
+
 if (typeof window !== 'undefined') {
     window.isApexDevMode = isApexDevMode;
     window.isProductionRelease = isProductionRelease;
+    window.generateDeviceSecret = generateDeviceSecret;
+    window.getOrCreateDeviceSecret = getOrCreateDeviceSecret;
 }
 
 // ===== CATÁLOGO DE 73 VEHÍCULOS NFT WEB3, 10 ESTADÍSTICAS POR PUNTOS, SISTEMA DE NIVELES Y PIEZAS =====
@@ -849,13 +894,15 @@ function loadNftUserData() {
             credits: (data && typeof data.credits === 'number') ? data.credits : APP_CONFIG.DEFAULT_STARTING_CREDITS,
             gems: (data && typeof data.gems === 'number') ? data.gems : APP_CONFIG.DEFAULT_STARTING_GEMS,
             equippedInstanceId: (data && data.equippedInstanceId) ? data.equippedInstanceId : starterCar.instanceId,
-            garage: (data && Array.isArray(data.garage) && data.garage.length > 0) ? data.garage : [starterCar]
+            garage: (data && Array.isArray(data.garage) && data.garage.length > 0) ? data.garage : [starterCar],
+            tonPurchaseOrderIds: (data && Array.isArray(data.tonPurchaseOrderIds)) ? data.tonPurchaseOrderIds : []
         };
         saveNftUserData(data);
     }
 
     if (typeof data.credits !== 'number') data.credits = APP_CONFIG.DEFAULT_STARTING_CREDITS;
     if (typeof data.gems !== 'number') data.gems = APP_CONFIG.DEFAULT_STARTING_GEMS;
+    if (!Array.isArray(data.tonPurchaseOrderIds)) data.tonPurchaseOrderIds = [];
     if (!Array.isArray(data.garage) || data.garage.length === 0) data.garage = [starterCar];
     if (!data.equippedInstanceId && data.garage[0]) data.equippedInstanceId = data.garage[0].instanceId;
     if (!data.userId) {
@@ -954,6 +1001,12 @@ function loadNftUserData() {
 
     // Código de invitación único del usuario y estadísticas de referidos
     let needsSave = false;
+    if (typeof data.nitros !== 'number' || !Number.isFinite(data.nitros) || data.nitros < 0) {
+        data.nitros = 2;
+        needsSave = true;
+    } else {
+        data.nitros = Math.floor(data.nitros);
+    }
     if (!data.referralCode || typeof data.referralCode !== 'string') {
         const randStr = Math.random().toString(36).substring(2, 8).toUpperCase();
         data.referralCode = 'APEX-' + randStr;
@@ -1221,12 +1274,13 @@ function consumeNitroFromInventory() {
     return false;
 }
 
-// Acuñar (Mint) un coche NFT con sus 10 estadísticas y ranuras de piezas
+// Crear un coche jugable off-chain. El número global y la futura dirección
+// del ítem TON los asigna el registro autoritativo del servidor; este
+// constructor nunca inventa una identidad blockchain.
 function mintProceduralNftCar(modelDef, forcedColor = null) {
     const chosenColor = forcedColor || NFT_CAR_COLORS[Math.floor(Math.random() * NFT_CAR_COLORS.length)];
-    const mintNum = Math.floor(1000 + Math.random() * 8999);
-    const randomHex = Math.floor(Math.random() * 0xffffffffff).toString(16).padStart(10, '0');
-    const tokenHash = `0x${randomHex.slice(0, 4)}...${randomHex.slice(-4)}`;
+    const mintNum = 0;
+    const tokenHash = 'OFF-CHAIN';
 
     return {
         instanceId: `nft_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -1253,13 +1307,37 @@ function mintProceduralNftCar(modelDef, forcedColor = null) {
     };
 }
 
-// Abrir una Caja Misteriosa NFT con probabilidades calibradas y botín de piezas de taller
-function openMysteryCrate(crateKey) {
+// Abrir una Caja Misteriosa NFT con probabilidades calibradas y botín de piezas de taller.
+// options.prepaidTonOrderId solo llega tras un claim TON verificado por el
+// servidor: en ese caso no se descuenta $CR y el id queda guardado junto al
+// coche/piezas en la misma escritura, para que una interrupción o un claim
+// repetido nunca abra dos cofres con el mismo pago.
+function openMysteryCrate(crateKey, options = {}) {
     const crate = NFT_CRATES[crateKey];
     if (!crate) return { success: false, reason: "Caja no válida" };
 
+    const prepaidTonOrderId = String((options && options.prepaidTonOrderId) || '').trim();
+    const isPrepaidTon = /^APEX-[A-Za-z0-9-]{6,32}$/.test(prepaidTonOrderId);
+    if (prepaidTonOrderId && !isPrepaidTon) {
+        return { success: false, reason: "invalid_prepaid_ton_order" };
+    }
+
     const userData = loadNftUserData();
-    if (crate.currency === "credits") {
+    if (!Array.isArray(userData.tonPurchaseOrderIds)) userData.tonPurchaseOrderIds = [];
+    if (isPrepaidTon && userData.tonPurchaseOrderIds.includes(prepaidTonOrderId)) {
+        return {
+            success: false,
+            alreadyApplied: true,
+            reason: "ton_purchase_already_applied",
+            prepaidTonOrderId,
+            remainingCredits: userData.credits,
+            remainingGems: userData.gems
+        };
+    }
+
+    if (isPrepaidTon) {
+        // El pago TON ya fue verificado y reclamado en servidor.
+    } else if (crate.currency === "credits") {
         if (userData.credits < crate.cost) return { success: false, reason: "credits_insufficient" };
         userData.credits -= crate.cost;
         userData.burnedTokens = (userData.burnedTokens || 0) + Math.round(crate.cost * 0.20);
@@ -1300,6 +1378,11 @@ function openMysteryCrate(crateKey) {
         userData.partsInventory[pk] = (userData.partsInventory[pk] || 0) + 1;
     }
 
+    if (isPrepaidTon) {
+        userData.tonPurchaseOrderIds.push(prepaidTonOrderId);
+        userData.tonPurchaseOrderIds = userData.tonPurchaseOrderIds.slice(-100);
+    }
+
     saveNftUserData(userData);
 
     return {
@@ -1307,6 +1390,8 @@ function openMysteryCrate(crateKey) {
         car: mintedCar,
         crate: crate,
         awardedParts: awardedParts,
+        paidWithTon: isPrepaidTon,
+        prepaidTonOrderId: isPrepaidTon ? prepaidTonOrderId : null,
         remainingCredits: userData.credits,
         remainingGems: userData.gems,
         partsInventory: userData.partsInventory
@@ -1865,8 +1950,8 @@ function claimSeasonPassTier(tierNum) {
     if (tierDef.rewardType === "nitros") {
         userData.nitros = (userData.nitros || 0) + (tierDef.count || 1);
     } else if (tierDef.rewardType === "energy") {
-        if (userData.selectedCarId && Array.isArray(userData.garage)) {
-            const car = userData.garage.find(c => c.instanceId === userData.selectedCarId);
+        if ((userData.selectedCarId || userData.equippedInstanceId) && Array.isArray(userData.garage)) {
+            const car = userData.garage.find(c => c.instanceId === (userData.selectedCarId || userData.equippedInstanceId));
             if (car) {
                 const maxE = typeof getCarMaxEnergy === 'function' ? getCarMaxEnergy(car) : 5;
                 car.energy = Math.min(maxE, (car.energy || 0) + (tierDef.count || 2));
@@ -1881,8 +1966,8 @@ function claimSeasonPassTier(tierNum) {
         if (tierDef.nitros) {
             userData.nitros = (userData.nitros || 0) + tierDef.nitros;
         }
-        if (tierDef.energy && userData.selectedCarId && Array.isArray(userData.garage)) {
-            const car = userData.garage.find(c => c.instanceId === userData.selectedCarId);
+        if (tierDef.energy && (userData.selectedCarId || userData.equippedInstanceId) && Array.isArray(userData.garage)) {
+            const car = userData.garage.find(c => c.instanceId === (userData.selectedCarId || userData.equippedInstanceId));
             if (car) {
                 const maxE = typeof getCarMaxEnergy === 'function' ? getCarMaxEnergy(car) : 5;
                 car.energy = Math.min(maxE, (car.energy || 0) + tierDef.energy);
@@ -1942,6 +2027,9 @@ function getMarketplaceListings() {
 
 // 1. Publicar Pieza en el Mercado P2P (NO compra la plataforma)
 function listPartOnMarketplace(partId, priceCr) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "marketplace_disabled" };
+    }
     const userData = loadNftUserData();
     if (!userData.partsInventory || (userData.partsInventory[partId] || 0) <= 0) {
         return { success: false, reason: "No posees unidades de esta pieza en tu inventario" };
@@ -1976,6 +2064,9 @@ function listPartOnMarketplace(partId, priceCr) {
 
 // 2. Publicar Coche NFT en el Mercado P2P (NO compra la plataforma)
 function listCarOnMarketplace(instanceId, priceCr) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "marketplace_disabled" };
+    }
     const userData = loadNftUserData();
     if (!userData.garage || !Array.isArray(userData.garage)) {
         return { success: false, reason: "Garaje no disponible" };
@@ -2031,6 +2122,9 @@ function listCarOnMarketplace(instanceId, priceCr) {
 
 // 3. Cancelar Listado y recuperar la pieza o el coche
 function cancelMarketplaceListing(listingId) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "marketplace_disabled" };
+    }
     const idx = COMMUNITY_MARKETPLACE_LISTINGS.findIndex(l => l.id === listingId);
     if (idx === -1) return { success: false, reason: "Oferta no encontrada" };
 
@@ -2055,6 +2149,9 @@ function cancelMarketplaceListing(listingId) {
 
 // 4. Comprar un artículo P2P (Pieza o Coche) de otro piloto
 function buyMarketplaceItem(listingId) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "marketplace_disabled" };
+    }
     const userData = loadNftUserData();
     const idx = COMMUNITY_MARKETPLACE_LISTINGS.findIndex(l => l.id === listingId);
     if (idx === -1) return { success: false, reason: "Oferta no disponible o ya adquirida" };
@@ -2128,6 +2225,9 @@ function buyMarketplacePart(listingId) {
 
 // Función de venta P2P ejecutada (con liquidación del 7.5% exacto entre plataforma, quema y pool)
 function sellPartToMarketplace(partId, priceCr) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "marketplace_disabled" };
+    }
     const userData = loadNftUserData();
     if (!userData.partsInventory || (userData.partsInventory[partId] || 0) <= 0) {
         return { success: false, reason: "No posees unidades de esta pieza en tu inventario" };
@@ -2166,9 +2266,15 @@ function sellPartToMarketplace(partId, priceCr) {
 }
 
 // =========================================================================
-// 9.1 BILLETERA WEB3 & TON — SIMULACIÓN LOCAL (SIN FONDOS REALES)
+// 9.1 BILLETERA WEB3 & TON — DIRECCIÓN DE DEMOSTRACIÓN LOCAL
+// La "conexión" de abajo solo genera una dirección ficticia de interfaz. Las
+// compras reales de $CR con TON NO pasan por aquí: las crea y verifica el
+// servidor (ver /api/purchases/*) contra la tesorería oficial.
 // =========================================================================
 function connectTonWallet(walletProvider = 'telegram_wallet') {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, simulated: false, reason: "wallet_connect_disabled" };
+    }
     const userData = loadNftUserData();
     const mockAddr = 'SIM-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
     userData.walletConnected = true;
@@ -2190,6 +2296,9 @@ function disconnectTonWallet() {
 }
 
 function buyCrWithTon(tonAmount) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, simulated: false, reason: "legacy_conversion_disabled" };
+    }
     const amount = Number(tonAmount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) {
         return { success: false, simulated: true, reason: "invalid_amount" };
@@ -2232,10 +2341,10 @@ function getWithdrawStatus() {
 }
 
 function withdrawCrToTon(crAmount, forceEarly = false) {
-    // v101: no hay integración on-chain verificada ni custodia/ledger en
-    // servidor. Las retiradas quedan deshabilitadas; $CR y TON del juego son
-    // saldos locales simulados sin valor real.
-    return { success: false, simulated: true, reason: "withdrawals_disabled_simulation_only" };
+    // v103: comprar $CR con TON es real, pero los $CR son moneda interna sin
+    // emisión on-chain ni pool. No hay conversión de vuelta a TON: las
+    // retiradas quedan deshabilitadas.
+    return { success: false, simulated: true, reason: "withdrawals_disabled" };
 }
 
 // =========================================================================
@@ -2321,6 +2430,9 @@ function getWeeklyTournamentInfo() {
 const WEEKLY_TOURNAMENT_DATA = getWeeklyTournamentInfo();
 
 function enterWeeklyTournament() {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "weekly_tournament_disabled" };
+    }
     const userData = loadNftUserData();
     const tourneyInfo = getWeeklyTournamentInfo();
     const fee = tourneyInfo.entryFeeCr || 20;
@@ -2490,8 +2602,8 @@ function claimSponsorshipReward(contractId) {
     }
 
     // Otorgar Energía Extra de Batería
-    if (def.rewardEnergy && userData.selectedCarId && Array.isArray(userData.garage)) {
-        const car = userData.garage.find(carObj => carObj.instanceId === userData.selectedCarId);
+    if (def.rewardEnergy && (userData.selectedCarId || userData.equippedInstanceId) && Array.isArray(userData.garage)) {
+        const car = userData.garage.find(carObj => carObj.instanceId === (userData.selectedCarId || userData.equippedInstanceId));
         if (car) {
             const maxE = typeof getCarMaxEnergy === 'function' ? getCarMaxEnergy(car) : 5;
             car.energy = Math.min(maxE, (car.energy || 0) + def.rewardEnergy);
@@ -2647,6 +2759,9 @@ function getReferralTournamentData() {
 }
 
 function redeemInviteCode(inputCode) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "server_referral_required" };
+    }
     const userData = loadNftUserData();
     const code = (inputCode || '').trim().toUpperCase();
     if (!code || !code.startsWith('APEX-') || code.length < 8) {
@@ -2673,6 +2788,9 @@ function redeemInviteCode(inputCode) {
 }
 
 function simulateFriendJoined(friendName) {
+    if (typeof isProductionRelease === 'function' ? isProductionRelease() : true) {
+        return { success: false, reason: "referral_simulation_disabled" };
+    }
     const userData = loadNftUserData();
     const bonusNitros = 1; // +1 Nitro N2O por cada amigo invitado
     userData.referralsCount = (userData.referralsCount || 0) + 1;

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soporte — Dust &amp; Nitro / Apex Motorsport</title>
+<style>
+:root{color-scheme:dark;--bg:#070b14;--card:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--accent:#00f5d4;--warn:#fbbf24;--danger:#f87171;--border:rgba(148,163,184,.25)}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(circle at top,#123 0,#070b14 55%);color:var(--text);line-height:1.65}
+main{max-width:880px;margin:0 auto;padding:28px 18px 48px}.card{background:rgba(15,23,42,.92);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+h1{line-height:1.15;margin:0 0 8px;font-size:clamp(28px,6vw,42px)}h2{margin-top:30px;color:#fff}h3{margin-top:22px}.muted{color:var(--muted)}a{color:var(--accent)}
+.notice{border:1px solid rgba(0,245,212,.45);background:rgba(0,245,212,.07);border-radius:12px;padding:14px 16px}.warning{border-color:rgba(251,191,36,.55);background:rgba(251,191,36,.09)}
+.danger{border-color:rgba(248,113,113,.55);background:rgba(248,113,113,.08)}
+nav{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}nav a{border:1px solid var(--border);border-radius:999px;padding:8px 13px;text-decoration:none;background:rgba(255,255,255,.04)}
+code{background:#020617;border:1px solid var(--border);border-radius:6px;padding:1px 5px;word-break:break-all}li{margin:.35rem 0}.hidden{display:none}
+</style>
+</head>
+<body>
+<main><section class="card">
+<p><a href="/">← Volver al juego</a></p>
+<h1>Soporte y recuperación</h1>
+<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.5</p>
+<nav><a href="/terms.html">Términos</a><a href="/privacy.html">Privacidad</a><a href="/">Jugar</a></nav>
+
+<div class="notice danger"><strong>Nunca compartas</strong> tu frase semilla, claves privadas, contraseña de Telegram o wallet, credencial de dispositivo ni código de recuperación. Soporte puede trabajar con tu ID de cuenta, ID del pedido, recibo o identificador del cargo de Telegram Stars y hash público de una transacción TON; no necesita tus secretos.</div>
+
+<div id="support-contact-box" class="notice hidden" style="margin-top:14px"></div>
+
+<h2>1. Pagué con TON y no veo mis $CR o mi cofre</h2>
+<ol>
+<li>Espera unos minutos a que la red TON confirme la transferencia.</li>
+<li>Entra con <strong>la misma cuenta</strong> que creó el pedido.</li>
+<li>Abre la billetera del juego y pulsa <strong>“Recuperar pedidos”</strong>.</li>
+<li>Si el pedido está pagado, el servidor lo entregará una sola vez. No vuelvas a pagar ni crees otro pedido para el mismo pago.</li>
+<li>Si sigue sin aparecer, escribe al bot: <code>/paysupport APEX-ID-DEL-PEDIDO</code>.</li>
+</ol>
+<p>Ten a mano:</p>
+<ul>
+<li>ID del pedido (<code>APEX-…</code>).</li>
+<li>Hash de la transacción TON.</li>
+<li>Fecha/hora aproximada e importe enviado.</li>
+<li>ID de cuenta visible en Ajustes.</li>
+<li>Captura del recibo de tu wallet, si la tienes.</li>
+</ul>
+<div class="notice warning">No envíes TON sin crear antes un pedido. El comentario debe ser exactamente el ID del pedido y la cotización tiene una ventana de validez. Dentro de Telegram no uses este flujo TON: compra $CR con Telegram Stars en la billetera y abre cofres con tu saldo $CR.</div>
+
+<h2>2. Pagué con Telegram Stars y no veo mis $CR</h2>
+<ol>
+<li>Vuelve a abrir el juego con <strong>la misma cuenta de Telegram</strong> que pagó. Una cuenta de navegador <code>usr_…</code> es un garaje distinto y no puede recibir esa compra.</li>
+<li>Abre la billetera, deja visible el pedido y pulsa <strong>“Comprobar en servidor”</strong>. Si no aparece, pulsa <strong>“Recuperar pedidos”</strong>.</li>
+<li>El aviso “pagado” al cerrar la factura no acredita por sí solo: el bot debe enviar el pago confirmado y el servidor aplicarlo una vez. Espera unos segundos y vuelve a comprobar.</li>
+<li>No pagues otra vez si Telegram ya cobró las Stars. Revisa el recibo en Telegram y conserva el ID del pedido.</li>
+<li>Si sigue pendiente, escribe al bot: <code>/paysupport APEX-ID-DEL-PEDIDO</code>.</li>
+</ol>
+<p>Ten a mano el ID <code>APEX-…</code>, la hora aproximada, el paquete comprado y el recibo o identificador del cargo de Telegram si aparece. Si el servidor detecta un cargo duplicado, no válido o no entregable, lo marcará para reembolso o revisión; no necesitas crear otro pedido para reclamarlo.</p>
+<div class="notice warning">Una factura Stars caduca a los 30 minutos. Si no pagaste, olvida el pedido caducado y crea uno nuevo. Si Telegram sí cobró, no lo olvides: usa primero “Comprobar en servidor” y después <code>/paysupport</code>.</div>
+
+<h2>3. He cambiado de móvil o navegador</h2>
+<h3>Cuenta de Telegram</h3>
+<p>Entra con la misma cuenta de Telegram. Tu garaje económico se descarga del servidor.</p>
+<h3>Cuenta de navegador <code>usr_…</code></h3>
+<ol>
+<li>En el dispositivo antiguo, abre Ajustes y crea un código de recuperación.</li>
+<li>Guarda el código fuera de ese dispositivo: solo se muestra una vez y crear uno nuevo invalida el anterior.</li>
+<li>En el nuevo navegador, abre Ajustes → Cuenta, soporte y legal → “Recuperar otra cuenta”.</li>
+<li>Introduce el ID <code>usr_…</code> y el código. La página se recargará con la cuenta recuperada.</li>
+</ol>
+<p>El correo opcional no está verificado y no permite recuperar la cuenta por sí solo.</p>
+
+<h2>4. Mi saldo o un coche no coincide con lo que veía</h2>
+<p>Desde la versión 1.0.4 el servidor es la fuente autoritativa de saldos, coches, piezas, energía y recompensas; en la 1.0.5 también conserva el registro global y el estado de conversión de cada coche. Cierra y vuelve a abrir el hub con conexión para sincronizar la representación local. Si una compra TON o de Stars está pagada, usa primero “Recuperar pedidos” o “Comprobar en servidor”. En el garaje, “Sincronizar registro” vuelve a descargar la serie global. Si el problema continúa, envía tu ID de cuenta, la hora aproximada y qué acción hiciste.</p>
+
+<h2>5. Vi un anuncio y no recibí energía o nitro</h2>
+<p>Las recompensas de producción esperan la confirmación de Adsgram en el servidor. Espera unos segundos y vuelve a intentarlo desde la misma pantalla. Si Adsgram no confirma el evento, el juego no puede acreditarlo solo por el aviso visual del anuncio.</p>
+
+<h2>6. Una carrera no acreditó recompensa</h2>
+<p>Las carreras oficiales necesitan una sesión de servidor válida, energía disponible y un resultado dentro de los límites físicos del circuito. Revisa tu conexión y vuelve a intentarlo. Los tiempos del ranking son el mejor tiempo por piloto y circuito; no hay pilotos de demostración.</p>
+
+<h2>7. Funciones en pausa</h2>
+<p>El mercado entre jugadores, las apuestas/duelos con saldo y el torneo semanal con entrada están pausados para no mover objetos ni $CR sin escrow y liquidación autoritativa. No se ha descontado saldo por abrir esas pantallas.</p>
+<p>La <strong>acuñación NFT en TON también está pausada</strong>. En la versión 1.0.5 puedes ver la serie global y preparar o cancelar la conversión de un coche elegible, pero eso no crea un NFT, no pide tu wallet y no cobra TON. Desconfía de cualquier pantalla o persona que te pida enviar TON o revelar tu frase semilla para “activar” el coche.</p>
+
+<h2>8. Contactar</h2>
+<ul>
+<li>Compras con Telegram Stars o TON: <code>/paysupport APEX-ID-DEL-PEDIDO</code> en el bot.</li>
+<li>Ayuda general: <code>/support</code> en el bot.</li>
+<li>Consulta también los <a href="/terms.html">términos</a> y la <a href="/privacy.html">política de privacidad</a>.</li>
+</ul>
+<p class="muted">Incluye siempre tu ID de cuenta y una descripción breve. No incluyas secretos en capturas ni mensajes.</p>
+</section></main>
+<script>
+fetch('/api/config', { headers: { Accept: 'application/json' } })
+  .then(function (response) { return response.json(); })
+  .then(function (data) {
+    var support = data && data.support ? data.support : {};
+    var box = document.getElementById('support-contact-box');
+    if (!box || (!support.contact && !support.url)) return;
+    box.textContent = '';
+    var title = document.createElement('strong');
+    title.textContent = 'Contacto adicional configurado por el operador: ';
+    box.appendChild(title);
+    if (support.contact) box.appendChild(document.createTextNode(String(support.contact)));
+    if (support.url) {
+      if (support.contact) box.appendChild(document.createTextNode(' · '));
+      var link = document.createElement('a');
+      link.href = String(support.url);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = String(support.url);
+      box.appendChild(link);
+    }
+    box.classList.remove('hidden');
+  })
+  .catch(function () {});
+</script>
+</body>
+</html>

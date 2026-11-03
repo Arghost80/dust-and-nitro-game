@@ -21,6 +21,44 @@ services:
         value: "false"
       - key: ALLOW_INSECURE_DEV_AUTH
         value: "false"
+      - key: ECONOMY_ACTIONS_ENABLED
+        value: "true"
+      - key: TON_PURCHASES_ENABLED
+        value: "true"
+      - key: TELEGRAM_TON_PURCHASES_ENABLED
+        value: "false"
+      - key: TELEGRAM_STARS_PURCHASES_ENABLED
+        value: "true"
+      - key: NFT_ENTITLEMENTS_ENABLED
+        value: "true"
+      - key: TON_NFT_MINTING_ENABLED
+        value: "false"
+      - key: TON_NFT_NETWORK
+        value: ton-testnet
+      - key: ENABLE_WAGER_STAKES
+        value: "false"
+      - key: ENABLE_MARKETPLACE
+        value: "false"
+      - key: ENABLE_WEEKLY_TOURNAMENT
+        value: "false"
+      - key: ENABLE_REFERRAL_REWARDS
+        value: "true"
+      - key: ENABLE_AD_REWARDS
+        value: "true"
+      - key: DB_BACKUP_ENABLED
+        value: "true"
+      - key: DB_BACKUP_DIR
+        value: /var/data/apex_backups
+      - key: DB_BACKUP_INTERVAL_HOURS
+        value: "6"
+      - key: DB_BACKUP_RETENTION
+        value: "14"
+      - key: TEAM_BOOTSTRAP_TELEGRAM_IDS
+        sync: false
+      - key: SUPPORT_CONTACT
+        sync: false
+      - key: SUPPORT_URL
+        sync: false
       - key: BOT_TOKEN
         sync: false
       - key: WEBAPP_URL
@@ -31,3 +69,25 @@ services:
         sync: false
       - key: SERVER_SECRET_KEY
         generateValue: true
+      - key: TREASURY_WALLET_ADDRESS
+        value: UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X
+      - key: TONCENTER_API_KEY
+        sync: false
+      - key: TONAPI_KEY
+        sync: false
+      - key: TON_USDT_RATE_OVERRIDE
+        sync: false
+      - key: TON_NFT_COLLECTION_ADDRESS
+        sync: false
+      - key: TON_NFT_COLLECTION_OWNER_ADDRESS
+        sync: false
+      - key: TON_NFT_ROYALTY_ADDRESS
+        sync: false
+      - key: TON_NFT_CLAIM_AMOUNT_NANOTONS
+        value: "40000000"
+      - key: TON_NFT_ITEM_RESERVE_NANOTONS
+        value: "15000000"
+      - key: TON_NFT_COLLECTION_RESERVE_NANOTONS
+        value: "5000000"
+      - key: TON_NFT_METADATA_BASE_URL
+        sync: false

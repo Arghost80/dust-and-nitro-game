@@ -321,8 +321,8 @@ const creditsBeforeWithdraw = vm.runInContext('loadNftUserData().credits', ctx);
 const gemsBeforeWithdraw = vm.runInContext('loadNftUserData().gems', ctx);
 const withdrawRes = vm.runInContext(`withdrawCrToTon(1000)`, ctx);
 const forcedWithdrawRes = vm.runInContext(`withdrawCrToTon(1000, true)`, ctx);
-if (withdrawRes.success || withdrawRes.reason !== 'withdrawals_disabled_simulation_only' ||
-    forcedWithdrawRes.success || forcedWithdrawRes.reason !== 'withdrawals_disabled_simulation_only') {
+if (withdrawRes.success || withdrawRes.reason !== 'withdrawals_disabled' ||
+    forcedWithdrawRes.success || forcedWithdrawRes.reason !== 'withdrawals_disabled') {
     throw new Error(`Las retiradas deben permanecer deshabilitadas: ${JSON.stringify({ withdrawRes, forcedWithdrawRes })}`);
 }
 if (vm.runInContext('loadNftUserData().credits', ctx) !== creditsBeforeWithdraw ||
@@ -346,16 +346,32 @@ if (!validTelemetryCheck.valid) {
 }
 console.log('✅ Anti-Cheat 4 superado: Telemetría física validada contra speedhacks y bots');
 
-// Renderizado del Modal de Billetera
+// Renderizado del Modal de Billetera (v103: compra real verificada en servidor)
 vm.runInContext(`openWeb3WalletModal()`, ctx);
 const walletModalHtml = doc.getElementById('wallet-modal').innerHTML;
-if (!walletModalHtml.includes('BILLETERA WEB3 & TON — SIMULACIÓN LOCAL')) {
-    throw new Error('El modal de la billetera no se renderizó como simulación local');
+if (!walletModalHtml.includes('BILLETERA WEB3 & TON') || !walletModalHtml.includes('COMPRAR CON TON (PAGO REAL)') || !walletModalHtml.includes('1.000 $CR = 1 USDT')) {
+    throw new Error('El modal de la billetera no muestra la compra TON anclada a USDT');
 }
-if (!walletModalHtml.includes('Retiros reales: DESHABILITADOS') || !walletModalHtml.includes('No envíes TON ni ningún fondo real')) {
-    throw new Error('El modal de la billetera no avisa de que no hay fondos reales');
+if (!walletModalHtml.includes('handleBuyCrPackage(\'cr_ton_001\')') || !walletModalHtml.includes('handleBuyCrPackage(\'cr_ton_1\')') || !walletModalHtml.includes('handleBuyCrPackage(\'cr_ton_5\')')) {
+    throw new Error('El modal de la billetera no ofrece el mínimo de 0.01 TON y los paquetes de 1/5 TON');
 }
-console.log('✅ Modal de Billetera Web3 renderizado como simulación sin fondos reales');
+if (!walletModalHtml.includes('assets/apex_cr_coin_256.jpg') || walletModalHtml.includes('assets/apex_token_logo.jpg')) {
+    throw new Error('La billetera debe usar el logo $CR optimizado de 256px, no el JPG completo');
+}
+const hubHeaderHtml = doc.getElementById('hub-header').innerHTML;
+if (!hubHeaderHtml.includes('assets/apex_cr_coin_256.jpg') || !hubHeaderHtml.includes('id="curr-credits"')) {
+    throw new Error('El saldo $CR del encabezado debe usar la moneda con el logo oficial');
+}
+if (!walletModalHtml.includes('Tesorería oficial') || !walletModalHtml.includes('SIEMPRE el comentario exacto de tu pedido')) {
+    throw new Error('El modal no indica la tesorería ni la obligación del comentario de pedido');
+}
+if (vm.runInContext(`getTreasuryWalletAddress()`, ctx) !== 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X') {
+    throw new Error('La dirección de tesorería del cliente no es la wallet oficial del proyecto');
+}
+if (!walletModalHtml.includes('Retiros reales: DESHABILITADOS')) {
+    throw new Error('El modal de la billetera no avisa de que los retiros siguen deshabilitados');
+}
+console.log('✅ Modal de Billetera Web3 renderizado con mínimo 0.01 TON, ancla USDT, logo $CR y retiros deshabilitados');
 
 // ===== VERIFICACIÓN DE LAS 12 SILUETAS VECTORIALES DE COCHES =====
 console.log('\n--- VERIFICANDO LAS 12 SILUETAS ARQUITECTÓNICAS DE COCHES ---');
@@ -546,13 +562,17 @@ if (!editModal || !editModal.innerHTML.includes('modal-input-pilot-name')) {
 }
 console.log('✓ Modal interactivo de edición rápida de nombre de piloto activo');
 
-// Probar modal de clasificación mundial con puesto y nombre del piloto
+// Probar ranking real por circuito (sin pilotos ficticios ni premios inventados)
 vm.runInContext('openLeaderboardModal()', ctx);
 const lbModal = doc.getElementById('leaderboard-modal');
-if (!lbModal || !lbModal.innerHTML.includes('Apex_Champion_99')) {
-    throw new Error('La tabla clasificatoria debe mostrar la posición y el nombre del piloto del usuario');
+const lbHtml = lbModal ? lbModal.innerHTML : '';
+if (!lbModal || !lbHtml.includes('RANKING REAL APEX GT') || !lbHtml.includes('leaderboard-track-select') || !lbHtml.includes('leaderboard-real-list')) {
+    throw new Error('La tabla clasificatoria debe pedir tiempos reales por circuito al servidor');
 }
-console.log('✓ Modal de clasificación mundial muestra el ranking y el piloto del usuario');
+if (lbHtml.includes('Yusuke') || lbHtml.includes('Tarek Mansour') || lbHtml.includes('+5,000 $CR')) {
+    throw new Error('La tabla clasificatoria no debe contener pilotos ficticios ni premios TON/$CR inventados');
+}
+console.log('✓ Modal de clasificación lee el ranking real por circuito y sin premios ficticios');
 
 // ===== VERIFICACIÓN DE OPCIÓN B: GRÁFICOS E INMERSIÓN =====
 console.log('\n--- VERIFICANDO GRÁFICOS E INMERSIÓN: FAROS, SKIDMARKS Y LÍNEAS DE VELOCIDAD ---');
@@ -1497,16 +1517,17 @@ if (!compHtml.includes('~2.500 $CR')) {
 }
 console.log('✓ Torneo Semanal sostenible (~2.500 $CR) integrado en la cabecera de la sección de Competición');
 
-// 2.1 Verificar Leaderboard con recompensas calibradas y sin TON
+// 2.1 Verificar Leaderboard real por circuito, sin premios de ranking inventados
 vm.runInContext('openLeaderboardModal()', ctx);
 const lbCleanModal = doc.getElementById('leaderboard-modal');
-if (!lbCleanModal || lbCleanModal.innerHTML.includes('TON') || lbCleanModal.innerHTML.includes('15.000 $CR')) {
-    throw new Error('El modal de Clasificación (Leaderboard) no debe prometer TON ni premios inflados');
+const lbCleanHtml = lbCleanModal ? lbCleanModal.innerHTML : '';
+if (!lbCleanModal || !lbCleanHtml.includes('RANKING REAL APEX GT') || !lbCleanHtml.includes('leaderboard-real-list')) {
+    throw new Error('El modal de Clasificación debe mostrar tiempos reales leídos del servidor');
 }
-if (!lbCleanModal.innerHTML.includes('+300 $CR') || !lbCleanModal.innerHTML.includes('+150 $CR') || !lbCleanModal.innerHTML.includes('+75 $CR')) {
-    throw new Error('El modal de Clasificación debe otorgar premios calibrados (+300, +150, +75 $CR)');
+if (lbCleanHtml.includes('+300 $CR') || lbCleanHtml.includes('+150 $CR') || lbCleanHtml.includes('+75 $CR') || lbCleanHtml.includes('15.000 $CR')) {
+    throw new Error('El ranking por circuito no debe prometer premios que el servidor no liquida');
 }
-console.log('✓ Clasificación Mundial verificada: Recompensas de podio sostenibles (+300, +150, +75 $CR) sin desangrar el token');
+console.log('✓ Clasificación verificada: ranking real por circuito sin premios ficticios');
 
 // 2.2 Verificar que las reglas de apuestas están en el botón de ayuda ❓ y no saturan la pantalla
 if (compHtml.includes('wager-rules-card')) {
@@ -1766,6 +1787,15 @@ if (cratesV79Html.includes('<div class="chest-icon">📦</div>') || cratesV79Htm
 if (!cratesV79Html.includes('rendered-chest-svg chest-tier-bronze') || !cratesV79Html.includes('rendered-chest-svg chest-tier-gold')) {
     throw new Error('view-crates debe renderizar los cofres SVG 3D de alta definición');
 }
+if (!cratesV79Html.includes('assets/apex_cr_coin_256.jpg') ||
+    !cratesV79Html.includes("handleBuyCrateWithTon('bronze')") ||
+    !cratesV79Html.includes("handleBuyCrateWithTon('silver')") ||
+    !cratesV79Html.includes("handleBuyCrateWithTon('gold')") ||
+    !cratesV79Html.includes('id="crate-ton-price-bronze"') ||
+    !cratesV79Html.includes('· 1 USDT') || !cratesV79Html.includes('· 5 USDT') || !cratesV79Html.includes('· 25 USDT')) {
+    throw new Error('view-crates debe ofrecer cada cofre en $CR y directamente en TON según 1/5/25 USDT');
+}
+console.log('✓ Cofres con doble pago verificados: $CR interno o TON directo cotizado desde USDT');
 vm.runInContext('renderMainHubView()', ctx);
 const mainV79Html = doc.getElementById('view-main').innerHTML;
 if (!mainV79Html.includes('rendered-chest-svg chest-tier-gold')) {
@@ -1895,6 +1925,40 @@ if (totalBurned !== 190 + 5000) { // +20% de 25,000 = 5,000 $CR
     throw new Error(`Tokens quemados acumulados tras cofre oro incorrectos: ${totalBurned}`);
 }
 console.log('✓ Apertura de Cofre Oro por 25,000 $CR y quema deflacionaria de 5,000 $CR verificada');
+
+// 5. Apertura prepagada con TON: no descuenta $CR, no quema saldo y el
+// mismo pedido no puede abrir un segundo cofre aunque se repita el claim.
+const creditsBeforeTonCrate = vm.runInContext('loadNftUserData().credits', ctx);
+const burnedBeforeTonCrate = vm.runInContext('loadNftUserData().burnedTokens || 0', ctx);
+const garageBeforeTonCrate = vm.runInContext('loadNftUserData().garage.length', ctx);
+vm.runInContext(`
+    const uTonCrate = loadNftUserData();
+    uTonCrate.credits = 0;
+    uTonCrate.gems = 0;
+    uTonCrate.tonPurchaseOrderIds = (uTonCrate.tonPurchaseOrderIds || []).filter(id => id !== 'APEX-ABCDEF123456');
+    saveNftUserData(uTonCrate);
+`, ctx);
+const resTonCrate = vm.runInContext('openMysteryCrate("bronze", { prepaidTonOrderId: "APEX-ABCDEF123456" })', ctx);
+if (!resTonCrate.success || !resTonCrate.paidWithTon || resTonCrate.car == null) {
+    throw new Error(`Fallo al abrir el cofre prepagado con TON: ${JSON.stringify(resTonCrate)}`);
+}
+if (vm.runInContext('loadNftUserData().credits', ctx) !== 0 ||
+    vm.runInContext('loadNftUserData().burnedTokens || 0', ctx) !== burnedBeforeTonCrate ||
+    vm.runInContext('loadNftUserData().garage.length', ctx) !== garageBeforeTonCrate + 1 ||
+    !vm.runInContext('loadNftUserData().tonPurchaseOrderIds.includes("APEX-ABCDEF123456")', ctx)) {
+    throw new Error('El cofre TON debe añadir un coche sin descontar/quemar $CR y registrar el pedido en la partida');
+}
+const resTonCrateAgain = vm.runInContext('openMysteryCrate("bronze", { prepaidTonOrderId: "APEX-ABCDEF123456" })', ctx);
+if (resTonCrateAgain.success || !resTonCrateAgain.alreadyApplied ||
+    vm.runInContext('loadNftUserData().garage.length', ctx) !== garageBeforeTonCrate + 1) {
+    throw new Error(`El mismo pedido TON no debe abrir dos cofres: ${JSON.stringify(resTonCrateAgain)}`);
+}
+vm.runInContext(`
+    const uRestoreTonCrate = loadNftUserData();
+    uRestoreTonCrate.credits = ${creditsBeforeTonCrate};
+    saveNftUserData(uRestoreTonCrate);
+`, ctx);
+console.log('✓ Cofre prepagado con TON verificado: abre sin $CR y un pedido repetido no duplica el coche');
 
 console.log('\n--- VERIFICANDO ORÁCULO DINÁMICO Y PEG A USDT ANTE SUBIDA DEL TOKEN (V83) ---');
 // Simular subida del token de $0.001 a $0.10 (100x pump)
@@ -2037,17 +2101,19 @@ if (prodMarketListings.length !== 0) {
 }
 console.log('✓ En Producción: El Mercado P2P arranca 100% vacío (sin ofertas bot/seed)');
 
-// Publicar pieza con precio personalizado elegido por el usuario (ej: 480 $CR)
+// v104: en producción el mercado local está cerrado; publicar no mueve el objeto.
 vm.runInContext('(() => { const uData = loadNftUserData(); if (!uData.partsInventory) uData.partsInventory = {}; uData.partsInventory["turbocharger"] = 2; saveNftUserData(uData); })()', ctx);
-const customPriceRes = vm.runInContext('listPartOnMarketplace("turbocharger", 480)', ctx);
-if (!customPriceRes.success || customPriceRes.listing.priceCr !== 480) {
-    throw new Error('El usuario debe poder fijar el precio que desee en $CR');
+const turboBeforeDisabledMarket = vm.runInContext('loadNftUserData().partsInventory["turbocharger"] || 0', ctx);
+const disabledMarketRes = vm.runInContext('listPartOnMarketplace("turbocharger", 480)', ctx);
+if (disabledMarketRes.success || disabledMarketRes.reason !== 'marketplace_disabled') {
+    throw new Error('En producción, el mercado local debe rechazar publicaciones hasta tener escrow/transacción en servidor');
 }
+const turboAfterDisabledMarket = vm.runInContext('loadNftUserData().partsInventory["turbocharger"] || 0', ctx);
 const updatedProdListings = vm.runInContext('getMarketplaceListings()', ctx);
-if (updatedProdListings.length !== 1 || updatedProdListings[0].priceCr !== 480) {
-    throw new Error('La oferta del usuario debe aparecer en el mercado de producción con su precio personalizado');
+if (turboAfterDisabledMarket !== turboBeforeDisabledMarket || updatedProdListings.length !== 0) {
+    throw new Error(`Cerrar el mercado no debe retirar piezas ni crear ofertas: turbo=${turboAfterDisabledMarket}, listings=${updatedProdListings.length}`);
 }
-console.log('✓ Precio libre verificado: La pieza se publicó con éxito a 480 $CR fijados por el usuario');
+console.log('✓ Mercado de producción cerrado sin mover objetos ni crear ofertas locales');
 
 // Verificar configuración del Torneo Semanal: 200 $CR de bote inicial garantizado sin cartel independiente
 const tourneyConfig = vm.runInContext('WEEKLY_TOURNAMENT_CONFIG', ctx);
@@ -2065,6 +2131,13 @@ if (tourneyModalHtml.includes('INSCRITOS:') || tourneyModalHtml.includes('PATROC
     throw new Error('El modal del torneo NO debe mostrar tarjetas de inscritos ni patrocinio de la casa');
 }
 console.log('✓ Modal de Torneo verificado: Muestra exclusivamente el BOTE TOTAL ACUMULADO');
+const weeklyCreditsBeforeProd = vm.runInContext('loadNftUserData().credits', ctx);
+const weeklyProdRes = vm.runInContext('enterWeeklyTournament()', ctx);
+const weeklyCreditsAfterProd = vm.runInContext('loadNftUserData().credits', ctx);
+if (weeklyProdRes.success || weeklyProdRes.reason !== 'weekly_tournament_disabled' || weeklyCreditsAfterProd !== weeklyCreditsBeforeProd) {
+    throw new Error('En producción, inscribirse al torneo semanal local debe estar bloqueado sin cobrar la entrada');
+}
+console.log('✓ Torneo semanal de producción bloqueado sin cobrar entrada');
 
 // Restaurar desarrollo explícito solo para el resto de la suite local
 vm.runInContext('localStorage.setItem("apex_dev_mode", "1")', ctx);
@@ -2149,6 +2222,23 @@ if (!/^[A-Za-z0-9_-]*$/.test(sanitizedNetworkSlot.id) ||
     throw new Error(`sanitizeNetworkSlot debe aplicar una lista blanca estricta: ${JSON.stringify(sanitizedNetworkSlot)}`);
 }
 console.log('✓ Slots de red reducidos a lista blanca con stake acotado y sin campos arbitrarios');
+
+const deviceSecretA = vm.runInContext('getOrCreateDeviceSecret()', ctx);
+const deviceSecretB = vm.runInContext('getOrCreateDeviceSecret()', ctx);
+const apexHeaders = vm.runInContext('apexApiHeaders()', ctx);
+if (!/^[A-Za-z0-9_-]{32,128}$/.test(deviceSecretA) || deviceSecretA !== deviceSecretB
+    || apexHeaders['X-Device-Secret'] !== deviceSecretA) {
+    throw new Error('La credencial secreta de dispositivo debe generarse una vez, persistir y enviarse en X-Device-Secret');
+}
+const selfNetworkSlot = vm.runInContext(`sanitizeNetworkSlot({
+    id: 'player_1', userId: 'pub_abc123', name: 'Yo', carName: 'GT', colorHex: '#00f5d4',
+    archetype: 'ferrari_corsa', roleLabel: 'YO', status: 'LISTO', stake: 5,
+    isAI: false, isPlayer: false, isSelf: true
+})`, ctx);
+if (selfNetworkSlot.isSelf !== true || sanitizedNetworkSlot.isSelf !== false) {
+    throw new Error('sanitizeNetworkSlot debe conservar isSelf solo cuando es boolean true estricto');
+}
+console.log('✓ Credencial de dispositivo persistente y slots isSelf verificados');
 
 console.log('\n========================================');
 console.log('SUCCESS! ALL TESTS PASSED SUCCESSFULLY!');

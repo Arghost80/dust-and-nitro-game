@@ -5,6 +5,8 @@ const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const db = require('./database');
+const economyEngine = require('./economy_engine');
+const telegramStars = require('./telegram_stars');
 // Catálogo jugable canónico: tracks_data.json es la fuente de la que también
 // se genera tracks_data.js. El catálogo orgánico legacy de track_generator.js
 // no se acepta para rankings ni se anuncia como circuitos jugables.
@@ -26,7 +28,40 @@ const PlayableTracksCatalog = Object.values(RaceTracksCatalog || {})
         worldHeight: Number(track.worldHeight) || 0
     }));
 
+const APP_VERSION = '1.0.5';
 const PORT = process.env.PORT || 3000;
+
+function envFlag(name, defaultValue) {
+    const raw = String(process.env[name] ?? '').trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
+    if (['0', 'false', 'no', 'off'].includes(raw)) return false;
+    return defaultValue;
+}
+
+// Interruptores operativos v105. Permiten apagar una superficie económica sin
+// desplegar código nuevo. Las apuestas, el mercado P2P y el torneo semanal
+// quedan apagados hasta tener liquidación/escrow autoritativos completos.
+const FEATURES = {
+    economyActionsEnabled: envFlag('ECONOMY_ACTIONS_ENABLED', true),
+    tonPurchasesEnabled: envFlag('TON_PURCHASES_ENABLED', true),
+    telegramTonPurchasesEnabled: envFlag('TELEGRAM_TON_PURCHASES_ENABLED', false),
+    telegramStarsPurchasesEnabled: envFlag('TELEGRAM_STARS_PURCHASES_ENABLED', true),
+    nftEntitlementsEnabled: envFlag('NFT_ENTITLEMENTS_ENABLED', true),
+    nftMintingEnabled: envFlag('TON_NFT_MINTING_ENABLED', false),
+    wagerStakesEnabled: envFlag('ENABLE_WAGER_STAKES', false),
+    marketplaceEnabled: envFlag('ENABLE_MARKETPLACE', false),
+    weeklyTournamentEnabled: envFlag('ENABLE_WEEKLY_TOURNAMENT', false),
+    referralRewardsEnabled: envFlag('ENABLE_REFERRAL_REWARDS', true),
+    adRewardsEnabled: envFlag('ENABLE_AD_REWARDS', true)
+};
+const SUPPORT_CONTACT = String(process.env.SUPPORT_CONTACT || '').trim().slice(0, 120);
+const SUPPORT_URL = String(process.env.SUPPORT_URL || '').trim().slice(0, 300);
+const DB_BACKUP_ENABLED = envFlag('DB_BACKUP_ENABLED', true);
+const DB_BACKUP_INTERVAL_MS = Math.max(15 * 60 * 1000, (Number(process.env.DB_BACKUP_INTERVAL_HOURS) || 6) * 60 * 60 * 1000);
+const DB_BACKUP_RETENTION = Math.max(1, Math.min(100, Math.floor(Number(process.env.DB_BACKUP_RETENTION) || 14)));
+const DB_BACKUP_DIR = process.env.DB_BACKUP_DIR
+    ? path.resolve(process.env.DB_BACKUP_DIR)
+    : path.join(path.dirname(db.DB_FILE), 'apex_backups');
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER_EXTERNAL_URL);
 const ALLOW_INSECURE_DEV_AUTH = process.env.ALLOW_INSECURE_DEV_AUTH === 'true' && !IS_PRODUCTION;
@@ -35,18 +70,97 @@ const ADMIN_AUDIT_TOKEN = process.env.ADMIN_AUDIT_TOKEN || '';
 const ADSGRAM_WEBHOOK_SECRET = process.env.ADSGRAM_WEBHOOK_SECRET || '';
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || Boolean(process.env.RENDER_EXTERNAL_URL);
 const MAX_API_BODY_BYTES = 64 * 1024;
-// Billetera Oficial de Tesorería del Proyecto (Receptora de fondos del juego, swaps y Ads)
+// Solo para la suite local: permite no esperar la duración física mínima de
+// una carrera al probar sesiones. En producción se ignora siempre.
+const RACE_SESSION_MIN_AGE_MS = (!IS_PRODUCTION && process.env.RACE_SESSION_MIN_AGE_MS !== undefined)
+    ? Math.max(0, Number(process.env.RACE_SESSION_MIN_AGE_MS) || 0)
+    : null;
+const RACE_SESSION_TTL_MS = 60 * 60 * 1000;
+
+// ===== TESORERÍA TON Y PAQUETES $CR (v103) =====
+// Wallet oficial del proyecto: recibe los pagos TON de los paquetes de $CR.
+// Es una dirección pública de recepción; se puede sobrescribir por entorno.
+// Ningún $CR se acredita hasta que el servidor verifica on-chain una
+// transferencia entrante con el comentario (= id de pedido) e importe >=
+// el del paquete. Los $CR siguen siendo moneda interna sin retirada a TON.
 const TREASURY_WALLET_ADDRESS = process.env.TREASURY_WALLET_ADDRESS || 'UQD4ivLM7PJ7XpX_CflUUhoZW361xvOH4WP869C9WghJAN4X';
+// v105 solo prepara la conversión NFT: identidad global, snapshot y
+// entitlement único. TON_NFT_MINTING_ENABLED seguirá en false hasta tener el
+// contrato auditado/probado en testnet y TON Connect con ton_proof; ningún
+// endpoint debe fingir que un coche ya está acuñado sin esa configuración.
+function positiveNanotonEnv(name, fallback) {
+    const value = String(process.env[name] || '').trim();
+    return /^[1-9]\d{0,18}$/.test(value) ? value : fallback;
+}
+const NFT_CONFIG = {
+    network: String(process.env.TON_NFT_NETWORK || 'ton-testnet').trim() === 'ton-mainnet' ? 'ton-mainnet' : 'ton-testnet',
+    collectionAddress: String(process.env.TON_NFT_COLLECTION_ADDRESS || '').trim().slice(0, 120) || null,
+    collectionOwnerAddress: String(process.env.TON_NFT_COLLECTION_OWNER_ADDRESS || TREASURY_WALLET_ADDRESS).trim().slice(0, 120),
+    royaltyFactor: 50,
+    royaltyBase: 1000,
+    royaltyPercent: 5,
+    royaltyAddress: String(process.env.TON_NFT_ROYALTY_ADDRESS || TREASURY_WALLET_ADDRESS).trim().slice(0, 120),
+    claimAmountNanotons: positiveNanotonEnv('TON_NFT_CLAIM_AMOUNT_NANOTONS', '40000000'),
+    itemReserveNanotons: positiveNanotonEnv('TON_NFT_ITEM_RESERVE_NANOTONS', '15000000'),
+    collectionReserveNanotons: positiveNanotonEnv('TON_NFT_COLLECTION_RESERVE_NANOTONS', '5000000'),
+    metadataBaseUrl: String(process.env.TON_NFT_METADATA_BASE_URL || '').trim().replace(/\/+$/, '').slice(0, 300) || null
+};
+const TONCENTER_API_KEY = process.env.TONCENTER_API_KEY || '';
+const TONAPI_KEY = process.env.TONAPI_KEY || '';
+// Solo fuera de producción: libro mayor ficticio para probar el flujo de
+// compra sin tocar la red TON real. En producción se ignora siempre.
+const TON_MOCK_LEDGER_FILE = (!IS_PRODUCTION && process.env.TON_MOCK_LEDGER_FILE) ? process.env.TON_MOCK_LEDGER_FILE : '';
+// Ancla económica aprobada para la tienda: 1.000 $CR = 1 USDT. El importe
+// en TON nunca es una equivalencia fija: el servidor consulta TON/USDT al
+// crear el pedido y bloquea cotización, nanotons y entrega en ese pedido.
+const CR_PER_USDT = 1000;
+const TON_USDT_RATE_OVERRIDE = String(process.env.TON_USDT_RATE_OVERRIDE || '').trim();
+const TON_RATE_CACHE_MS = 60 * 1000;
+const TON_RATE_STALE_MAX_MS = 10 * 60 * 1000;
+const TON_QUOTE_GRACE_SEC = 120;
+const TON_CR_PACKAGES = [
+    { id: 'cr_ton_001', productType: 'cr', name: 'Mini bolsa $CR', ton: '0.01', amountNanotons: '10000000' },
+    { id: 'cr_ton_1', productType: 'cr', name: 'Bolsa $CR', ton: '1', amountNanotons: '1000000000' },
+    { id: 'cr_ton_5', productType: 'cr', name: 'Baúl $CR', ton: '5', amountNanotons: '5000000000' }
+];
+const TON_CRATE_PRODUCTS = [
+    { id: 'crate_bronze', productType: 'crate', crateId: 'bronze', priceUsdt: '1', priceCr: 1000, label: 'Cofre Rookie NFT' },
+    { id: 'crate_silver', productType: 'crate', crateId: 'silver', priceUsdt: '5', priceCr: 5000, label: 'Cofre Clubman NFT' },
+    { id: 'crate_gold', productType: 'crate', crateId: 'gold', priceUsdt: '25', priceCr: 25000, label: 'Cofre Apex Pro NFT' }
+];
+const PURCHASE_PRODUCTS = [...TON_CR_PACKAGES, ...TON_CRATE_PRODUCTS];
+const PURCHASE_ORDER_TTL_MS = 60 * 60 * 1000;
+const PURCHASE_MAX_PENDING_PER_USER = 3;
+const purchaseVerifyCache = new Map(); // orderId -> última verificación on-chain (ms)
+let tonUsdtRateCache = null;
+let tonUsdtRatePromise = null;
 
 // ===== MOTOR DE SEGURIDAD, AUDITORÍA Y PROTECCIÓN ANTI-BOTS =====
 const SERVER_SECRET_KEY = process.env.SERVER_SECRET_KEY || crypto.randomBytes(32).toString('hex');
 const activeMatchTickets = new Map();
 const rateLimitMap = new Map();
-const securityAuditLogs = [];
+// Compatibilidad con los puntos antiguos de registro: ahora cada evento se
+// persiste en SQLite en vez de vivir solo en un array en memoria.
+const securityAuditLogs = {
+    push(entry) {
+        try {
+            const details = { ...(entry || {}) };
+            const event = details.event || 'security_event';
+            const userId = details.userId || details.saveId || null;
+            delete details.event;
+            delete details.userId;
+            delete details.saveId;
+            delete details.time;
+            delete details.timeStamp;
+            db.recordAuditEvent(userId, event, details);
+        } catch (e) {}
+    }
+};
 
 // ===== SISTEMA MULTIJUGADOR REAL: SALAS PÚBLICAS Y DUELOS PRIVADOS =====
 const publicLobbies = new Map(); // roomId -> active lobby
 const privateDuels = new Map();  // duelCode -> private duel room
+const raceSessions = new Map();  // sessionId -> carrera registrada y de un solo uso
 
 const AI_BOT_POOL = [
     { name: "🤖 Bot_Klaus", carName: "Bavaria ROWE M4", archetype: "dtm_coupe", colorHex: "#15803d" },
@@ -105,19 +219,71 @@ function sanitizeSlot(slot) {
         status: cleanText(slot.status, 30, 'LISTO'),
         stake: Number.isFinite(rawStake) ? Math.max(0, Math.min(10000, rawStake)) : 0,
         isAI: slot.isAI === true,
-        isPlayer: slot.isPlayer === true
+        isPlayer: slot.isPlayer === true,
+        isSelf: slot.isSelf === true
     };
 }
 
-function publicDuelView(duel) {
-    if (!duel) return duel;
+function publicUserId(rawUserId, viewerUserId = '') {
+    const id = String(rawUserId || '');
+    if (!id || id === String(viewerUserId || '') || id.startsWith('ai_')) return id;
+    // Los demás jugadores solo necesitan distinguir slots, no conocer el ID
+    // persistente de la cuenta. El seudónimo es estable dentro del servidor
+    // mientras SERVER_SECRET_KEY no cambie, pero no sirve como credencial.
+    return 'pub_' + crypto.createHmac('sha256', SERVER_SECRET_KEY)
+        .update(`public-user:${id}`)
+        .digest('hex')
+        .slice(0, 24);
+}
+
+function publicSlotView(slot, viewerUserId = '') {
+    const clean = sanitizeSlot(slot);
+    if (!clean || typeof clean !== 'object') return clean;
+    const rawUserId = String(slot && slot.userId || '');
+    const maskedUserId = publicUserId(rawUserId, viewerUserId);
     return {
-        ...duel,
+        ...clean,
+        id: rawUserId && clean.id === `player_${rawUserId}` ? `player_${maskedUserId}` : clean.id,
+        userId: maskedUserId,
+        isSelf: Boolean(viewerUserId && rawUserId === String(viewerUserId))
+    };
+}
+
+function publicLobbyView(lobby, viewerUserId = '') {
+    if (!lobby) return lobby;
+    return {
+        id: cleanText(lobby.id, 80),
+        roomId: cleanText(lobby.roomId, 40),
+        buyIn: Number(lobby.buyIn) || 0,
+        circuit: lobby.circuit ? {
+            id: cleanText(lobby.circuit.id, 60),
+            name: cleanText(lobby.circuit.name, 80, 'Circuito')
+        } : lobby.circuit,
+        createdAt: Number(lobby.createdAt) || 0,
+        expiresAt: Number(lobby.expiresAt) || 0,
+        status: cleanText(lobby.status, 30, 'WAITING'),
+        slots: Array.isArray(lobby.slots) ? lobby.slots.map(slot => publicSlotView(slot, viewerUserId)) : []
+    };
+}
+
+function publicDuelView(duel, viewerUserId = '') {
+    if (!duel) return duel;
+    const slots = Array.isArray(duel.slots) ? duel.slots : [];
+    const viewer = String(viewerUserId || '');
+    return {
+        code: cleanDuelCode(duel.code),
+        betAmount: Math.max(0, Math.min(10000, Number(duel.betAmount) || 0)),
         circuit: duel.circuit ? {
             id: cleanText(duel.circuit.id, 60),
             name: cleanText(duel.circuit.name, 80, 'Circuito')
         } : duel.circuit,
-        slots: Array.isArray(duel.slots) ? duel.slots.map(sanitizeSlot) : []
+        createdAt: Number(duel.createdAt) || 0,
+        expiresAt: Number(duel.expiresAt) || 0,
+        hostUserId: publicUserId(duel.hostUserId, viewer),
+        isHost: Boolean(viewer && String(duel.hostUserId || '') === viewer),
+        isParticipant: Boolean(viewer && slots.some(slot => slot && String(slot.userId || '') === viewer)),
+        status: cleanText(duel.status, 30, 'WAITING'),
+        slots: slots.map(slot => publicSlotView(slot, viewer))
     };
 }
 
@@ -163,13 +329,17 @@ function verifyTelegramWebAppData(initDataString, botToken) {
         const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
         const calculatedHash = crypto.createHmac('sha256', secret).update(sortedParams).digest('hex');
 
-        if (calculatedHash !== hash) {
+        if (!timingSafeEqualString(calculatedHash, hash)) {
             return { valid: false, reason: 'Firma HMAC adulterada (posible bot o suplantación)' };
         }
 
         const authDate = parseInt(urlParams.get('auth_date') || '0', 10);
-        if (Date.now() / 1000 - authDate > 86400) {
+        const nowSeconds = Date.now() / 1000;
+        if (!Number.isFinite(authDate) || authDate <= 0 || nowSeconds - authDate > 86400) {
             return { valid: false, reason: 'Sesión expirada (>24h anti-replay)' };
+        }
+        if (authDate - nowSeconds > 300) {
+            return { valid: false, reason: 'auth_date de Telegram está en el futuro' };
         }
 
         return { valid: true, user: JSON.parse(urlParams.get('user') || '{}') };
@@ -291,7 +461,9 @@ function getTelegramInitData(req, body) {
 
 // Autorización común para acciones de usuario:
 // - ID numérico: debe coincidir con un initData de Telegram firmado.
-// - usr_...: credencial bearer de dispositivo (no debe filtrarse).
+// - usr_...: ID público de dispositivo + X-Device-Secret aleatorio separado.
+//   El servidor conserva solo el hash del secreto; ver el ID en una sala ya no
+//   permite leer o sobrescribir la partida.
 // - Sin BOT_TOKEN, las acciones con ID numérico fallan cerradas salvo
 //   ALLOW_INSECURE_DEV_AUTH=true en un entorno no productivo.
 function authorizeKnownUser(req, userId, body) {
@@ -313,7 +485,30 @@ function authorizeKnownUser(req, userId, body) {
         }
         return { ok: true, userId: id, authMode: 'telegram', telegramUser: check.user };
     }
-    if (isDeviceId(id)) return { ok: true, userId: id, authMode: 'device_bearer' };
+    if (isDeviceId(id)) {
+        const deviceSecret = req && req.headers ? req.headers['x-device-secret'] : '';
+        if (!deviceSecret && ALLOW_INSECURE_DEV_AUTH) {
+            return { ok: true, userId: id, authMode: 'insecure_dev' };
+        }
+        if (typeof db.verifyOrRegisterDeviceSecret !== 'function') {
+            return { ok: false, status: 503, error: 'device_auth_not_configured', reason: 'Autenticación de dispositivo no disponible' };
+        }
+        const deviceCheck = db.verifyOrRegisterDeviceSecret(id, deviceSecret);
+        if (!deviceCheck.ok) {
+            return {
+                ok: false,
+                status: 401,
+                error: deviceSecret ? 'invalid_device_secret' : 'missing_device_secret',
+                reason: 'Se requiere la credencial secreta de este dispositivo'
+            };
+        }
+        return {
+            ok: true,
+            userId: id,
+            authMode: 'device_secret',
+            deviceCredentialRegistered: deviceCheck.registered === true
+        };
+    }
     if (ALLOW_INSECURE_DEV_AUTH) return { ok: true, userId: id, authMode: 'insecure_dev' };
     return { ok: false, status: 401, error: 'unsupported_user_id', reason: 'Se requiere un ID de Telegram verificado o un ID de dispositivo usr_' };
 }
@@ -332,6 +527,625 @@ function requireKnownUser(req, res, userId, body) {
     return auth;
 }
 
+// Para polling de salas: si el cliente se identifica correctamente puede ver
+// su propio ID/isSelf; si no, recibe la misma vista con todos los IDs ajenos
+// seudonimizados. Nunca se confía en un userId de query sin credencial.
+function optionalViewerUserId(req, rawUserId) {
+    const id = String(rawUserId || '').trim();
+    if (!id) return '';
+    const auth = authorizeKnownUser(req, id);
+    return auth.ok ? auth.userId : '';
+}
+
+function economyProfileResponse(profile) {
+    if (!profile) return null;
+    return {
+        version: profile.version,
+        garage: profile.garage,
+        createdAt: profile.createdAt,
+        updatedAt: profile.updatedAt
+    };
+}
+
+function applyServerEconomyAction(userId, action, args = {}, idempotencyKey = null, details = {}) {
+    return db.applyEconomyMutation(userId, action, idempotencyKey, (garage) => {
+        return economyEngine.applyAction(garage, action, args);
+    }, details);
+}
+
+function isAdminRequest(req) {
+    if (!ADMIN_AUDIT_TOKEN) return false;
+    const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const suppliedToken = req.headers['x-admin-token'] || bearer;
+    return timingSafeEqualString(suppliedToken, ADMIN_AUDIT_TOKEN);
+}
+
+function requireAdminRequest(req, res) {
+    if (!ADMIN_AUDIT_TOKEN) {
+        sendJson(res, 503, { ok: false, error: 'admin_not_configured', message: 'Configura ADMIN_AUDIT_TOKEN para habilitar herramientas administrativas' });
+        return false;
+    }
+    if (!isAdminRequest(req)) {
+        securityAuditLogs.push({ event: 'ADMIN_AUTH_FAILED', ip: getClientIp(req), time: new Date().toISOString() });
+        sendJson(res, 403, { ok: false, error: 'forbidden' });
+        return false;
+    }
+    return true;
+}
+
+const PUBLIC_ECONOMY_ACTIONS = new Set([
+    'buy_energy_pack', 'buy_nitros', 'consume_nitro', 'open_crate',
+    'upgrade_branch', 'buy_parts_kit', 'buy_shop_component', 'claim_milestone',
+    'claim_season_tier', 'claim_daily_mission', 'sign_sponsor',
+    'claim_sponsor', 'equip_car', 'link_email'
+]);
+
+function validateEconomyActionArgs(action, args) {
+    const isId = value => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,120}$/.test(value);
+    const isKey = value => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value);
+    switch (action) {
+        case 'buy_energy_pack':
+            return isKey(args.packKey) && (args.targetInstanceId == null || isId(args.targetInstanceId));
+        case 'buy_nitros':
+            return [1, 5, 20].includes(Number(args.amount));
+        case 'consume_nitro':
+            return true;
+        case 'open_crate':
+            return ['bronze', 'silver', 'gold'].includes(String(args.crateKey || ''));
+        case 'upgrade_branch':
+            return isId(args.instanceId) && ['speed_power', 'braking', 'handling_grip', 'accel_traction', 'aero_lightness'].includes(String(args.branchKey || ''));
+        case 'buy_parts_kit':
+            return isKey(args.kitKey);
+        case 'buy_shop_component':
+            return ['turbo', 'tires', 'brakes'].includes(String(args.component || args.type || ''));
+        case 'claim_milestone':
+            return isId(args.instanceId) && [10, 20, 30, 40, 50].includes(Number(args.milestoneLevel))
+                && ['potencia', 'velocidad', 'aceleracion', 'agarre', 'frenada', 'manejo', 'turbo', 'downforce', 'traccion', 'ligereza'].includes(String(args.statName || ''));
+        case 'claim_season_tier':
+            return Number.isInteger(Number(args.tier)) && Number(args.tier) >= 1 && Number(args.tier) <= 5;
+        case 'claim_daily_mission':
+            return ['m_races', 'm_slipstream', 'm_drift', 'm_speed'].includes(String(args.missionId || ''));
+        case 'sign_sponsor':
+        case 'claim_sponsor':
+            return isKey(args.contractId);
+        case 'equip_car':
+            return isId(args.instanceId);
+        case 'link_email':
+            return typeof args.email === 'string' && args.email.length <= 160 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(args.email);
+        default:
+            return false;
+    }
+}
+
+async function createScheduledDatabaseBackup(reason = 'scheduled') {
+    if (!DB_BACKUP_ENABLED && reason === 'scheduled') return null;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const destination = path.join(DB_BACKUP_DIR, `apex-sqlite-${stamp}.sqlite`);
+    await db.backupDatabaseTo(destination);
+    try {
+        const files = fs.readdirSync(DB_BACKUP_DIR)
+            .filter(name => /^apex-sqlite-.*\.sqlite$/.test(name))
+            .map(name => ({ name, mtime: fs.statSync(path.join(DB_BACKUP_DIR, name)).mtimeMs }))
+            .sort((a, b) => b.mtime - a.mtime);
+        for (const stale of files.slice(DB_BACKUP_RETENTION)) {
+            try { fs.unlinkSync(path.join(DB_BACKUP_DIR, stale.name)); } catch (e) {}
+        }
+    } catch (e) {}
+    console.log(`💾 Copia SQLite (${reason}) creada: ${destination}`);
+    return destination;
+}
+
+function scheduleDatabaseBackups() {
+    if (!DB_BACKUP_ENABLED) return;
+    const initial = setTimeout(() => {
+        createScheduledDatabaseBackup('startup').catch(e => console.warn('⚠️ Copia SQLite inicial falló:', e.message));
+    }, 60 * 1000);
+    if (typeof initial.unref === 'function') initial.unref();
+    const timer = setInterval(() => {
+        createScheduledDatabaseBackup('scheduled').catch(e => console.warn('⚠️ Copia SQLite programada falló:', e.message));
+    }, DB_BACKUP_INTERVAL_MS);
+    if (typeof timer.unref === 'function') timer.unref();
+}
+
+// ===== VERIFICACIÓN ON-CHAIN DE PAGOS TON (v103) =====
+// El pedido usa su propio id como comentario de la transferencia. El
+// servidor busca en indexadores públicos una transferencia entrante a la
+// tesorería con ese comentario exacto e importe suficiente posterior a la
+// creación del pedido. Sin coincidencia no hay $CR: el cliente no puede
+// "declarar" un pago.
+function tonFriendlyToRaw(address) {
+    try {
+        const buf = Buffer.from(String(address).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+        if (buf.length !== 36) return '';
+        const workchain = buf[1] > 127 ? buf[1] - 256 : buf[1];
+        return `${workchain}:${buf.subarray(2, 34).toString('hex')}`;
+    } catch (e) {
+        return '';
+    }
+}
+
+function normalizeTonAddress(address) {
+    const raw = String(address || '').trim().toLowerCase();
+    if (/^-?\d+:[0-9a-f]{64}$/.test(raw)) return raw;
+    return tonFriendlyToRaw(address).toLowerCase();
+}
+
+const TREASURY_RAW_ADDRESS = normalizeTonAddress(TREASURY_WALLET_ADDRESS);
+
+async function fetchJsonWithTimeout(url, headers = {}, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(url, { headers, signal: controller.signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function tonAmountGte(seen, expected) {
+    try {
+        return BigInt(String(seen)) >= BigInt(String(expected));
+    } catch (e) {
+        return false;
+    }
+}
+
+function formatScaledDecimal(value, scaleDigits) {
+    let scaled;
+    try {
+        scaled = BigInt(String(value));
+    } catch (e) {
+        return '0';
+    }
+    const negative = scaled < 0n;
+    const absolute = negative ? -scaled : scaled;
+    const scale = 10n ** BigInt(scaleDigits);
+    const whole = absolute / scale;
+    const fraction = (absolute % scale).toString().padStart(scaleDigits, '0').replace(/0+$/, '');
+    return `${negative ? '-' : ''}${whole}${fraction ? '.' + fraction : ''}`;
+}
+
+function formatNanotonsToTon(amountNanotons) {
+    return formatScaledDecimal(amountNanotons, 9);
+}
+
+function makeTonUsdtQuote(rawRate, source) {
+    const rate = Number(rawRate);
+    if (!Number.isFinite(rate) || rate < 0.01 || rate > 100) {
+        throw new Error('ton_rate_out_of_range');
+    }
+    const rateMicro = BigInt(Math.round(rate * 1000000));
+    if (rateMicro <= 0n) throw new Error('ton_rate_out_of_range');
+    const fetchedAtMs = Date.now();
+    return {
+        rate: formatScaledDecimal(rateMicro, 6),
+        rateMicro,
+        source,
+        fetchedAt: new Date(fetchedAtMs).toISOString(),
+        fetchedAtMs,
+        stale: false
+    };
+}
+
+async function fetchTonUsdtQuoteFromTonapi() {
+    const headers = { Accept: 'application/json' };
+    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+    const data = await fetchJsonWithTimeout(
+        'https://tonapi.io/v2/rates?tokens=ton&currencies=usdt,usd',
+        headers,
+        6000
+    );
+    const prices = data && data.rates && data.rates.TON && data.rates.TON.prices
+        ? data.rates.TON.prices
+        : {};
+    if (prices.USDT !== undefined) return makeTonUsdtQuote(prices.USDT, 'tonapi_usdt');
+    if (prices.USD !== undefined) return makeTonUsdtQuote(prices.USD, 'tonapi_usd_proxy');
+    throw new Error('tonapi_rate_missing');
+}
+
+async function fetchTonUsdtQuoteFromCoingecko() {
+    const data = await fetchJsonWithTimeout(
+        'https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd',
+        { Accept: 'application/json' },
+        6000
+    );
+    const usd = data && data['the-open-network'] ? data['the-open-network'].usd : undefined;
+    if (usd === undefined) throw new Error('coingecko_rate_missing');
+    return makeTonUsdtQuote(usd, 'coingecko_usd_proxy');
+}
+
+async function getTonUsdtQuote() {
+    if (TON_USDT_RATE_OVERRIDE) {
+        return makeTonUsdtQuote(TON_USDT_RATE_OVERRIDE, 'env_override');
+    }
+
+    const now = Date.now();
+    if (tonUsdtRateCache && now - tonUsdtRateCache.fetchedAtMs < TON_RATE_CACHE_MS) {
+        return tonUsdtRateCache;
+    }
+    if (tonUsdtRatePromise) return tonUsdtRatePromise;
+
+    tonUsdtRatePromise = (async () => {
+        const failures = [];
+        try {
+            const quote = await fetchTonUsdtQuoteFromTonapi();
+            tonUsdtRateCache = quote;
+            return quote;
+        } catch (e) {
+            failures.push(e.message || 'tonapi_failed');
+        }
+        try {
+            const quote = await fetchTonUsdtQuoteFromCoingecko();
+            tonUsdtRateCache = quote;
+            return quote;
+        } catch (e) {
+            failures.push(e.message || 'coingecko_failed');
+        }
+
+        // Una cotización reciente (<=10 min) es preferible a vender a ciegas;
+        // más allá de ese margen no se crea ningún pedido ni instrucción.
+        if (tonUsdtRateCache && Date.now() - tonUsdtRateCache.fetchedAtMs <= TON_RATE_STALE_MAX_MS) {
+            return { ...tonUsdtRateCache, stale: true };
+        }
+        throw new Error('ton_rate_unavailable:' + failures.join(','));
+    })();
+
+    const clearPromise = () => { tonUsdtRatePromise = null; };
+    tonUsdtRatePromise.then(clearPromise, clearPromise);
+    return tonUsdtRatePromise;
+}
+
+function buildPurchaseProductView(definition, quote) {
+    let amountNanotons;
+    let cr = 0;
+    let priceUsdt;
+    let priceCr = null;
+    let label = definition.label || definition.name || definition.id;
+
+    if (definition.productType === 'crate') {
+        const numerator = BigInt(definition.priceUsdt) * 1000000000000000n;
+        amountNanotons = (numerator + quote.rateMicro - 1n) / quote.rateMicro;
+        priceUsdt = definition.priceUsdt;
+        priceCr = definition.priceCr;
+    } else {
+        amountNanotons = BigInt(definition.amountNanotons);
+        // $CR = TON * (USDT/TON) * 1.000. En enteros:
+        // nanotons * microUSDT / 10^12, redondeando hacia abajo.
+        const crAmount = (amountNanotons * quote.rateMicro) / 1000000000000n;
+        cr = Number(crAmount);
+        const priceUsdtMicro = (amountNanotons * quote.rateMicro) / 1000000000n;
+        priceUsdt = formatScaledDecimal(priceUsdtMicro, 6);
+        label = `${definition.name} · ${cr.toLocaleString('es-ES')} $CR`;
+    }
+
+    const amountTon = formatNanotonsToTon(amountNanotons);
+    return {
+        id: definition.id,
+        packageId: definition.id,
+        productType: definition.productType,
+        crateId: definition.crateId || null,
+        label,
+        ton: amountTon,
+        amountTon,
+        amountNanotons: amountNanotons.toString(),
+        cr,
+        priceUsdt,
+        priceCr,
+        crPerUsdt: CR_PER_USDT,
+        tonUsdtRate: quote.rate,
+        tonUsdtRateMicro: quote.rateMicro.toString(),
+        rateSource: quote.source,
+        quotedAt: quote.fetchedAt,
+        quoteStale: quote.stale === true
+    };
+}
+
+function findPurchaseProduct(productId) {
+    return PURCHASE_PRODUCTS.find(entry => entry.id === String(productId || '')) || null;
+}
+
+function purchaseQuotePublicFields(quote) {
+    return {
+        crPerUsdt: CR_PER_USDT,
+        tonUsdtRate: quote.rate,
+        rateSource: quote.source,
+        quotedAt: quote.fetchedAt,
+        quoteStale: quote.stale === true
+    };
+}
+
+function isPaymentTimestampInWindow(timestamp, minTimestampSec, maxTimestampSec) {
+    const ts = Number(timestamp || 0);
+    if (ts > 0) {
+        return ts >= minTimestampSec && (!maxTimestampSec || ts <= maxTimestampSec);
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    return nowSec >= minTimestampSec && (!maxTimestampSec || nowSec <= maxTimestampSec);
+}
+
+async function findTonPaymentViaToncenter(order, minTimestampSec, maxTimestampSec) {
+    const headers = { Accept: 'application/json' };
+    if (TONCENTER_API_KEY) headers['X-Api-Key'] = TONCENTER_API_KEY;
+    const data = await fetchJsonWithTimeout(
+        `https://toncenter.com/api/v3/transactions?account=${encodeURIComponent(TREASURY_WALLET_ADDRESS)}&limit=100&sort=desc`,
+        headers
+    );
+    const transactions = Array.isArray(data && data.transactions) ? data.transactions : [];
+    for (const tx of transactions) {
+        const inMsg = tx && tx.in_msg;
+        if (!inMsg || !inMsg.source) continue;
+        const timestamp = Number(tx.now || 0);
+        if (!isPaymentTimestampInWindow(timestamp, minTimestampSec, maxTimestampSec)) continue;
+        if (inMsg.destination && normalizeTonAddress(inMsg.destination) !== TREASURY_RAW_ADDRESS) continue;
+
+        const decoded = (inMsg.message_content && inMsg.message_content.decoded) || inMsg.decoded_body || inMsg.decoded || null;
+        let comment = decoded && typeof decoded.comment === 'string' ? decoded.comment : '';
+        if (comment !== order.id) {
+            // Respaldo: el cuerpo BOC de un comentario de texto contiene los
+            // bytes UTF-8 en claro, así que puede localizarse el id sin un
+            // decodificador de celdas completo.
+            const bodyB64 = inMsg.message_content && inMsg.message_content.body;
+            if (bodyB64) {
+                try {
+                    if (Buffer.from(String(bodyB64), 'base64').includes(Buffer.from(order.id, 'utf8'))) comment = order.id;
+                } catch (e) {}
+            }
+        }
+        if (comment !== order.id) continue;
+        if (!tonAmountGte(inMsg.value, order.amountNanotons)) continue;
+        return {
+            txHash: String(tx.hash || ''),
+            amountNanotons: String(inMsg.value || ''),
+            sender: String(inMsg.source || ''),
+            timestamp
+        };
+    }
+    return null;
+}
+
+async function findTonPaymentViaTonapi(order, minTimestampSec, maxTimestampSec) {
+    const headers = { Accept: 'application/json' };
+    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+    const data = await fetchJsonWithTimeout(
+        `https://tonapi.io/v2/accounts/${encodeURIComponent(TREASURY_WALLET_ADDRESS)}/events?limit=100&start_date=${minTimestampSec}`,
+        headers
+    );
+    const events = Array.isArray(data && data.events) ? data.events : [];
+    for (const event of events) {
+        const timestamp = Number(event && event.timestamp || 0);
+        if (!isPaymentTimestampInWindow(timestamp, minTimestampSec, maxTimestampSec)) continue;
+        const actions = Array.isArray(event && event.actions) ? event.actions : [];
+        for (const action of actions) {
+            if (!action || action.type !== 'TonTransfer' || !action.TonTransfer) continue;
+            const transfer = action.TonTransfer;
+            const recipient = transfer.recipient && transfer.recipient.address;
+            if (!recipient || normalizeTonAddress(recipient) !== TREASURY_RAW_ADDRESS) continue;
+            if (String(transfer.comment || '') !== order.id) continue;
+            if (!tonAmountGte(transfer.amount, order.amountNanotons)) continue;
+            return {
+                txHash: String(event.event_id || ''),
+                amountNanotons: String(transfer.amount || ''),
+                sender: String((transfer.sender && transfer.sender.address) || ''),
+                timestamp
+            };
+        }
+    }
+    return null;
+}
+
+// Solo tests (TON_MOCK_LEDGER_FILE está vacío en producción): lee un JSON
+// [{comment, amountNanotons, txHash, sender, timestamp}] como si fuera la red.
+function findTonPaymentInMockLedger(order, minTimestampSec, maxTimestampSec) {
+    try {
+        const entries = JSON.parse(fs.readFileSync(TON_MOCK_LEDGER_FILE, 'utf8'));
+        if (!Array.isArray(entries)) return null;
+        for (const entry of entries) {
+            if (!entry || String(entry.comment || '') !== order.id) continue;
+            const timestamp = Number(entry.timestamp || 0);
+            if (!isPaymentTimestampInWindow(timestamp, minTimestampSec, maxTimestampSec)) continue;
+            if (!tonAmountGte(entry.amountNanotons, order.amountNanotons)) continue;
+            return {
+                txHash: String(entry.txHash || ('mock_' + order.id)),
+                amountNanotons: String(entry.amountNanotons || ''),
+                sender: String(entry.sender || ''),
+                timestamp
+            };
+        }
+    } catch (e) {}
+    return null;
+}
+
+async function findTonPayment(order) {
+    const minTimestampSec = Math.max(0, Math.floor(Number(order.createdAtMs || Date.now()) / 1000) - 120);
+    const expiresAtMs = Number(order.expiresAtMs || Date.parse(order.expiresAt || '') || 0);
+    // La cotización bloqueada solo se honra si la transacción entró dentro
+    // de su ventana (más 120 s de gracia). Detectarla tarde sí es válido;
+    // pagar meses después con un importe calculado a otro precio, no.
+    const maxTimestampSec = expiresAtMs ? Math.floor(expiresAtMs / 1000) + TON_QUOTE_GRACE_SEC : 0;
+    if (TON_MOCK_LEDGER_FILE) return findTonPaymentInMockLedger(order, minTimestampSec, maxTimestampSec);
+    try {
+        const viaToncenter = await findTonPaymentViaToncenter(order, minTimestampSec, maxTimestampSec);
+        if (viaToncenter) return viaToncenter;
+    } catch (e) {
+        console.warn('⚠️ Toncenter no disponible para verificar un pago:', e.message);
+    }
+    try {
+        return await findTonPaymentViaTonapi(order, minTimestampSec, maxTimestampSec);
+    } catch (e) {
+        console.warn('⚠️ TonAPI no disponible para verificar un pago:', e.message);
+        return null;
+    }
+}
+
+function purchaseIsTelegramStars(order) {
+    return Boolean(order && order.paymentProvider === 'telegram_stars');
+}
+
+function publicPurchaseView(order) {
+    if (!order) return null;
+    if (purchaseIsTelegramStars(order)) return telegramStars.publicStarsOrder(order);
+    const productType = order.productType || 'cr';
+    const expiresAtMs = Number(order.expiresAtMs || Date.parse(order.expiresAt || '') || 0);
+    return {
+        id: order.id,
+        packageId: order.packageId,
+        productId: order.packageId,
+        paymentProvider: 'ton',
+        productType,
+        crateId: order.crateId || null,
+        label: order.label || (productType === 'crate' ? 'Cofre NFT' : 'Paquete $CR'),
+        cr: Number(order.cr || 0),
+        priceUsdt: order.priceUsdt || undefined,
+        priceCr: order.priceCr === undefined ? null : order.priceCr,
+        crPerUsdt: Number(order.crPerUsdt || CR_PER_USDT),
+        tonUsdtRate: order.tonUsdtRate || undefined,
+        tonUsdtRateMicro: order.tonUsdtRateMicro || undefined,
+        rateSource: order.rateSource || undefined,
+        quotedAt: order.quotedAt || undefined,
+        quoteStale: order.quoteStale === true,
+        amountTon: order.amountTon || formatNanotonsToTon(order.amountNanotons),
+        amountNanotons: order.amountNanotons,
+        status: order.status,
+        createdAt: order.createdAt,
+        expiresAt: order.expiresAt,
+        expiresAtMs: expiresAtMs || undefined,
+        quoteExpired: order.status === 'pending' && expiresAtMs > 0 && Date.now() > expiresAtMs + TON_QUOTE_GRACE_SEC * 1000,
+        txHash: order.txHash || undefined
+    };
+}
+
+function purchasePaymentLinks(order) {
+    if (purchaseIsTelegramStars(order)) {
+        return {
+            paymentProvider: 'telegram_stars',
+            currency: 'XTR',
+            priceStars: Math.floor(Number(order.priceStars) || 0),
+            invoiceUrl: order.status === 'pending' ? (order.invoiceUrl || null) : null
+        };
+    }
+    const text = encodeURIComponent(order.id);
+    return {
+        address: TREASURY_WALLET_ADDRESS,
+        amountTon: order.amountTon,
+        amountNanotons: order.amountNanotons,
+        comment: order.id,
+        tonkeeperUrl: `https://app.tonkeeper.com/transfer/${TREASURY_WALLET_ADDRESS}?amount=${order.amountNanotons}&text=${text}`,
+        tonUrl: `ton://transfer/${TREASURY_WALLET_ADDRESS}?amount=${order.amountNanotons}&text=${text}`
+    };
+}
+
+function publicBaseUrl(req) {
+    const configured = String(process.env.PUBLIC_BASE_URL || process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || '').trim().replace(/\/+$/, '');
+    if (configured) return configured;
+    const proto = TRUST_PROXY && req.headers['x-forwarded-proto']
+        ? String(req.headers['x-forwarded-proto']).split(',')[0].trim()
+        : 'http';
+    const host = String(req.headers.host || 'localhost').replace(/[^A-Za-z0-9.:-]/g, '').slice(0, 120);
+    return `${proto === 'https' ? 'https' : 'http'}://${host || 'localhost'}`;
+}
+
+const NFT_METADATA_ARCHETYPES = new Set([
+    'viper_acr', 'le_mans_proto', 'jdm_supra', 'rally_evo', 'hot_hatch',
+    'ferrari_corsa', 'porsche_boxer', 'bentley_gt3', 'dakar_truck',
+    'lambo_wedge', 'bugatti_w16', 'dtm_coupe'
+]);
+
+function nftPublicConfig(req) {
+    const baseUrl = NFT_CONFIG.metadataBaseUrl || publicBaseUrl(req);
+    const mintingConfigured = Boolean(NFT_CONFIG.collectionAddress);
+    return {
+        entitlementsEnabled: FEATURES.nftEntitlementsEnabled,
+        mintingEnabled: FEATURES.nftMintingEnabled && mintingConfigured,
+        mintingConfigured,
+        network: NFT_CONFIG.network,
+        collectionAddress: NFT_CONFIG.collectionAddress,
+        collectionOwnerAddress: NFT_CONFIG.collectionOwnerAddress,
+        royaltyFactor: NFT_CONFIG.royaltyFactor,
+        royaltyBase: NFT_CONFIG.royaltyBase,
+        royaltyPercent: NFT_CONFIG.royaltyPercent,
+        royaltyAddress: NFT_CONFIG.royaltyAddress,
+        claimAmountNanotons: NFT_CONFIG.claimAmountNanotons,
+        claimAmountTon: formatNanotonsToTon(NFT_CONFIG.claimAmountNanotons),
+        itemReserveNanotons: NFT_CONFIG.itemReserveNanotons,
+        collectionReserveNanotons: NFT_CONFIG.collectionReserveNanotons,
+        metadataBaseUrl: baseUrl,
+        collectionMetadataUrl: `${baseUrl}/api/nft/collection-metadata`
+    };
+}
+
+function publicNftRegistryView(registry) {
+    if (!registry) return null;
+    return {
+        serial: registry.serial,
+        registryId: registry.registryId,
+        carInstanceId: registry.carInstanceId,
+        status: registry.status,
+        chainNetwork: registry.chainNetwork,
+        collectionAddress: registry.collectionAddress,
+        nftItemAddress: registry.nftItemAddress,
+        nftIndex: registry.nftIndex,
+        ownerWalletAddress: registry.ownerWalletAddress,
+        mintTxHash: registry.mintTxHash,
+        metadataHash: registry.metadataHash,
+        snapshot: registry.snapshot,
+        createdAt: registry.createdAt,
+        updatedAt: registry.updatedAt
+    };
+}
+
+function publicNftClaimView(claim, req) {
+    if (!claim) return null;
+    const config = nftPublicConfig(req);
+    return {
+        claimId: claim.claimId,
+        registrySerial: claim.registrySerial,
+        carInstanceId: claim.carInstanceId,
+        status: claim.status,
+        network: claim.network,
+        walletAddress: claim.walletAddress,
+        walletVerifiedAt: claim.walletVerifiedAt,
+        metadataUri: claim.metadataUri || `${config.metadataBaseUrl}/api/nft/metadata/${claim.registrySerial}`,
+        metadataHash: claim.metadataHash,
+        snapshot: claim.snapshot,
+        txHash: claim.txHash,
+        createdAt: claim.createdAt,
+        updatedAt: claim.updatedAt
+    };
+}
+
+function nftMetadataForEntry(req, entry) {
+    const config = nftPublicConfig(req);
+    const registry = entry.registry;
+    const snapshot = registry.snapshot || {};
+    const archetype = NFT_METADATA_ARCHETYPES.has(String(snapshot.archetype || ''))
+        ? String(snapshot.archetype)
+        : null;
+    const image = archetype
+        ? `${config.metadataBaseUrl}/assets/cars_side/${archetype}.jpg`
+        : `${config.metadataBaseUrl}/assets/apex_cr_coin_256.jpg`;
+    const stats = snapshot.baseStats || {};
+    const attributes = [
+        { trait_type: 'Registry ID', value: registry.registryId },
+        { trait_type: 'Global Serial', value: registry.serial },
+        { trait_type: 'NFT Index', value: registry.nftIndex },
+        { trait_type: 'Model ID', value: snapshot.modelId || '' },
+        { trait_type: 'Rarity', value: snapshot.rarity || '' },
+        { trait_type: 'Color', value: snapshot.colorName || '' },
+        { trait_type: 'Color Hex', value: snapshot.colorHex || '' },
+        { trait_type: 'Visual ID', value: snapshot.visualId == null ? '' : snapshot.visualId },
+        ...Object.entries(stats).map(([key, value]) => ({ trait_type: `Base ${key}`, value: Number(value) || 0 }))
+    ];
+    return {
+        name: `Apex Motorsport — ${snapshot.name || 'Apex GT'} #${registry.serial}`,
+        description: 'Coche jugable de Apex Motorsport con identidad global registrada en servidor. El modelo, rareza, color y estadísticas base de esta ficha son la foto inmutable preparada para su conversión opcional a NFT en TON; nivel, XP, energía y mejoras se conservan fuera de cadena por identidad del coche.',
+        image,
+        external_url: config.metadataBaseUrl,
+        attributes
+    };
+}
+
 // Limpieza periódica para evitar crecimiento indefinido de estado en memoria.
 function cleanupEphemeralState() {
     const now = Date.now();
@@ -344,10 +1158,15 @@ function cleanupEphemeralState() {
     for (const [roomId, lobby] of publicLobbies.entries()) {
         if (!lobby || now > Number(lobby.expiresAt || 0) + 5 * 60 * 1000) publicLobbies.delete(roomId);
     }
+    for (const [sessionId, session] of raceSessions.entries()) {
+        if (!session || now > Number(session.expiresAt || 0)) raceSessions.delete(sessionId);
+    }
     for (const [key, entry] of rateLimitMap.entries()) {
         if (now > Number(entry.resetAt || 0)) rateLimitMap.delete(key);
     }
-    if (securityAuditLogs.length > 200) securityAuditLogs.splice(0, securityAuditLogs.length - 200);
+    for (const [orderId, checkedAt] of purchaseVerifyCache.entries()) {
+        if (now - Number(checkedAt || 0) > 2 * 60 * 60 * 1000) purchaseVerifyCache.delete(orderId);
+    }
 }
 const cleanupTimer = setInterval(cleanupEphemeralState, 60 * 1000);
 if (typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
@@ -366,7 +1185,10 @@ const PUBLIC_ROOT_FILES = new Set([
     'dustrac_game.js',
     'game_hub.js',
     'favicon.svg',
-    'favicon.ico'
+    'favicon.ico',
+    'terms.html',
+    'privacy.html',
+    'support.html'
 ]);
 const PUBLIC_ASSET_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.svg', '.ico', '.mp3', '.ogg', '.wav', '.js', '.json']);
 
@@ -414,19 +1236,29 @@ const server = http.createServer((req, res) => {
     const pathname = parsedUrl.pathname;
     const clientIp = getClientIp(req);
 
-    // Cabeceras de seguridad. La CSP se envía en Report-Only mientras el
-    // frontend conserva handlers inline; ya documenta el perímetro permitido
-    // y permite endurecerla sin romper Telegram/Adsgram de forma abrupta.
+    // Cabeceras de seguridad. Se aplica ya en modo enforce el subconjunto que
+    // no depende de retirar handlers inline (objetos, base, formularios y
+    // encuadre). La política completa sigue en Report-Only hasta eliminar los
+    // handlers inline y retestar todos los dominios reales de Adsgram.
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader('Content-Security-Policy-Report-Only', [
+    // v104: política completa ya en modo enforce. Todavía permite inline
+    // porque la UI histórica usa handlers inline; retirar 'unsafe-inline'
+    // queda como endurecimiento posterior, pero ya se bloquean scripts,
+    // objetos, conexiones y encuadres fuera de la lista permitida.
+    res.setHeader('Content-Security-Policy', [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org https://sad.adsgram.ai",
+        "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org https://sad.adsgram.ai https://*.adsgram.ai",
+        "script-src-attr 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob: https:",
+        "media-src 'self' data: blob: https:",
         "font-src 'self' data:",
-        "connect-src 'self' https://telegram.org https://*.telegram.org https://sad.adsgram.ai",
+        "connect-src 'self' https://telegram.org https://*.telegram.org wss://*.telegram.org https://sad.adsgram.ai https://*.adsgram.ai",
+        "frame-src 'self' https://*.telegram.org https://*.adsgram.ai",
+        "worker-src 'self' blob:",
+        "object-src 'none'",
         "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org",
         "base-uri 'self'",
         "form-action 'self'"
@@ -449,7 +1281,7 @@ const server = http.createServer((req, res) => {
         res.setHeader('Access-Control-Allow-Origin', requestOrigin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Init-Data, X-Admin-Token, X-Adsgram-Secret');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Telegram-Init-Data, X-Device-Secret, X-Admin-Token, X-Adsgram-Secret');
     }
 
     if (req.method === 'OPTIONS') {
@@ -494,13 +1326,13 @@ const server = http.createServer((req, res) => {
             res.end();
             return;
         }
-        sendJson(res, 200, { ok: true, service: 'apex-motorsport', version: '1.0.1', uptimeSeconds: Math.round(process.uptime()) });
+        sendJson(res, 200, { ok: true, service: 'apex-motorsport', version: APP_VERSION, uptimeSeconds: Math.round(process.uptime()) });
         return;
     }
 
     // ===== RUTAS DE API =====
-    // Webhook de recompensa publicitaria: deshabilitado hasta verificar la
-    // firma/secreto oficial del proveedor. Nunca concede saldo por sí solo.
+    // Webhook de recompensa publicitaria. Crea un derecho de un solo uso en
+    // SQLite; el cliente lo reclama después y el servidor aplica la recompensa.
     if (pathname === '/api/ad-reward') {
         if (req.method !== 'POST' && req.method !== 'GET') {
             sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
@@ -516,9 +1348,39 @@ const server = http.createServer((req, res) => {
             sendJson(res, 403, { ok: false, error: 'forbidden' });
             return;
         }
-        const userId = cleanText(parsedUrl.searchParams.get('userid') || 'unknown', 64, 'unknown');
+        const userId = cleanText(parsedUrl.searchParams.get('userid') || parsedUrl.searchParams.get('userId') || '', 64);
+        // Adsgram sustituye [userId] por el ID de Telegram. Sin ese ID no hay
+        // cuenta a la que asignar la recompensa; no se aceptan IDs inventados.
+        if (!isTelegramNumericId(userId)) {
+            sendJson(res, 422, { ok: false, error: 'invalid_adsgram_user_id' });
+            return;
+        }
+        const rewardTypeRaw = String(parsedUrl.searchParams.get('reward') || parsedUrl.searchParams.get('rewardType') || 'generic').toLowerCase();
+        const rewardType = ['energy', 'nitro', 'generic'].includes(rewardTypeRaw) ? rewardTypeRaw : 'generic';
+        const explicitSource = parsedUrl.searchParams.get('event_id')
+            || parsedUrl.searchParams.get('transaction_id')
+            || parsedUrl.searchParams.get('impression_id')
+            || parsedUrl.searchParams.get('id')
+            || '';
+        // Adsgram no documenta un ID único obligatorio en su Reward URL. Si
+        // no llega ninguno, una ventana de 30 s absorbe reintentos inmediatos
+        // sin convertir cada reintento en una segunda recompensa.
+        const sourceId = explicitSource
+            ? `adsgram:${String(explicitSource).slice(0, 120)}`
+            : `adsgram:${userId}:${rewardType}:${Math.floor(Date.now() / 30000)}`;
+        const entitlement = FEATURES.adRewardsEnabled
+            ? db.createAdRewardEntitlement(userId, rewardType, sourceId)
+            : { ok: false, error: 'ad_rewards_disabled' };
+        securityAuditLogs.push({ event: entitlement.duplicate ? 'AD_REWARD_DUPLICATE' : 'AD_REWARD_ENTITLEMENT_CREATED', userId, rewardType, duplicate: Boolean(entitlement.duplicate), time: new Date().toISOString() });
         console.log(`💰 Adsgram Reward Webhook autenticado para userId: ${userId}`);
-        sendJson(res, 200, { ok: true, status: 'reward_not_granted_server_ledger_required', userId, timestamp: new Date().toISOString() });
+        sendJson(res, 200, {
+            ok: Boolean(entitlement.ok),
+            status: entitlement.ok ? 'reward_entitlement_created' : 'ad_rewards_disabled',
+            duplicate: Boolean(entitlement.duplicate),
+            userId,
+            rewardType,
+            timestamp: new Date().toISOString()
+        });
         return;
     }
 
@@ -529,17 +1391,7 @@ const server = http.createServer((req, res) => {
             sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
             return;
         }
-        if (!ADMIN_AUDIT_TOKEN) {
-            sendJson(res, 503, { ok: false, error: 'admin_audit_not_configured', message: 'Configura ADMIN_AUDIT_TOKEN para habilitar este endpoint' });
-            return;
-        }
-        const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const suppliedToken = req.headers['x-admin-token'] || bearer;
-        if (!timingSafeEqualString(suppliedToken, ADMIN_AUDIT_TOKEN)) {
-            securityAuditLogs.push({ event: 'ADMIN_AUDIT_AUTH_FAILED', ip: clientIp, time: new Date().toISOString() });
-            sendJson(res, 403, { ok: false, error: 'forbidden' });
-            return;
-        }
+        if (!requireAdminRequest(req, res)) return;
         sendJson(res, 200, {
             ok: true,
             status: 'admin_only',
@@ -547,11 +1399,326 @@ const server = http.createServer((req, res) => {
             telegramAuthConfigured: Boolean(BOT_TOKEN),
             insecureDevAuthEnabled: ALLOW_INSECURE_DEV_AUTH,
             legacyWagerApiEnabled: ENABLE_LEGACY_WAGER_API,
+            features: FEATURES,
+            database: db.getDatabaseHealth(),
+            audit: db.getAuditSummary(10),
             circuitBreakerTriggered: emergencyCircuitBreaker.isTriggered,
             activeTicketsInFlight: activeMatchTickets.size,
             activePublicLobbies: publicLobbies.size,
-            activePrivateDuels: privateDuels.size
+            activePrivateDuels: privateDuels.size,
+            activeRaceSessions: raceSessions.size
         });
+        return;
+    }
+
+    // Configuración pública y banderas operativas. No contiene secretos.
+    if (pathname === '/api/config') {
+        if (req.method !== 'GET') { sendJson(res, 405, { ok: false, error: 'method_not_allowed' }); return; }
+        sendJson(res, 200, {
+            ok: true,
+            version: APP_VERSION,
+            features: FEATURES,
+            telegramStars: telegramStars.publicStarsCatalog(),
+            nft: nftPublicConfig(req),
+            support: {
+                contact: SUPPORT_CONTACT || null,
+                url: SUPPORT_URL || null,
+                botCommand: '/paysupport'
+            },
+            legal: { termsUrl: '/terms.html', privacyUrl: '/privacy.html', supportUrl: '/support.html' }
+        });
+        return;
+    }
+
+    // Estado económico autoritativo. El cliente puede representar este garaje,
+    // pero ya no puede subir saldos/coches como fuente de verdad.
+    if (pathname === '/api/economy/state') {
+        if (req.method !== 'GET') { sendJson(res, 405, { ok: false, error: 'method_not_allowed' }); return; }
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        const telegramName = auth.telegramUser
+            ? (auth.telegramUser.username ? '@' + auth.telegramUser.username : [auth.telegramUser.first_name, auth.telegramUser.last_name].filter(Boolean).join(' '))
+            : undefined;
+        const profile = db.getOrCreateEconomyProfile(auth.userId, { pilotName: telegramName || undefined });
+        sendJson(res, 200, { ok: true, economy: economyProfileResponse(profile) });
+        return;
+    }
+
+    // Única puerta pública para mutaciones económicas ordinarias.
+    if (pathname === '/api/economy/action' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!FEATURES.economyActionsEnabled) {
+                sendJson(res, 503, { ok: false, error: 'economy_actions_disabled', message: 'Las acciones económicas están pausadas temporalmente' });
+                return;
+            }
+            const action = String(data.action || '').trim();
+            const args = data.args && typeof data.args === 'object' && !Array.isArray(data.args) ? data.args : {};
+            if (!PUBLIC_ECONOMY_ACTIONS.has(action) || !validateEconomyActionArgs(action, args)) {
+                sendJson(res, 422, { ok: false, error: 'invalid_economy_action', action });
+                return;
+            }
+            let idempotencyKey = typeof data.idempotencyKey === 'string' && /^[A-Za-z0-9_.:-]{8,180}$/.test(data.idempotencyKey)
+                ? data.idempotencyKey
+                : null;
+            if (!idempotencyKey && action.startsWith('claim_')) {
+                const subject = args.tier ?? args.missionId ?? args.contractId ?? `${args.instanceId || ''}:${args.milestoneLevel || ''}:${args.statName || ''}`;
+                idempotencyKey = `${action}:${auth.userId}:${subject}`;
+            }
+            try {
+                const outcome = applyServerEconomyAction(auth.userId, action, args, idempotencyKey, { source: 'client_action' });
+                if (!outcome.ok) {
+                    const reason = (outcome.result && outcome.result.reason) || outcome.error || 'economy_action_failed';
+                    const status = reason === 'car_not_found' || String(reason).includes('no encontrado') ? 404 : 409;
+                    sendJson(res, status, {
+                        ok: false,
+                        error: reason,
+                        result: outcome.result || null,
+                        economy: economyProfileResponse(outcome.profile)
+                    });
+                    return;
+                }
+                sendJson(res, 200, {
+                    ok: true,
+                    action,
+                    duplicate: outcome.duplicate === true,
+                    result: outcome.result,
+                    economy: economyProfileResponse(outcome.profile)
+                });
+            } catch (e) {
+                console.error('Error aplicando acción económica:', e);
+                securityAuditLogs.push({ event: 'ECONOMY_ACTION_ERROR', userId: auth.userId, action, message: String(e.message || e).slice(0, 240), time: new Date().toISOString() });
+                sendJson(res, 500, { ok: false, error: 'economy_action_failed' });
+            }
+        });
+        return;
+    }
+
+    // Reclamar una recompensa publicitaria solo tras el webhook servidor.
+    if (pathname === '/api/ads/claim' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!FEATURES.adRewardsEnabled) {
+                sendJson(res, 503, { ok: false, error: 'ad_rewards_disabled' });
+                return;
+            }
+            const rewardType = String(data.rewardType || data.type || '').toLowerCase();
+            if (!['energy', 'nitro'].includes(rewardType)) {
+                sendJson(res, 422, { ok: false, error: 'invalid_ad_reward_type' });
+                return;
+            }
+            const instanceId = typeof data.instanceId === 'string' && /^[A-Za-z0-9_.:-]{1,120}$/.test(data.instanceId) ? data.instanceId : null;
+            const outcome = db.claimAdReward(auth.userId, rewardType, ({ garage }) => {
+                return rewardType === 'energy'
+                    ? economyEngine.applyAction(garage, 'recharge_energy_ad', { instanceId })
+                    : economyEngine.applyAction(garage, 'add_nitro_ad', {});
+            });
+            if (!outcome.ok) {
+                const status = outcome.error === 'ad_reward_not_verified_yet' ? 202 : 409;
+                sendJson(res, status, { ok: false, error: outcome.error, result: outcome.economyResult || null });
+                return;
+            }
+            sendJson(res, 200, {
+                ok: true,
+                rewardType,
+                result: outcome.economyResult,
+                economy: economyProfileResponse(outcome.profile)
+            });
+        });
+        return;
+    }
+
+    // Referidos reales en servidor: sin pilotos sembrados ni botón de test.
+    if (pathname === '/api/referrals/leaderboard' && req.method === 'GET') {
+        sendJson(res, 200, { ok: true, leaders: db.listReferralLeaders(parsedUrl.searchParams.get('limit') || 20) });
+        return;
+    }
+    if (pathname === '/api/referrals/redeem' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!FEATURES.referralRewardsEnabled) {
+                sendJson(res, 503, { ok: false, error: 'referral_rewards_disabled' });
+                return;
+            }
+            const code = String(data.code || data.referralCode || '').trim().toUpperCase();
+            if (!/^APEX-[A-Z0-9-]{4,24}$/.test(code)) {
+                sendJson(res, 422, { ok: false, error: 'invalid_referral_code' });
+                return;
+            }
+            const outcome = db.redeemReferralOnServer(auth.userId, code);
+            if (!outcome.ok) {
+                sendJson(res, outcome.error === 'referral_code_not_found' ? 404 : 409, {
+                    ok: false,
+                    error: outcome.error,
+                    economy: economyProfileResponse(outcome.profile)
+                });
+                return;
+            }
+            sendJson(res, 200, {
+                ok: true,
+                inviteeNitrosGranted: outcome.inviteeNitrosGranted,
+                economy: economyProfileResponse(outcome.profile)
+            });
+        });
+        return;
+    }
+
+    // Recuperación de cuentas de navegador. El código se muestra una sola vez
+    // y en servidor solo queda su hash. La recuperación rota la credencial.
+    if (pathname === '/api/account/recovery-code' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!isDeviceId(auth.userId)) {
+                sendJson(res, 422, { ok: false, error: 'recovery_only_for_device_accounts' });
+                return;
+            }
+            const result = db.createDeviceRecoveryCode(auth.userId);
+            sendJson(res, result.ok ? 200 : 409, result);
+        });
+        return;
+    }
+    if (pathname === '/api/account/recover-device' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const userId = String(data.userId || '');
+            const rate = checkRateLimit(`account-recover:${clientIp}:${userId}`, 5);
+            if (!rate.allowed) {
+                res.setHeader('Retry-After', String(rate.retryAfter));
+                sendJson(res, 429, { ok: false, error: 'too_many_requests', retryAfter: rate.retryAfter });
+                return;
+            }
+            const result = db.resetDeviceSecretWithRecovery(userId, data.recoveryCode, data.newDeviceSecret);
+            sendJson(res, result.ok ? 200 : 401, result);
+        });
+        return;
+    }
+    if (pathname === '/api/account/rotate-device-secret' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!isDeviceId(auth.userId)) {
+                sendJson(res, 422, { ok: false, error: 'rotation_only_for_device_accounts' });
+                return;
+            }
+            const result = db.rotateDeviceSecret(auth.userId, data.newDeviceSecret);
+            sendJson(res, result.ok ? 200 : 409, result);
+        });
+        return;
+    }
+
+    // Herramientas de soporte/operación con token de administrador.
+    if (pathname === '/api/admin/purchases' && req.method === 'GET') {
+        if (!requireAdminRequest(req, res)) return;
+        const orderId = cleanText(parsedUrl.searchParams.get('orderId'), 40);
+        const txHash = cleanText(parsedUrl.searchParams.get('txHash'), 140);
+        const userId = cleanText(parsedUrl.searchParams.get('userId'), 64);
+        if (orderId) {
+            const order = db.getPurchaseOrder(orderId);
+            sendJson(res, order ? 200 : 404, order ? { ok: true, orders: [order] } : { ok: false, error: 'order_not_found' });
+            return;
+        }
+        if (txHash) {
+            const order = db.getPurchaseOrderByTxHash(txHash);
+            sendJson(res, order ? 200 : 404, order ? { ok: true, orders: [order] } : { ok: false, error: 'order_not_found' });
+            return;
+        }
+        if (userId) {
+            sendJson(res, 200, { ok: true, orders: db.listPurchaseOrdersByUser(userId, { limit: 100 }) });
+            return;
+        }
+        sendJson(res, 400, { ok: false, error: 'missing_purchase_query' });
+        return;
+    }
+    if (pathname === '/api/admin/purchases/recheck' && req.method === 'POST') {
+        if (!requireAdminRequest(req, res)) return;
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const orderId = cleanText(data.orderId, 40);
+            const order = db.getPurchaseOrder(orderId);
+            if (!order) { sendJson(res, 404, { ok: false, error: 'order_not_found' }); return; }
+            if (purchaseIsTelegramStars(order)) {
+                telegramStars.attemptRefundsForOrder(order.id)
+                    .catch(() => [])
+                    .then(refunds => {
+                        const checked = telegramStars.getStarsOrderForUser(order.id, order.userId);
+                        const current = checked.ok ? checked.order : db.getPurchaseOrder(order.id);
+                        securityAuditLogs.push({
+                            event: 'ADMIN_TELEGRAM_STARS_RECHECK',
+                            userId: order.userId,
+                            orderId: order.id,
+                            status: current ? current.status : undefined,
+                            refundAttempts: refunds.length,
+                            time: new Date().toISOString()
+                        });
+                        sendJson(res, 200, {
+                            ok: true,
+                            found: Boolean(current && current.telegramPaymentChargeId),
+                            order: publicPurchaseView(current),
+                            charges: db.listTelegramStarsChargesForOrder(order.id)
+                        });
+                    });
+                return;
+            }
+            if (order.status !== 'pending') { sendJson(res, 200, { ok: true, order: publicPurchaseView(order) }); return; }
+            findTonPayment(order)
+                .then(payment => {
+                    let current = order;
+                    if (payment && payment.txHash) {
+                        const marked = db.markPurchasePaid(order.id, payment.txHash, payment);
+                        if (marked.ok) current = marked.order;
+                    }
+                    securityAuditLogs.push({ event: 'ADMIN_PURCHASE_RECHECK', userId: order.userId, orderId: order.id, found: Boolean(payment), time: new Date().toISOString() });
+                    sendJson(res, 200, { ok: true, found: Boolean(payment), order: publicPurchaseView(current) });
+                })
+                .catch(error => sendJson(res, 502, { ok: false, error: 'payment_recheck_failed', message: String(error.message || error).slice(0, 240) }));
+        });
+        return;
+    }
+    if (pathname === '/api/admin/purchases/refund-stars' && req.method === 'POST') {
+        if (!requireAdminRequest(req, res)) return;
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const orderId = cleanText(data.orderId, 40);
+            const chargeId = cleanText(data.chargeId || data.telegramPaymentChargeId, 180);
+            const options = {
+                orderId: orderId || undefined,
+                chargeId,
+                allowUnfulfilled: data.allowUnfulfilled === true,
+                allowClaimedPrimary: data.allowClaimedPrimary === true
+            };
+            const work = chargeId
+                ? telegramStars.attemptRefundForCharge(options).then(result => [result])
+                : (orderId ? telegramStars.attemptRefundsForOrder(orderId) : Promise.resolve([]));
+            work.then(results => {
+                const order = orderId ? db.getPurchaseOrder(orderId) : (results[0] && results[0].order);
+                securityAuditLogs.push({
+                    event: 'ADMIN_TELEGRAM_STARS_REFUND',
+                    userId: order ? order.userId : undefined,
+                    orderId: orderId || undefined,
+                    chargeId: chargeId || undefined,
+                    refunded: results.filter(result => result.ok).length,
+                    time: new Date().toISOString()
+                });
+                sendJson(res, results.length && results.every(result => result.ok) ? 200 : 409, {
+                    ok: results.length > 0 && results.every(result => result.ok),
+                    results: results.map(result => ({
+                        ok: result.ok === true,
+                        error: result.error || undefined,
+                        chargeId: result.charge ? result.charge.chargeId : chargeId,
+                        status: result.charge ? result.charge.status : undefined
+                    })),
+                    order: order ? publicPurchaseView(order) : undefined
+                });
+            }).catch(error => sendJson(res, 502, { ok: false, error: 'telegram_stars_refund_failed', message: String(error.message || error).slice(0, 240) }));
+        });
+        return;
+    }
+    if (pathname === '/api/admin/backup' && req.method === 'POST') {
+        if (!requireAdminRequest(req, res)) return;
+        createScheduledDatabaseBackup('manual')
+            .then(destination => sendJson(res, 200, { ok: true, backupCreated: Boolean(destination) }))
+            .catch(error => sendJson(res, 500, { ok: false, error: 'backup_failed', message: String(error.message || error).slice(0, 240) }));
         return;
     }
 
@@ -772,6 +1939,593 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // Sesión de carrera de un solo uso. No convierte la telemetría cliente en
+    // autoritativa, pero impide replay/envíos instantáneos sin haber iniciado
+    // una carrera y vincula usuario + circuito + ventana temporal en servidor.
+    if (pathname === '/api/race/session' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+
+            const rawTrack = String(data.trackId || data.track || '').trim();
+            const jsonTrack = RaceTracksCatalog && typeof RaceTracksCatalog === 'object' ? RaceTracksCatalog[rawTrack] : null;
+            if (!jsonTrack) {
+                sendJson(res, 422, { ok: false, error: 'invalid_race_session', message: 'Circuito no válido para iniciar una sesión' });
+                return;
+            }
+            const trackId = jsonTrack.id || rawTrack;
+            const limits = TRACK_PHYSICAL_LIMITS[trackId] || TRACK_PHYSICAL_LIMITS.default;
+            const minAllowedTime = limits.minLapSeconds * limits.totalLaps * 0.75;
+            const now = Date.now();
+
+            // Una sola sesión activa por piloto: reiniciar sustituye la previa
+            // y evita acumular sesiones en espera para canjearlas en ráfaga.
+            for (const [existingId, existing] of raceSessions.entries()) {
+                if (!existing || existing.userId === auth.userId || now > Number(existing.expiresAt || 0)) {
+                    raceSessions.delete(existingId);
+                }
+            }
+            if (raceSessions.size >= 5000) {
+                const oldest = raceSessions.keys().next().value;
+                if (oldest) raceSessions.delete(oldest);
+            }
+
+            const sessionId = crypto.randomBytes(18).toString('hex');
+            const requestedCarInstanceId = typeof (data.carInstanceId || data.instanceId) === 'string'
+                && /^[A-Za-z0-9_.:-]{1,120}$/.test(data.carInstanceId || data.instanceId)
+                ? (data.carInstanceId || data.instanceId)
+                : null;
+            const energyOutcome = applyServerEconomyAction(
+                auth.userId,
+                'consume_race_energy',
+                { instanceId: requestedCarInstanceId },
+                `race-energy:${sessionId}`,
+                { trackId }
+            );
+            if (!energyOutcome.ok) {
+                sendJson(res, 409, {
+                    ok: false,
+                    error: (energyOutcome.result && energyOutcome.result.reason) || 'energy_depleted',
+                    message: 'El coche no tiene energía suficiente para una carrera oficial',
+                    economy: economyProfileResponse(energyOutcome.profile)
+                });
+                return;
+            }
+            const session = {
+                id: sessionId,
+                userId: auth.userId,
+                trackId,
+                carName: cleanText(data.car || data.carName, 80, ''),
+                carInstanceId: energyOutcome.result && energyOutcome.result.carInstanceId
+                    ? String(energyOutcome.result.carInstanceId)
+                    : requestedCarInstanceId,
+                startedAt: now,
+                expiresAt: now + RACE_SESSION_TTL_MS
+            };
+            raceSessions.set(sessionId, session);
+            sendJson(res, 200, {
+                ok: true,
+                sessionId,
+                trackId,
+                startedAt: new Date(session.startedAt).toISOString(),
+                expiresAt: new Date(session.expiresAt).toISOString(),
+                minAllowedTime: Math.round(minAllowedTime * 100) / 100,
+                economy: economyProfileResponse(energyOutcome.profile)
+            });
+        });
+        return;
+    }
+
+    // ===== COMPRAS DE $CR CON TELEGRAM STARS (v105) =====
+    // El servidor crea primero el pedido y después la factura XTR. El bot es
+    // quien recibe pre_checkout_query/successful_payment; este status solo
+    // lee SQLite y, si el pago quedó paid_unfulfilled, reintenta la entrega
+    // idempotente. El cliente nunca puede declarar que ha pagado.
+    if (pathname === '/api/telegram-stars/packages') {
+        if (req.method !== 'GET') { sendJson(res, 405, { ok: false, error: 'method_not_allowed' }); return; }
+        sendJson(res, 200, {
+            ok: true,
+            ...telegramStars.publicStarsCatalog(),
+            supportContact: SUPPORT_CONTACT || undefined,
+            supportUrl: SUPPORT_URL || undefined
+        });
+        return;
+    }
+
+    if (pathname === '/api/telegram-stars/create' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!FEATURES.telegramStarsPurchasesEnabled) {
+                sendJson(res, 503, { ok: false, error: 'telegram_stars_purchases_disabled', message: 'Las compras con Telegram Stars están pausadas temporalmente.' });
+                return;
+            }
+            if (!isTelegramNumericId(auth.userId)) {
+                sendJson(res, 403, {
+                    ok: false,
+                    error: 'telegram_account_required',
+                    message: 'Telegram Stars solo puede usarse con tu cuenta verificada dentro de Telegram.'
+                });
+                return;
+            }
+            telegramStars.createStarsOrder(auth.userId, data.packageId || data.productId || data.packId || '')
+                .then(result => {
+                    if (!result.ok) {
+                        sendJson(res, result.status || 502, {
+                            ok: false,
+                            error: result.error || 'telegram_stars_order_failed',
+                            message: result.message || 'No se pudo crear la factura de Telegram Stars.'
+                        });
+                        return;
+                    }
+                    const publicOrder = telegramStars.publicStarsOrder(result.order);
+                    sendJson(res, 200, {
+                        ok: true,
+                        reused: result.reused === true,
+                        order: publicOrder,
+                        invoiceUrl: publicOrder.invoiceUrl,
+                        payment: {
+                            paymentProvider: 'telegram_stars',
+                            currency: 'XTR',
+                            priceStars: publicOrder.priceStars,
+                            invoiceUrl: publicOrder.invoiceUrl
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.warn('⚠️ No se pudo crear una factura Telegram Stars:', error.message);
+                    sendJson(res, 502, { ok: false, error: 'telegram_stars_invoice_failed', message: 'Telegram no ha podido crear la factura. No se ha cobrado nada.' });
+                });
+        });
+        return;
+    }
+
+    if (pathname === '/api/telegram-stars/status' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        if (!isTelegramNumericId(auth.userId)) { sendJson(res, 403, { ok: false, error: 'telegram_account_required' }); return; }
+        const result = telegramStars.getStarsOrderForUser(cleanText(parsedUrl.searchParams.get('orderId'), 40), auth.userId);
+        if (!result.ok) { sendJson(res, 404, { ok: false, error: 'order_not_found' }); return; }
+        sendJson(res, 200, {
+            ok: true,
+            order: telegramStars.publicStarsOrder(result.order),
+            payment: purchasePaymentLinks(result.order),
+            fulfillmentPending: result.order.status === 'paid_unfulfilled',
+            economy: result.profile ? economyProfileResponse(result.profile) : undefined
+        });
+        return;
+    }
+
+    if (pathname === '/api/telegram-stars/list' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        if (!isTelegramNumericId(auth.userId)) { sendJson(res, 403, { ok: false, error: 'telegram_account_required' }); return; }
+        const orders = telegramStars.listStarsOrdersForUser(auth.userId, parsedUrl.searchParams.get('limit') || 50)
+            .map(order => ({ order: telegramStars.publicStarsOrder(order), payment: purchasePaymentLinks(order) }));
+        sendJson(res, 200, { ok: true, orders });
+        return;
+    }
+
+    // ===== REGISTRO Y CONVERSIÓN NFT TON (base v105) =====
+    if (pathname === '/api/nft/collection-metadata' && req.method === 'GET') {
+        const config = nftPublicConfig(req);
+        sendJson(res, 200, {
+            name: 'Apex Motorsport GT Cars',
+            description: 'Colección oficial de coches jugables de Apex Motorsport. Cada coche nace como objeto interno del juego y solo se convierte en NFT de TON si su propietario decide acuñarlo.',
+            image: `${config.metadataBaseUrl}/assets/apex_cr_coin_256.jpg`,
+            external_url: config.metadataBaseUrl,
+            social_links: []
+        });
+        return;
+    }
+
+    if (pathname.startsWith('/api/nft/metadata/') && req.method === 'GET') {
+        const serialRaw = decodeURIComponent(pathname.replace('/api/nft/metadata/', ''));
+        if (!/^\d{1,12}$/.test(serialRaw)) { sendJson(res, 404, { ok: false, error: 'nft_metadata_not_found' }); return; }
+        const entry = db.getPublicNftRegistryEntry(Number(serialRaw));
+        if (!entry) { sendJson(res, 404, { ok: false, error: 'nft_metadata_not_found' }); return; }
+        sendJson(res, 200, nftMetadataForEntry(req, entry));
+        return;
+    }
+
+    if (pathname === '/api/nft/cars' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        if (!FEATURES.nftEntitlementsEnabled) { sendJson(res, 503, { ok: false, error: 'nft_entitlements_disabled' }); return; }
+        const synced = db.syncNftRegistryForUser(auth.userId);
+        sendJson(res, 200, {
+            ok: true,
+            config: nftPublicConfig(req),
+            entries: synced.entries.map(entry => ({
+                registry: publicNftRegistryView(entry.registry),
+                claim: publicNftClaimView(entry.claim, req)
+            })),
+            economy: economyProfileResponse(synced.profile)
+        });
+        return;
+    }
+
+    if (pathname === '/api/nft/prepare-conversion' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!FEATURES.nftEntitlementsEnabled) { sendJson(res, 503, { ok: false, error: 'nft_entitlements_disabled' }); return; }
+            const instanceId = typeof data.instanceId === 'string' && /^[A-Za-z0-9_.:-]{1,120}$/.test(data.instanceId) ? data.instanceId : '';
+            if (!instanceId) { sendJson(res, 422, { ok: false, error: 'invalid_car_instance_id' }); return; }
+            const result = db.prepareNftConversion(auth.userId, instanceId, { network: NFT_CONFIG.network });
+            if (!result.ok) {
+                sendJson(res, result.error === 'car_not_found' ? 404 : 422, {
+                    ok: false,
+                    error: result.error || 'nft_conversion_prepare_failed',
+                    economy: result.profile ? economyProfileResponse(result.profile) : undefined
+                });
+                return;
+            }
+            securityAuditLogs.push({
+                event: result.alreadyMinted ? 'NFT_CONVERSION_ALREADY_MINTED' : 'NFT_CONVERSION_PREPARED',
+                userId: auth.userId,
+                instanceId,
+                registryId: result.registry.registryId,
+                claimId: result.claim ? result.claim.claimId : undefined,
+                time: new Date().toISOString()
+            });
+            sendJson(res, 200, {
+                ok: true,
+                alreadyPrepared: result.alreadyPrepared === true,
+                alreadyMinted: result.alreadyMinted === true,
+                registry: publicNftRegistryView(result.registry),
+                claim: publicNftClaimView(result.claim, req),
+                config: nftPublicConfig(req),
+                economy: economyProfileResponse(result.profile)
+            });
+        });
+        return;
+    }
+
+    if (pathname === '/api/nft/cancel-conversion' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            const instanceId = typeof data.instanceId === 'string' && /^[A-Za-z0-9_.:-]{1,120}$/.test(data.instanceId) ? data.instanceId : '';
+            if (!instanceId) { sendJson(res, 422, { ok: false, error: 'invalid_car_instance_id' }); return; }
+            const result = db.cancelNftConversionPreparation(auth.userId, instanceId);
+            if (!result.ok) {
+                sendJson(res, result.error === 'car_not_found' ? 404 : 409, { ok: false, error: result.error || 'nft_conversion_cancel_failed' });
+                return;
+            }
+            sendJson(res, 200, {
+                ok: true,
+                registry: publicNftRegistryView(result.registry),
+                claim: publicNftClaimView(result.claim, req),
+                config: nftPublicConfig(req),
+                economy: economyProfileResponse(result.profile)
+            });
+        });
+        return;
+    }
+
+    if (pathname.startsWith('/api/nft/claims/') && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        const claimId = cleanText(decodeURIComponent(pathname.replace('/api/nft/claims/', '')), 40).toUpperCase();
+        const entry = db.getNftClaimForUser(auth.userId, claimId);
+        if (!entry) { sendJson(res, 404, { ok: false, error: 'nft_claim_not_found' }); return; }
+        sendJson(res, 200, {
+            ok: true,
+            registry: publicNftRegistryView(entry.registry),
+            claim: publicNftClaimView(entry.claim, req),
+            config: nftPublicConfig(req)
+        });
+        return;
+    }
+
+    // ===== COMPRAS DE $CR CON TON REAL (v103) =====
+    // Flujo: create -> el jugador paga a la tesorería con el comentario del
+    // pedido -> status verifica on-chain y marca 'paid' -> claim entrega los
+    // $CR/caja una sola vez dentro de la misma transacción SQLite. Si la
+    // respuesta se pierde, repetir claim devuelve el mismo resultado guardado.
+    if (pathname === '/api/purchases/packages' && req.method === 'GET') {
+        if (!FEATURES.tonPurchasesEnabled) {
+            sendJson(res, 503, { ok: false, error: 'ton_purchases_disabled', message: 'Las compras TON están pausadas temporalmente. No envíes ningún pago.' });
+            return;
+        }
+        getTonUsdtQuote()
+            .then(quote => {
+                const packages = TON_CR_PACKAGES.map(definition => buildPurchaseProductView(definition, quote));
+                const crates = TON_CRATE_PRODUCTS.map(definition => buildPurchaseProductView(definition, quote));
+                sendJson(res, 200, {
+                    ok: true,
+                    treasuryAddress: TREASURY_WALLET_ADDRESS,
+                    telegramTonPurchasesEnabled: FEATURES.telegramTonPurchasesEnabled,
+                    supportContact: SUPPORT_CONTACT || undefined,
+                    supportUrl: SUPPORT_URL || undefined,
+                    ...purchaseQuotePublicFields(quote),
+                    packages,
+                    crates,
+                    products: [...packages, ...crates]
+                });
+            })
+            .catch(error => {
+                console.warn('⚠️ Cotización TON/USDT no disponible:', error.message);
+                sendJson(res, 503, {
+                    ok: false,
+                    error: 'ton_rate_unavailable',
+                    message: 'La cotización TON/USDT no está disponible ahora. No envíes ningún pago todavía.'
+                });
+            });
+        return;
+    }
+
+    if (pathname === '/api/purchases/create' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+
+            if (!FEATURES.tonPurchasesEnabled) {
+                sendJson(res, 503, { ok: false, error: 'ton_purchases_disabled', message: 'Las compras TON están pausadas temporalmente. No envíes ningún pago.' });
+                return;
+            }
+            // Dentro de Telegram, los bienes digitales deben venderse con
+            // Telegram Stars. Hasta implantar esa vía, el pago TON directo se
+            // bloquea para sesiones Telegram verificadas (la web externa puede
+            // seguir usando la tesorería si el operador lo decide).
+            if (auth.authMode === 'telegram' && !FEATURES.telegramTonPurchasesEnabled) {
+                sendJson(res, 403, {
+                    ok: false,
+                    error: 'telegram_ton_purchases_disabled',
+                    message: 'Las compras con TON dentro de Telegram están pausadas hasta habilitar Telegram Stars. No envíes ningún pago.'
+                });
+                return;
+            }
+
+            const product = findPurchaseProduct(data.packageId || data.productId || data.packId || '');
+            if (!product) {
+                sendJson(res, 422, { ok: false, error: 'invalid_package', message: 'Producto no válido' });
+                return;
+            }
+
+            const countPending = () => (typeof db.countPurchaseOrdersByUser === 'function'
+                ? db.countPurchaseOrdersByUser(auth.userId, 'pending')
+                : 0);
+            const sendTooManyPending = () => sendJson(res, 429, {
+                ok: false,
+                error: 'too_many_pending_orders',
+                message: 'Ya tienes pedidos pendientes de pago. Completa uno o espera a que caduque antes de crear otro.'
+            });
+            if (countPending() >= PURCHASE_MAX_PENDING_PER_USER) {
+                sendTooManyPending();
+                return;
+            }
+
+            getTonUsdtQuote()
+                .then(quote => {
+                    // Recomprobar tras la espera de red: otra petición del
+                    // mismo usuario pudo crear pedidos mientras tanto.
+                    if (countPending() >= PURCHASE_MAX_PENDING_PER_USER) {
+                        sendTooManyPending();
+                        return;
+                    }
+
+                    const priced = buildPurchaseProductView(product, quote);
+                    if (priced.productType === 'cr' && priced.cr < 1) {
+                        sendJson(res, 503, {
+                            ok: false,
+                            error: 'ton_quote_too_small',
+                            message: 'La cotización actual no permite acreditar ni 1 $CR en este paquete. No envíes ningún pago.'
+                        });
+                        return;
+                    }
+
+                    const now = Date.now();
+                    let order = null;
+                    for (let attempt = 0; attempt < 5 && !order; attempt++) {
+                        order = db.createPurchaseOrder({
+                            id: 'APEX-' + crypto.randomBytes(6).toString('hex').toUpperCase(),
+                            userId: auth.userId,
+                            packageId: priced.id,
+                            productType: priced.productType,
+                            crateId: priced.crateId,
+                            label: priced.label,
+                            cr: priced.cr,
+                            priceUsdt: priced.priceUsdt,
+                            priceCr: priced.priceCr,
+                            crPerUsdt: priced.crPerUsdt,
+                            tonUsdtRate: priced.tonUsdtRate,
+                            tonUsdtRateMicro: priced.tonUsdtRateMicro,
+                            rateSource: priced.rateSource,
+                            quotedAt: priced.quotedAt,
+                            quoteStale: priced.quoteStale,
+                            amountTon: priced.amountTon,
+                            amountNanotons: priced.amountNanotons,
+                            treasuryAddress: TREASURY_WALLET_ADDRESS,
+                            status: 'pending',
+                            createdAt: new Date(now).toISOString(),
+                            createdAtMs: now,
+                            expiresAt: new Date(now + PURCHASE_ORDER_TTL_MS).toISOString(),
+                            expiresAtMs: now + PURCHASE_ORDER_TTL_MS
+                        });
+                    }
+                    if (!order) {
+                        sendJson(res, 500, { ok: false, error: 'order_create_failed' });
+                        return;
+                    }
+                    securityAuditLogs.push({
+                        event: 'PURCHASE_ORDER_CREATED',
+                        userId: auth.userId,
+                        orderId: order.id,
+                        packageId: priced.id,
+                        productType: priced.productType,
+                        crateId: priced.crateId || undefined,
+                        amountNanotons: priced.amountNanotons,
+                        tonUsdtRate: priced.tonUsdtRate,
+                        time: new Date().toISOString()
+                    });
+                    sendJson(res, 200, { ok: true, order: publicPurchaseView(order), payment: purchasePaymentLinks(order) });
+                })
+                .catch(error => {
+                    console.warn('⚠️ No se creó pedido por falta de cotización TON/USDT:', error.message);
+                    sendJson(res, 503, {
+                        ok: false,
+                        error: 'ton_rate_unavailable',
+                        message: 'La cotización TON/USDT no está disponible ahora. No se ha creado ningún pedido; no envíes TON todavía.'
+                    });
+                });
+        });
+        return;
+    }
+
+    if (pathname === '/api/purchases/list' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        const status = ['pending', 'paid', 'claimed'].includes(String(parsedUrl.searchParams.get('status') || ''))
+            ? String(parsedUrl.searchParams.get('status'))
+            : null;
+        const orders = db.listPurchaseOrdersByUser(auth.userId, {
+            status,
+            limit: parsedUrl.searchParams.get('limit') || 50
+        }).filter(order => !purchaseIsTelegramStars(order)).map(order => ({
+            order: publicPurchaseView(order),
+            payment: purchasePaymentLinks(order)
+        }));
+        sendJson(res, 200, { ok: true, orders });
+        return;
+    }
+
+    if (pathname === '/api/purchases/status' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        const orderId = cleanText(parsedUrl.searchParams.get('orderId'), 40);
+        let order = db.getPurchaseOrder(orderId);
+        if (!order || order.userId !== auth.userId) {
+            sendJson(res, 404, { ok: false, error: 'order_not_found' });
+            return;
+        }
+        if (purchaseIsTelegramStars(order)) {
+            const checked = telegramStars.getStarsOrderForUser(order.id, auth.userId);
+            const current = checked.ok ? checked.order : order;
+            sendJson(res, 200, {
+                ok: true,
+                order: publicPurchaseView(current),
+                payment: purchasePaymentLinks(current),
+                fulfillmentPending: current.status === 'paid_unfulfilled',
+                economy: checked.profile ? economyProfileResponse(checked.profile) : undefined
+            });
+            return;
+        }
+        if (order.status !== 'pending') {
+            sendJson(res, 200, { ok: true, order: publicPurchaseView(order), payment: purchasePaymentLinks(order) });
+            return;
+        }
+
+        // No martillear los indexadores: una verificación on-chain cada 8 s
+        // por pedido como máximo (el mock de tests no necesita espera).
+        const lastCheck = purchaseVerifyCache.get(order.id) || 0;
+        const minIntervalMs = TON_MOCK_LEDGER_FILE ? 0 : 8000;
+        if (Date.now() - lastCheck < minIntervalMs) {
+            sendJson(res, 200, { ok: true, order: publicPurchaseView(order), payment: purchasePaymentLinks(order), verificationPending: true });
+            return;
+        }
+        purchaseVerifyCache.set(order.id, Date.now());
+
+        findTonPayment(order)
+            .then(payment => {
+                if (payment && payment.txHash) {
+                    const marked = db.markPurchasePaid(order.id, payment.txHash, payment);
+                    if (marked.ok) {
+                        order = marked.order;
+                        securityAuditLogs.push({ event: 'PURCHASE_PAID', userId: auth.userId, orderId: order.id, txHash: payment.txHash, time: new Date().toISOString() });
+                    } else if (marked.error === 'tx_already_used') {
+                        securityAuditLogs.push({ event: 'PURCHASE_TX_REUSE_BLOCKED', userId: auth.userId, orderId: order.id, txHash: payment.txHash, time: new Date().toISOString() });
+                    }
+                }
+                sendJson(res, 200, { ok: true, order: publicPurchaseView(order), payment: purchasePaymentLinks(order) });
+            })
+            .catch(() => {
+                sendJson(res, 200, { ok: true, order: publicPurchaseView(order), payment: purchasePaymentLinks(order), verificationPending: true });
+            });
+        return;
+    }
+
+    if (pathname === '/api/purchases/claim' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            const orderId = cleanText(data.orderId, 40);
+            const existingOrder = db.getPurchaseOrder(orderId);
+            if (existingOrder && existingOrder.userId === auth.userId && purchaseIsTelegramStars(existingOrder)) {
+                const checked = telegramStars.getStarsOrderForUser(orderId, auth.userId);
+                const current = checked.ok ? checked.order : existingOrder;
+                if (current.status !== 'claimed') {
+                    sendJson(res, 409, {
+                        ok: false,
+                        error: 'telegram_stars_payment_not_confirmed',
+                        message: 'El pago de Telegram Stars aún no está confirmado y entregado por el servidor',
+                        order: publicPurchaseView(current),
+                        payment: purchasePaymentLinks(current)
+                    });
+                    return;
+                }
+                sendJson(res, 200, {
+                    ok: true,
+                    orderId,
+                    cr: Number(current.cr || 0),
+                    productType: 'cr',
+                    crateId: null,
+                    label: current.label,
+                    alreadyClaimed: true,
+                    economyResult: null,
+                    economy: checked.profile ? economyProfileResponse(checked.profile) : undefined,
+                    order: publicPurchaseView(current),
+                    payment: purchasePaymentLinks(current)
+                });
+                return;
+            }
+            const result = db.claimPurchaseOrder(orderId, auth.userId, ({ order, garage }) => {
+                if ((order.productType || 'cr') === 'crate') {
+                    return economyEngine.applyAction(garage, 'open_prepaid_crate', {
+                        crateKey: order.crateId,
+                        orderId: order.id
+                    });
+                }
+                return economyEngine.applyAction(garage, 'grant_ton_credits', {
+                    orderId: order.id,
+                    cr: Number(order.cr || 0)
+                });
+            });
+            if (!result.ok) {
+                const notPaid = result.error === 'order_not_paid' || result.error === 'wrong_payment_provider';
+                sendJson(res, notPaid ? 409 : 404, {
+                    ok: false,
+                    error: result.error || 'claim_failed',
+                    message: notPaid ? 'El pago aún no está confirmado on-chain' : 'Pedido no encontrado'
+                });
+                return;
+            }
+            securityAuditLogs.push({
+                event: result.alreadyClaimed ? 'PURCHASE_CLAIM_REPEAT' : 'PURCHASE_CLAIMED',
+                userId: auth.userId,
+                orderId,
+                cr: result.cr,
+                productType: result.productType,
+                crateId: result.crateId || undefined,
+                time: new Date().toISOString()
+            });
+            sendJson(res, 200, {
+                ok: true,
+                orderId,
+                cr: result.cr,
+                productType: result.productType,
+                crateId: result.crateId,
+                label: result.order ? result.order.label : undefined,
+                alreadyClaimed: result.alreadyClaimed === true,
+                economyResult: result.economyResult || null,
+                economy: economyProfileResponse(result.profile),
+                order: publicPurchaseView(result.order)
+            });
+        });
+        return;
+    }
+
     if (pathname === '/api/race/result' && req.method === 'POST') {
         readJsonBody(req, res, 16 * 1024, (data) => {
             const auth = requireKnownUser(req, res, data.userId, data);
@@ -789,9 +2543,34 @@ const server = http.createServer((req, res) => {
             const cleanTime = Number(data.time);
             const limits = TRACK_PHYSICAL_LIMITS[trackId] || TRACK_PHYSICAL_LIMITS.default;
             const minAllowedTime = limits.minLapSeconds * limits.totalLaps * 0.75;
-            if (!trackId || !Number.isFinite(cleanTime) || cleanTime < minAllowedTime || cleanTime > 3600) {
-                securityAuditLogs.push({ event: 'INVALID_RACE_RESULT', userId: auth.userId, trackId: trackId || rawTrack.slice(0, 80), time: cleanTime, ip: clientIp, timeStamp: new Date().toISOString() });
-                sendJson(res, 422, { ok: false, error: 'invalid_race_result', message: 'Circuito o tiempo de carrera no válido', minAllowedTime: Math.round(minAllowedTime * 100) / 100 });
+            const basicResultValid = Boolean(trackId)
+                && Number.isFinite(cleanTime)
+                && cleanTime >= minAllowedTime
+                && cleanTime <= 3600;
+
+            const sessionId = String(data.sessionId || '').trim();
+            const session = /^[a-f0-9]{32,64}$/.test(sessionId) ? raceSessions.get(sessionId) : null;
+            const now = Date.now();
+            let raceSessionValid = false;
+            if (session && session.userId === auth.userId && session.trackId === trackId && now <= Number(session.expiresAt || 0)) {
+                // Un solo uso: una sesión coincidente se consume aunque el
+                // tiempo posterior sea inválido, para que no sirva de oráculo.
+                raceSessions.delete(sessionId);
+                const ageSeconds = Math.max(0, (now - Number(session.startedAt || now)) / 1000);
+                raceSessionValid = RACE_SESSION_MIN_AGE_MS !== null
+                    ? ageSeconds * 1000 >= RACE_SESSION_MIN_AGE_MS
+                    : ageSeconds >= minAllowedTime && cleanTime <= ageSeconds + 10;
+            }
+
+            if (!basicResultValid || !raceSessionValid) {
+                const error = basicResultValid ? 'invalid_race_session' : 'invalid_race_result';
+                securityAuditLogs.push({ event: basicResultValid ? 'INVALID_RACE_SESSION' : 'INVALID_RACE_RESULT', userId: auth.userId, trackId: trackId || rawTrack.slice(0, 80), time: cleanTime, ip: clientIp, timeStamp: new Date().toISOString() });
+                sendJson(res, 422, {
+                    ok: false,
+                    error,
+                    message: basicResultValid ? 'Sesión de carrera ausente, expirada o ya utilizada' : 'Circuito o tiempo de carrera no válido',
+                    minAllowedTime: Math.round(minAllowedTime * 100) / 100
+                });
                 return;
             }
 
@@ -800,15 +2579,65 @@ const server = http.createServer((req, res) => {
                 : '';
             const username = cleanText(telegramName || data.username, 40, 'Piloto');
             const carName = cleanText(data.car, 80, '');
-            const result = db.recordRaceResult(auth.userId, username, trackName, cleanTime, carName);
-            sendJson(res, 200, { ok: true, trackId, track: trackName, ...result });
+            const result = db.recordRaceResult(auth.userId, username, trackName, cleanTime, carName, trackId);
+            const rankRaw = Number(data.rank);
+            const rank = Number.isInteger(rankRaw) && rankRaw >= 1 && rankRaw <= 6 ? rankRaw : 6;
+            const topSpeed = Math.max(0, Math.min(500, Number(data.topSpeed) || 0));
+            const drifts = Math.max(0, Math.min(100, Math.floor(Number(data.drifts) || 0)));
+            const nitrosUsed = Math.max(0, Math.min(2, Math.floor(Number(data.nitrosUsed) || 0)));
+            let economyReward = null;
+            let economyProfile = null;
+            let economyError = null;
+            try {
+                const economyOutcome = db.applyEconomyMutation(
+                    auth.userId,
+                    'race_complete',
+                    `race-complete:${sessionId}`,
+                    (garage) => {
+                        if (session && session.carInstanceId && Array.isArray(garage.garage)
+                            && garage.garage.some(car => car && car.instanceId === session.carInstanceId)) {
+                            garage.equippedInstanceId = session.carInstanceId;
+                        }
+                        return economyEngine.applyAction(garage, 'race_complete', {
+                            rank,
+                            trackId,
+                            topSpeed,
+                            drifts,
+                            nitrosUsed
+                        });
+                    },
+                    { trackId, time: cleanTime, rank }
+                );
+                if (economyOutcome.ok) {
+                    economyReward = economyOutcome.result;
+                    economyProfile = economyProfileResponse(economyOutcome.profile);
+                } else {
+                    economyError = (economyOutcome.result && economyOutcome.result.reason) || economyOutcome.error || 'race_reward_failed';
+                    economyProfile = economyProfileResponse(economyOutcome.profile);
+                }
+            } catch (e) {
+                economyError = 'race_reward_failed';
+                console.error('Error acreditando recompensa de carrera:', e);
+            }
+            sendJson(res, 200, {
+                ok: true,
+                trackId,
+                track: trackName,
+                ...result,
+                economyReward,
+                economyError,
+                economy: economyProfile
+            });
         });
         return;
     }
 
     if (pathname === '/api/leaderboard') {
         if (req.method !== 'GET') { sendJson(res, 405, { ok: false, error: 'method_not_allowed' }); return; }
-        sendJson(res, 200, db.getLeaderboard());
+        sendJson(res, 200, db.getLeaderboard({
+            trackId: parsedUrl.searchParams.get('trackId') || undefined,
+            limit: parsedUrl.searchParams.get('limit') || 20
+        }));
         return;
     }
 
@@ -835,6 +2664,10 @@ const server = http.createServer((req, res) => {
                 const roomId = Object.prototype.hasOwnProperty.call(PUBLIC_WAGER_ROOMS, data.roomId) ? data.roomId : null;
                 if (!roomId) {
                     sendJson(res, 400, { ok: false, error: 'invalid_room' });
+                    return;
+                }
+                if (!FEATURES.wagerStakesEnabled) {
+                    sendJson(res, 410, { ok: false, error: 'wager_stakes_disabled', message: 'Las apuestas están pausadas hasta completar la liquidación autoritativa en servidor' });
                     return;
                 }
                 const userId = auth.userId;
@@ -868,7 +2701,7 @@ const server = http.createServer((req, res) => {
                 if (existingIdx === -1) {
                     if (lobby.slots.length < 4) {
                         lobby.slots.push({
-                            id: 'player_' + userId,
+                            id: 'player_' + crypto.randomBytes(6).toString('hex'),
                             userId,
                             name,
                             carName,
@@ -896,7 +2729,7 @@ const server = http.createServer((req, res) => {
                     roomId: lobby.roomId,
                     circuit: lobby.circuit,
                     countdown,
-                    slots: lobby.slots,
+                    slots: lobby.slots.map(slot => publicSlotView(slot, auth.userId)),
                     status: lobby.status
                 }));
             } catch (e) {
@@ -914,6 +2747,7 @@ const server = http.createServer((req, res) => {
         const roomId = Object.prototype.hasOwnProperty.call(PUBLIC_WAGER_ROOMS, requestedRoom) ? requestedRoom : '';
         const lobbyId = cleanText(parsedUrl.searchParams.get('lobbyId'), 80);
         if (!roomId) { sendJson(res, 400, { ok: false, error: 'invalid_room' }); return; }
+        const viewerUserId = optionalViewerUserId(req, parsedUrl.searchParams.get('userId'));
         let lobby = publicLobbies.get(roomId);
 
         if (!lobby || (lobbyId && lobby.id !== lobbyId)) {
@@ -952,7 +2786,7 @@ const server = http.createServer((req, res) => {
             roomId: lobby.roomId,
             circuit: lobby.circuit,
             countdown,
-            slots: lobby.slots,
+            slots: lobby.slots.map(slot => publicSlotView(slot, viewerUserId)),
             status: lobby.status
         }));
         return;
@@ -995,6 +2829,10 @@ const server = http.createServer((req, res) => {
                 const colorHex = cleanColorHex(data.colorHex);
                 const archetype = cleanArchetype(data.archetype);
 
+                if (!FEATURES.wagerStakesEnabled) {
+                    sendJson(res, 410, { ok: false, error: 'wager_stakes_disabled', message: 'Los duelos con apuesta están pausados hasta completar escrow y liquidación en servidor' });
+                    return;
+                }
                 let code = createDuelCode();
                 while (privateDuels.has(code)) code = createDuelCode();
                 const requestedTrackId = String(data.trackId || '').trim();
@@ -1034,7 +2872,7 @@ const server = http.createServer((req, res) => {
 
                 privateDuels.set(code, duel);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ ok: true, code, duel }));
+                res.end(JSON.stringify({ ok: true, code, duel: publicDuelView(duel, auth.userId) }));
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON' }));
@@ -1054,6 +2892,10 @@ const server = http.createServer((req, res) => {
                 const carName = cleanText(data.carName, 80, 'GT3 Racer');
                 const colorHex = cleanColorHex(data.colorHex);
                 const archetype = cleanArchetype(data.archetype);
+                if (!FEATURES.wagerStakesEnabled) {
+                    sendJson(res, 410, { ok: false, error: 'wager_stakes_disabled', message: 'Los duelos con apuesta están pausados hasta completar escrow y liquidación en servidor' });
+                    return;
+                }
                 const cleanCode = cleanDuelCode(data.code);
                 const duel = cleanCode ? privateDuels.get(cleanCode) : null;
 
@@ -1077,12 +2919,12 @@ const server = http.createServer((req, res) => {
 
                 if (duel.hostUserId === userId) {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ ok: true, code: cleanCode, duel }));
+                    res.end(JSON.stringify({ ok: true, code: cleanCode, duel: publicDuelView(duel, auth.userId) }));
                     return;
                 }
 
                 if (duel.slots.some(s => s && s.userId === userId)) {
-                    sendJson(res, 200, { ok: true, code: cleanCode, duel: publicDuelView(duel) });
+                    sendJson(res, 200, { ok: true, code: cleanCode, duel: publicDuelView(duel, auth.userId) });
                     return;
                 }
                 if (duel.slots.length >= 2) {
@@ -1107,7 +2949,7 @@ const server = http.createServer((req, res) => {
 
                 duel.status = 'STARTING';
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ ok: true, code: cleanCode, duel }));
+                res.end(JSON.stringify({ ok: true, code: cleanCode, duel: publicDuelView(duel, auth.userId) }));
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid JSON' }));
@@ -1132,7 +2974,8 @@ const server = http.createServer((req, res) => {
             return;
         }
 
-        const view = publicDuelView(duel);
+        const viewerUserId = optionalViewerUserId(req, parsedUrl.searchParams.get('userId'));
+        const view = publicDuelView(duel, viewerUserId);
         sendJson(res, 200, { ok: true, duel: view, status: duel.status, slots: view.slots });
         return;
     }
@@ -1225,7 +3068,7 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ ok: true, updatedAt: result.save.updatedAt, serverSavedAt: result.save.serverSavedAt }));
+                res.end(JSON.stringify({ ok: true, updatedAt: result.save.updatedAt, serverSavedAt: result.save.serverSavedAt, save: result.save }));
             });
             return;
         }
@@ -1318,7 +3161,9 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🏁 APEX MOTORSPORT - Servidor Web & Game Hub listo`);
     console.log(`📡 URL Local: http://localhost:${PORT}`);
     console.log(`📡 URL IPv4:  http://127.0.0.1:${PORT}`);
-    console.log(`💾 Guardados de jugadores en: ${db.DB_FILE}`);
+    console.log(`💾 Base SQLite y guardados en: ${db.DB_FILE}`);
+    try { console.log('🗄️ Estado BD:', db.getDatabaseHealth()); } catch (e) {}
+    scheduleDatabaseBackups();
     console.log(`=======================================================`);
 
     if (process.env.BOT_TOKEN) {

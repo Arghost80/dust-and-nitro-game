@@ -681,6 +681,10 @@ let touchLeft = false, touchRight = false, touchGas = false, touchBrake = false,
 let touchJoyGas = false, touchJoyBrake = false, touchSteerAmount = 1.0;
 let currentTouchControlMode = 'joystick';
 let raceStartTime = 0;
+let currentRaceSessionPromise = null;
+let currentRaceSessionTrackId = '';
+let currentRaceUsedNitros = 0;
+let currentRaceAuthoritativeReward = null;
 let driftCharge = 0;
 let driftBoostTimer = 0;
 let driftSlipAngle = 0; // Ángulo de deslizamiento lateral en derrapes de alta velocidad
@@ -2862,7 +2866,8 @@ function activateNitroBoost() {
     }
 
     raceNitrosRemaining--;
-    if (typeof consumeNitroFromInventory === 'function') {
+    currentRaceUsedNitros = Math.min(2, currentRaceUsedNitros + 1);
+    if (!isRaceAuthoritativeEconomyActive() && typeof consumeNitroFromInventory === 'function') {
         consumeNitroFromInventory();
     }
     updateNitroButtonBadge();
@@ -3488,6 +3493,79 @@ function showMenu(scene) {
     });
 }
 
+function isRaceAuthoritativeEconomyActive() {
+    try {
+        return typeof window !== 'undefined'
+            && typeof window.authoritativeEconomyEnabled === 'function'
+            && window.authoritativeEconomyEnabled() === true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function applyRaceServerEconomy(data) {
+    try {
+        if (data && data.economy && data.economy.garage
+            && typeof window !== 'undefined'
+            && typeof window.applyAuthoritativeGarage === 'function') {
+            window.applyAuthoritativeGarage(data.economy.garage);
+        }
+    } catch (e) {}
+}
+
+function getRaceSubmissionUserId() {
+    try {
+        if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
+            return String(window.CloudSave.getUserId() || '');
+        }
+        if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+            return String(window.Telegram.WebApp.initDataUnsafe.user.id);
+        }
+    } catch (e) {}
+    return '';
+}
+
+function requestServerRaceSession(trackId) {
+    currentRaceSessionTrackId = String(trackId || '');
+    currentRaceSessionPromise = (async () => {
+        try {
+            const isTestEnvironment = (typeof process !== 'undefined' && process.versions && process.versions.node)
+                || (typeof window !== 'undefined' && window.__IS_TEST_ENV);
+            if (isTestEnvironment || typeof fetch !== 'function') return '';
+            const raceUserId = getRaceSubmissionUserId();
+            const canSubmitRace = /^\d{3,20}$/.test(raceUserId) || /^usr_[A-Za-z0-9_-]{4,60}$/.test(raceUserId);
+            if (!canSubmitRace) return '';
+            let raceCarName = '';
+            let raceCarInstanceId = '';
+            try {
+                const eq = (typeof getEquippedNftCar === 'function') ? getEquippedNftCar() : null;
+                if (eq && eq.name) raceCarName = eq.name;
+                if (eq && eq.instanceId) raceCarInstanceId = eq.instanceId;
+            } catch (e) {}
+            const raceHeaders = (typeof apexApiHeaders === 'function')
+                ? apexApiHeaders()
+                : { 'Content-Type': 'application/json' };
+            const res = await fetch('/api/race/session', {
+                method: 'POST',
+                headers: raceHeaders,
+                body: JSON.stringify({
+                    userId: raceUserId,
+                    trackId: currentRaceSessionTrackId,
+                    car: raceCarName || undefined,
+                    carInstanceId: raceCarInstanceId || undefined
+                })
+            });
+            const data = await res.json().catch(() => null);
+            applyRaceServerEconomy(data);
+            if (!res.ok) return '';
+            return data && typeof data.sessionId === 'string' ? data.sessionId : '';
+        } catch (e) {
+            return '';
+        }
+    })();
+    return currentRaceSessionPromise;
+}
+
 // ===== INICIAR CARRERA Y CONSTRUIR MUNDO DUSTRAC OFICIAL =====
 function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = false, wagerConfig = undefined) {
     if (!scene || !scene.children || typeof scene.children.removeAll !== 'function') {
@@ -3501,6 +3579,12 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
         return;
     }
 
+    if (isRaceAuthoritativeEconomyActive()) {
+        // v104: no hay escrow/liquidación de servidor todavía. Una config
+        // heredada no puede convertir esta carrera en una apuesta local.
+        if (wagerConfig) wagerConfig = null;
+        if (wagerConfig === undefined) window.activeWagerConfig = null;
+    }
     if (wagerConfig !== undefined) {
         window.activeWagerConfig = wagerConfig;
     }
@@ -3536,6 +3620,8 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     // Cargar cápsulas de Nitro para la carrera (máx 2 por carrera)
     const userNitros = (typeof getAvailableNitros === 'function') ? getAvailableNitros() : 2;
     raceNitrosRemaining = Math.min(2, Math.max(0, userNitros));
+    currentRaceUsedNitros = 0;
+    currentRaceAuthoritativeReward = null;
     nitroBoostTimer = 0;
     updateNitroButtonBadge();
 
@@ -3560,6 +3646,18 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     }
     trackId = track.id || trackId;
     currentTrackId = trackId;
+
+    // Las carreras con apuesta no alimentan /api/race/result; el resto registra
+    // una sesión de servidor de un solo uso mientras se construye el mundo.
+    const startsAsWager = wagerConfig !== undefined
+        ? Boolean(wagerConfig)
+        : Boolean(typeof window !== 'undefined' && window.activeWagerConfig);
+    if (startsAsWager) {
+        currentRaceSessionPromise = null;
+        currentRaceSessionTrackId = '';
+    } else {
+        requestServerRaceSession(trackId);
+    }
 
     gameState = 'COUNTDOWN';
     console.log(`🏁 Cargando nivel oficial: ${track.name} (${track.worldWidth}x${track.worldHeight}px)`);
@@ -6293,7 +6391,7 @@ function endRace() {
             font: 'bold 14px Arial', fill: '#fca5a5', align: 'center'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
 
-        if (typeof loadNftUserData === 'function') {
+        if (!isRaceAuthoritativeEconomyActive() && typeof loadNftUserData === 'function') {
             const u = loadNftUserData();
             u.antiCheatFlags = (u.antiCheatFlags || 0) + 1;
             saveNftUserData(u);
@@ -6315,6 +6413,19 @@ function endRace() {
 
     // Si estamos en MODO COMPETICIÓN (Salas de Apuestas de Tokens)
     if (isWager) {
+        if (isRaceAuthoritativeEconomyActive()) {
+            window.activeWagerConfig = null;
+            raceScene.add.text(480, 210, '🛠️ APUESTAS EN PAUSA: SIN LIQUIDACIÓN LOCAL', {
+                font: '900 20px Arial', fill: '#fde047', stroke: '#000000', strokeThickness: 4
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+            raceScene.add.text(480, 250, 'Esta carrera no ha movido ningún $CR. Las apuestas volverán solo con escrow y liquidación en servidor.', {
+                font: 'bold 13px Arial', fill: '#cbd5e1', align: 'center'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+            raceScene.add.text(480, 330, 'VOLVER AL MENÚ DE PISTAS', {
+                font: 'bold 14px Arial', fill: '#fee440', backgroundColor: '#1b202e', padding: { x: 16, y: 9 }
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setInteractive({ useHandCursor: true }).on('pointerdown', () => showMenu(raceScene));
+            return;
+        }
         handleWagerRaceEnd(raceScene, playerRank);
         return;
     }
@@ -6351,19 +6462,43 @@ function endRace() {
     }
     saveStoryProgress(progress);
 
+    const authoritativeRace = isRaceAuthoritativeEconomyActive();
+    let serverRewardLine = null;
+    let serverDropLineShown = false;
+    let serverSponsorLineShown = false;
+    const showAuthoritativeRaceReward = (reward, errorText) => {
+        if (serverRewardLine) {
+            if (reward && reward.success) {
+                let line = `💰 +${reward.crReward || 0} $CR  •  ⭐ +${reward.xpReward || 0} XP`;
+                if (reward.xpResult && reward.xpResult.milestoneUnlocked) line = `👑 ¡HITO NIVEL ${reward.xpResult.milestoneUnlocked}! (+1 STAT A ELEGIR EN GARAJE)`;
+                else if (reward.xpResult && reward.xpResult.leveledUp) line = `🔥 ¡NIV. ${reward.xpResult.newLevel}! (+${reward.xpReward || 0} XP)`;
+                serverRewardLine.setText(line);
+            } else {
+                serverRewardLine.setText(errorText || '⚠️ RESULTADO NO CONFIRMADO EN SERVIDOR: SIN RECOMPENSA ECONÓMICA');
+            }
+        }
+        if (reward && reward.success && reward.droppedPart && !serverDropLineShown) {
+            serverDropLineShown = true;
+            const part = reward.droppedPart;
+            raceScene.add.text(480, 288, `💎 ¡DROP DE PIEZA CONSEGUIDO! ${part.icon || '🔧'} ${part.name} [${String(part.rarity || '').toUpperCase()} #${part.serial || part.nftSerial || 'APEX'}]`, {
+                font: '900 12px Arial', fill: '#00f5d4', backgroundColor: '#0f172add', padding: { x: 10, y: 3 }
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+        }
+        if (reward && reward.success && Array.isArray(reward.completedSponsors) && reward.completedSponsors.length && !serverSponsorLineShown) {
+            serverSponsorLineShown = true;
+            const spNames = reward.completedSponsors.map(s => s.name).join(', ');
+            raceScene.add.text(480, 306, `🤝 ¡OBJETIVO DE PATROCINIO COMPLETADO: ${spNames}!`, {
+                font: '900 12px Arial', fill: '#00f5d4', backgroundColor: '#0a0d14dd', padding: { x: 8, y: 3 }
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+        }
+    };
+
     // v100: enviar el resultado al servidor (ranking global real alimentado por el juego).
     // "Dispara y olvida": si no hay red, la partida ya quedó guardada localmente y en la nube.
     try {
         if (!isTestEnvironment && typeof fetch === 'function' && Number.isFinite(totalRaceNum) && totalRaceNum > 0) {
             const trackObj = (typeof window !== 'undefined' && window.DustracTracks) ? window.DustracTracks[currentTrackId] : null;
-            let raceUserId = '';
-            try {
-                if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
-                    raceUserId = String(window.CloudSave.getUserId() || '');
-                } else if (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
-                    raceUserId = String(window.Telegram.WebApp.initDataUnsafe.user.id);
-                }
-            } catch (e) {}
+            const raceUserId = getRaceSubmissionUserId();
             const canSubmitRace = /^\d{3,20}$/.test(raceUserId) || /^usr_[A-Za-z0-9_-]{4,60}$/.test(raceUserId);
             let raceCarName = '';
             try {
@@ -6371,23 +6506,53 @@ function endRace() {
                 if (eq && eq.name) raceCarName = eq.name;
             } catch (e) {}
             if (canSubmitRace) {
-                const raceHeaders = (typeof apexApiHeaders === 'function')
-                    ? apexApiHeaders()
-                    : { 'Content-Type': 'application/json' };
-                fetch('/api/race/result', {
-                    method: 'POST',
-                    headers: raceHeaders,
-                    keepalive: true,
-                    body: JSON.stringify({
-                        userId: raceUserId,
-                        username: (typeof getPlayerName === 'function') ? getPlayerName() : 'Piloto',
-                        trackId: currentTrackId,
-                        trackName: trackObj ? (trackObj.name || currentTrackId) : currentTrackId,
-                        track: currentTrackId,
-                        time: Math.round(totalRaceNum * 100) / 100,
-                        car: raceCarName || undefined
+                const submitRaceResult = (sessionId) => {
+                    if (!sessionId || currentRaceSessionTrackId !== currentTrackId) return;
+                    const raceHeaders = (typeof apexApiHeaders === 'function')
+                        ? apexApiHeaders()
+                        : { 'Content-Type': 'application/json' };
+                    fetch('/api/race/result', {
+                        method: 'POST',
+                        headers: raceHeaders,
+                        keepalive: true,
+                        body: JSON.stringify({
+                            userId: raceUserId,
+                            sessionId,
+                            username: (typeof getPlayerName === 'function') ? getPlayerName() : 'Piloto',
+                            trackId: currentTrackId,
+                            trackName: trackObj ? (trackObj.name || currentTrackId) : currentTrackId,
+                            track: currentTrackId,
+                            time: Math.round(totalRaceNum * 100) / 100,
+                            car: raceCarName || undefined,
+                            rank: playerRank,
+                            topSpeed: playerCar ? (playerCar.maxReachedSpeed || 0) : 0,
+                            drifts: playerCar ? (playerCar.driftBoostCount || 0) : 0,
+                            nitrosUsed: currentRaceUsedNitros
+                        })
                     })
-                }).catch(() => {});
+                        .then(response => response.json().catch(() => null))
+                        .then(data => {
+                            applyRaceServerEconomy(data);
+                            currentRaceAuthoritativeReward = data && data.economyReward ? data.economyReward : null;
+                            if (authoritativeRace) showAuthoritativeRaceReward(currentRaceAuthoritativeReward);
+                        })
+                        .catch(() => {
+                            if (authoritativeRace) showAuthoritativeRaceReward(null, '⚠️ SIN CONFIRMACIÓN DE SERVIDOR: RECOMPENSA NO ACREDITADA');
+                        });
+                };
+                if (currentRaceSessionPromise && typeof currentRaceSessionPromise.then === 'function') {
+                    currentRaceSessionPromise.then(sessionId => {
+                        if (!sessionId) {
+                            if (authoritativeRace) showAuthoritativeRaceReward(null, '⚠️ SIN SESIÓN OFICIAL: RECOMPENSA NO ACREDITADA');
+                            return;
+                        }
+                        submitRaceResult(sessionId);
+                    }).catch(() => {
+                        if (authoritativeRace) showAuthoritativeRaceReward(null, '⚠️ SIN SESIÓN OFICIAL: RECOMPENSA NO ACREDITADA');
+                    });
+                } else if (authoritativeRace) {
+                    showAuthoritativeRaceReward(null, '⚠️ SIN SESIÓN OFICIAL: RECOMPENSA NO ACREDITADA');
+                }
             }
         }
     } catch (e) {}
@@ -6428,7 +6593,7 @@ function endRace() {
     let xpResult = null;
     let partsWonSummary = [];
 
-    if (typeof loadNftUserData === 'function') {
+    if (!authoritativeRace && typeof loadNftUserData === 'function') {
         const u = loadNftUserData();
         u.credits = (u.credits || 0) + crReward;
 
@@ -6444,7 +6609,7 @@ function endRace() {
         saveNftUserData(u);
     }
 
-    if (typeof addXpToEquippedCar === 'function') {
+    if (!authoritativeRace && typeof addXpToEquippedCar === 'function') {
         xpResult = addXpToEquippedCar(xpReward);
     }
 
@@ -6457,12 +6622,13 @@ function endRace() {
         }
     }
 
-    raceScene.add.text(480, 268, `💰 +${crReward} $CR  •  ${xpText}`, {
+    serverRewardLine = raceScene.add.text(480, 268, authoritativeRace ? '⏳ CONFIRMANDO RECOMPENSAS EN SERVIDOR…' : `💰 +${crReward} $CR  •  ${xpText}`, {
         font: 'bold 13px Arial', fill: '#00f5d4'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+    if (authoritativeRace && currentRaceAuthoritativeReward) showAuthoritativeRaceReward(currentRaceAuthoritativeReward);
 
     let completedSponsors = [];
-    if (typeof updateSponsorshipProgress === 'function') {
+    if (!authoritativeRace && typeof updateSponsorshipProgress === 'function') {
         completedSponsors = updateSponsorshipProgress({
             rank: playerRank,
             topSpeed: playerCar ? (playerCar.maxReachedSpeed || 320) : 320,
@@ -6475,7 +6641,7 @@ function endRace() {
         raceScene.add.text(480, 288, partsText, {
             font: '900 12px Arial', fill: '#00f5d4', backgroundColor: '#0f172add', padding: { x: 10, y: 3 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
-    } else if (playerRank <= 3) {
+    } else if (!authoritativeRace && playerRank <= 3) {
         raceScene.add.text(480, 288, '🏁 Sin drop de pieza en esta carrera (Probabilidad de obtención no superada)', {
             font: 'italic 11px Arial', fill: '#94a3b8'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
@@ -6557,6 +6723,7 @@ function endRace() {
 
 // ===== LIQUIDACIÓN FINANCIERA Y PODIO DEL MODO COMPETICIÓN (APUESTAS DE TOKENS) =====
 function handleWagerRaceEnd(scene, playerRank) {
+    if (isRaceAuthoritativeEconomyActive()) return;
     const isTestEnvironment = (typeof process !== 'undefined' && process.versions && process.versions.node) || (typeof window !== 'undefined' && window.__IS_TEST_ENV);
     const totalRaceNum = raceStartTime ? ((Date.now() - raceStartTime) / 1000) : 0;
     const bestLapNum = bestLapTime ? (bestLapTime / 1000) : 0;

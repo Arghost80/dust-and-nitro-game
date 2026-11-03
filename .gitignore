@@ -11,4 +11,14 @@ Thumbs.db
 game_database.json
 game_database.json.tmp
 game_database.json.corrupt-*
+game_database.json.legacy-imported-*
+game_database.sqlite
+game_database.sqlite-wal
+game_database.sqlite-shm
+game_database.sqlite.corrupt-*
+game_database.sqlite.legacy-imported-*
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+apex_backups/
 *.log
