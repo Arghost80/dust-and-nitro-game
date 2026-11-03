@@ -7,6 +7,7 @@ const zlib = require('zlib');
 const db = require('./database');
 const economyEngine = require('./economy_engine');
 const telegramStars = require('./telegram_stars');
+const { telegramBotApiResult } = require('./telegram_api');
 // Catálogo jugable canónico: tracks_data.json es la fuente de la que también
 // se genera tracks_data.js. El catálogo orgánico legacy de track_generator.js
 // no se acepta para rankings ni se anuncia como circuitos jugables.
@@ -28,7 +29,7 @@ const PlayableTracksCatalog = Object.values(RaceTracksCatalog || {})
         worldHeight: Number(track.worldHeight) || 0
     }));
 
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 const PORT = process.env.PORT || 3000;
 
 function envFlag(name, defaultValue) {
@@ -38,9 +39,10 @@ function envFlag(name, defaultValue) {
     return defaultValue;
 }
 
-// Interruptores operativos v105. Permiten apagar una superficie económica sin
-// desplegar código nuevo. Las apuestas, el mercado P2P y el torneo semanal
-// quedan apagados hasta tener liquidación/escrow autoritativos completos.
+// Interruptores operativos v106. Permiten apagar una superficie económica sin
+// desplegar código nuevo. El mercado interno ya usa escrow y liquidación
+// transaccional en servidor; apuestas y torneo semanal siguen apagados hasta
+// completar su liquidación autoritativa.
 const FEATURES = {
     economyActionsEnabled: envFlag('ECONOMY_ACTIONS_ENABLED', true),
     tonPurchasesEnabled: envFlag('TON_PURCHASES_ENABLED', true),
@@ -105,6 +107,126 @@ const NFT_CONFIG = {
     collectionReserveNanotons: positiveNanotonEnv('TON_NFT_COLLECTION_RESERVE_NANOTONS', '5000000'),
     metadataBaseUrl: String(process.env.TON_NFT_METADATA_BASE_URL || '').trim().replace(/\/+$/, '').slice(0, 300) || null
 };
+function marketplacePublicConfig() {
+    return {
+        enabled: FEATURES.marketplaceEnabled,
+        assetTypes: ['car', 'part'],
+        currency: '$CR',
+        settlement: 'server_escrow',
+        starterCarTransferable: false,
+        preservesCarProgression: true,
+        mintedNftSettlement: 'onchain_transfer_required',
+        ...db.MARKETPLACE_CONFIG
+    };
+}
+
+function telegramBotHealth() {
+    try {
+        const health = global.__APEX_TELEGRAM_BOT_HEALTH__;
+        return health && typeof health === 'object' ? { ...health } : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function launchReadiness() {
+    const webAppUrl = String(process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || '').trim();
+    const supportConfigured = Boolean(SUPPORT_CONTACT || SUPPORT_URL);
+    const checks = {
+        productionMode: IS_PRODUCTION,
+        persistentDataDir: Boolean(process.env.DATA_DIR || process.env.DB_FILE),
+        serverSecretConfigured: String(process.env.SERVER_SECRET_KEY || '').length >= 32,
+        adminTokenConfigured: String(ADMIN_AUDIT_TOKEN || '').length >= 24,
+        botTokenConfigured: Boolean(BOT_TOKEN),
+        botHealth: telegramBotHealth(),
+        webAppUrlHttps: webAppUrl.startsWith('https://'),
+        supportConfigured,
+        adsgramConfigured: !FEATURES.adRewardsEnabled || Boolean(ADSGRAM_WEBHOOK_SECRET),
+        tonIndexersConfigured: Boolean(process.env.TONCENTER_API_KEY || process.env.TONAPI_KEY),
+        databaseBackupsEnabled: DB_BACKUP_ENABLED,
+        telegramStarsEnabled: FEATURES.telegramStarsPurchasesEnabled,
+        telegramTonDisabled: !FEATURES.telegramTonPurchasesEnabled,
+        marketplaceEnabled: FEATURES.marketplaceEnabled,
+        nftMintingDisabled: !FEATURES.nftMintingEnabled,
+        wagerStakesDisabled: !FEATURES.wagerStakesEnabled,
+        weeklyTournamentDisabled: !FEATURES.weeklyTournamentEnabled,
+        insecureDevAuthDisabled: !ALLOW_INSECURE_DEV_AUTH,
+        legacyWagerApiDisabled: !ENABLE_LEGACY_WAGER_API,
+        teamBootstrapConfigured: String(process.env.TEAM_BOOTSTRAP_TELEGRAM_IDS || process.env.TEAM_ACCOUNT_IDS || '')
+            .split(/[,\s;]+/)
+            .filter(value => /^\d{5,20}$/.test(value)).length > 0
+    };
+    const blockers = [];
+    if (!checks.persistentDataDir) blockers.push('DATA_DIR_or_DB_FILE_not_configured');
+    if (!checks.serverSecretConfigured) blockers.push('SERVER_SECRET_KEY_missing_or_short');
+    if (!checks.adminTokenConfigured) blockers.push('ADMIN_AUDIT_TOKEN_missing_or_short');
+    if (!checks.botTokenConfigured) blockers.push('BOT_TOKEN_missing');
+    if (!checks.webAppUrlHttps) blockers.push('WEBAPP_URL_missing_or_not_https');
+    if (!checks.supportConfigured) blockers.push('SUPPORT_CONTACT_or_SUPPORT_URL_missing');
+    if (!checks.adsgramConfigured) blockers.push('ADSGRAM_WEBHOOK_SECRET_missing');
+    if (!checks.telegramTonDisabled) blockers.push('TELEGRAM_TON_PURCHASES_should_remain_disabled');
+    if (!checks.nftMintingDisabled && !NFT_CONFIG.collectionAddress) blockers.push('NFT_minting_enabled_without_collection');
+    if (!checks.insecureDevAuthDisabled) blockers.push('ALLOW_INSECURE_DEV_AUTH_enabled');
+    if (!checks.legacyWagerApiDisabled) blockers.push('legacy_wager_api_enabled');
+    const warnings = [];
+    if (!checks.productionMode) warnings.push('not_running_in_production_mode');
+    if (!checks.tonIndexersConfigured) warnings.push('TONCENTER_API_KEY_and_TONAPI_KEY_missing');
+    if (!checks.botHealth || !checks.botHealth.lastSuccessAt) warnings.push('telegram_bot_polling_not_yet_confirmed');
+    if (!checks.marketplaceEnabled) warnings.push('marketplace_kill_switch_off');
+    if (!checks.teamBootstrapConfigured) warnings.push('team_bootstrap_not_configured');
+    return {
+        ready: blockers.length === 0,
+        version: APP_VERSION,
+        checks,
+        blockers,
+        warnings,
+        marketplace: db.getMarketplaceStats(),
+        database: db.getDatabaseHealth()
+    };
+}
+
+function userHasActiveRaceForCar(userId, carInstanceId) {
+    const now = Date.now();
+    for (const session of raceSessions.values()) {
+        if (session && String(session.userId) === String(userId)
+            && String(session.carInstanceId || '') === String(carInstanceId || '')
+            && now <= Number(session.expiresAt || 0)) return true;
+    }
+    return false;
+}
+
+function userIsInActiveRoom(userId) {
+    const now = Date.now();
+    const id = String(userId || '');
+    for (const lobby of publicLobbies.values()) {
+        if (lobby && now <= Number(lobby.expiresAt || 0) + 60000
+            && Array.isArray(lobby.slots) && lobby.slots.some(slot => slot && String(slot.userId) === id)) return true;
+    }
+    for (const duel of privateDuels.values()) {
+        if (duel && now <= Number(duel.expiresAt || 0) + 60000
+            && Array.isArray(duel.slots) && duel.slots.some(slot => slot && String(slot.userId) === id)) return true;
+    }
+    return false;
+}
+
+function notifyMarketplaceSeller(sellerUserId, outcome) {
+    const sellerId = String(sellerUserId || '');
+    if (!BOT_TOKEN || !/^\d{5,20}$/.test(sellerId) || !outcome || !outcome.listing || !outcome.trade) return;
+    const listing = outcome.listing;
+    const trade = outcome.trade;
+    const text = `🤝 <b>VENTA COMPLETADA EN EL MERCADO</b>\n\n`
+        + `🏷️ <b>Anuncio:</b> <code>${listing.id}</code>\n`
+        + `📦 <b>Artículo:</b> ${String(listing.name || 'Artículo Apex').replace(/[<>&]/g, '')}\n`
+        + `💰 <b>Precio:</b> ${Number(trade.grossCr || 0).toLocaleString('es-ES')} $CR\n`
+        + `✅ <b>Recibido:</b> ${Number(trade.sellerNetCr || 0).toLocaleString('es-ES')} $CR tras la comisión.\n\n`
+        + `El saldo ya está aplicado en tu garaje de servidor.`;
+    telegramBotApiResult('sendMessage', {
+        chat_id: Number(sellerId),
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+    }, { timeoutMs: 5000 }).catch(() => {});
+}
 const TONCENTER_API_KEY = process.env.TONCENTER_API_KEY || '';
 const TONAPI_KEY = process.env.TONAPI_KEY || '';
 // Solo fuera de producción: libro mayor ficticio para probar el flujo de
@@ -1167,6 +1289,7 @@ function cleanupEphemeralState() {
     for (const [orderId, checkedAt] of purchaseVerifyCache.entries()) {
         if (now - Number(checkedAt || 0) > 2 * 60 * 60 * 1000) purchaseVerifyCache.delete(orderId);
     }
+    try { db.expireMarketplaceListings(50); } catch (e) {}
 }
 const cleanupTimer = setInterval(cleanupEphemeralState, 60 * 1000);
 if (typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
@@ -1330,6 +1453,33 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (pathname === '/readyz') {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
+            return;
+        }
+        res.setHeader('Cache-Control', 'no-store');
+        try {
+            const health = db.getDatabaseHealth();
+            if (req.method === 'HEAD') {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end();
+                return;
+            }
+            sendJson(res, 200, {
+                ok: true,
+                ready: true,
+                service: 'apex-motorsport',
+                version: APP_VERSION,
+                schemaVersion: health.schemaVersion,
+                uptimeSeconds: Math.round(process.uptime())
+            });
+        } catch (e) {
+            sendJson(res, 503, { ok: false, ready: false, error: 'database_not_ready' });
+        }
+        return;
+    }
+
     // ===== RUTAS DE API =====
     // Webhook de recompensa publicitaria. Crea un derecho de un solo uso en
     // SQLite; el cliente lo reclama después y el servidor aplica la recompensa.
@@ -1397,6 +1547,8 @@ const server = http.createServer((req, res) => {
             status: 'admin_only',
             timestamp: new Date().toISOString(),
             telegramAuthConfigured: Boolean(BOT_TOKEN),
+            telegramBotHealth: telegramBotHealth(),
+            marketplace: db.getMarketplaceStats(),
             insecureDevAuthEnabled: ALLOW_INSECURE_DEV_AUTH,
             legacyWagerApiEnabled: ENABLE_LEGACY_WAGER_API,
             features: FEATURES,
@@ -1419,6 +1571,7 @@ const server = http.createServer((req, res) => {
             version: APP_VERSION,
             features: FEATURES,
             telegramStars: telegramStars.publicStarsCatalog(),
+            marketplace: marketplacePublicConfig(),
             nft: nftPublicConfig(req),
             support: {
                 contact: SUPPORT_CONTACT || null,
@@ -1719,6 +1872,57 @@ const server = http.createServer((req, res) => {
         createScheduledDatabaseBackup('manual')
             .then(destination => sendJson(res, 200, { ok: true, backupCreated: Boolean(destination) }))
             .catch(error => sendJson(res, 500, { ok: false, error: 'backup_failed', message: String(error.message || error).slice(0, 240) }));
+        return;
+    }
+    if (pathname === '/api/admin/launch-readiness' && req.method === 'GET') {
+        if (!requireAdminRequest(req, res)) return;
+        sendJson(res, 200, { ok: true, launch: launchReadiness() });
+        return;
+    }
+    if (pathname === '/api/admin/marketplace' && req.method === 'GET') {
+        if (!requireAdminRequest(req, res)) return;
+        const listingId = cleanText(parsedUrl.searchParams.get('listingId'), 40).toUpperCase();
+        const userId = cleanText(parsedUrl.searchParams.get('userId'), 64);
+        if (listingId) {
+            const entry = db.getMarketplaceListingForUser(userId, listingId, { admin: true });
+            sendJson(res, entry ? 200 : 404, entry ? { ok: true, ...entry, stats: db.getMarketplaceStats() } : { ok: false, error: 'marketplace_listing_not_found' });
+            return;
+        }
+        if (userId) {
+            const result = db.listMarketplaceListings(userId, { limit: parsedUrl.searchParams.get('limit') || 50 });
+            sendJson(res, 200, {
+                ok: true,
+                listings: result.listings,
+                mine: result.mine,
+                trades: db.listMarketplaceTradesForUser(userId, parsedUrl.searchParams.get('limit') || 50),
+                stats: db.getMarketplaceStats()
+            });
+            return;
+        }
+        sendJson(res, 200, { ok: true, stats: db.getMarketplaceStats() });
+        return;
+    }
+    if (pathname === '/api/admin/marketplace/cancel' && req.method === 'POST') {
+        if (!requireAdminRequest(req, res)) return;
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const listingId = cleanText(data.listingId, 40).toUpperCase();
+            if (!/^MKT-[0-9A-F]{12}$/.test(listingId)) {
+                sendJson(res, 422, { ok: false, error: 'invalid_marketplace_listing_id' });
+                return;
+            }
+            const entry = db.getMarketplaceListingForUser('', listingId, { admin: true });
+            if (!entry || !entry.listing) { sendJson(res, 404, { ok: false, error: 'marketplace_listing_not_found' }); return; }
+            const result = db.cancelMarketplaceListing(entry.listing.sellerUserId || '', listingId, {
+                admin: true,
+                reason: cleanText(data.reason, 80, 'admin_moderation')
+            });
+            if (!result.ok) {
+                sendJson(res, 409, { ok: false, error: result.error || 'marketplace_admin_cancel_failed' });
+                return;
+            }
+            securityAuditLogs.push({ event: 'ADMIN_MARKETPLACE_CANCEL', userId: entry.listing.sellerUserId, listingId, time: new Date().toISOString() });
+            sendJson(res, 200, { ok: true, listing: result.listing, stats: db.getMarketplaceStats() });
+        });
         return;
     }
 
@@ -2215,6 +2419,215 @@ const server = http.createServer((req, res) => {
             registry: publicNftRegistryView(entry.registry),
             claim: publicNftClaimView(entry.claim, req),
             config: nftPublicConfig(req)
+        });
+        return;
+    }
+
+    // ===== MERCADO INTERNO ENTRE JUGADORES (v106) =====
+    // Publicar retira el coche/pieza al escrow de SQLite; comprar transfiere
+    // el mismo objeto y liquida comprador/vendedor en la misma transacción.
+    // En coches se conserva toda la progresión. El starter queda vinculado a
+    // la cuenta y un NFT ya acuñado/enviado no se finge transferido off-chain.
+    if (pathname === '/api/marketplace/listings' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        const result = db.listMarketplaceListings(auth.userId, {
+            type: parsedUrl.searchParams.get('type') || 'all',
+            rarity: parsedUrl.searchParams.get('rarity') || '',
+            q: parsedUrl.searchParams.get('q') || '',
+            sort: parsedUrl.searchParams.get('sort') || 'newest',
+            limit: parsedUrl.searchParams.get('limit') || 50,
+            offset: parsedUrl.searchParams.get('offset') || 0
+        });
+        if (!FEATURES.marketplaceEnabled) {
+            // Pausar el mercado no debe atrapar activos ya depositados: se
+            // oculta el escaparate público, pero el propietario sigue viendo
+            // sus anuncios y puede retirarlos para recuperar el escrow.
+            const mine = Array.isArray(result.mine) ? result.mine : [];
+            sendJson(res, 200, {
+                ...result,
+                listings: [],
+                mine,
+                total: 0,
+                counts: {
+                    all: 0,
+                    cars: 0,
+                    parts: 0,
+                    mine: mine.filter(listing => listing.status === 'active').length
+                },
+                marketplacePaused: true,
+                recoveryOnly: true,
+                config: marketplacePublicConfig()
+            });
+            return;
+        }
+        sendJson(res, 200, { ...result, config: marketplacePublicConfig() });
+        return;
+    }
+
+    if (pathname === '/api/marketplace/trades' && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        // El historial propio sigue siendo consultable durante una pausa.
+        sendJson(res, 200, {
+            ok: true,
+            trades: db.listMarketplaceTradesForUser(auth.userId, parsedUrl.searchParams.get('limit') || 50),
+            marketplacePaused: !FEATURES.marketplaceEnabled,
+            config: marketplacePublicConfig()
+        });
+        return;
+    }
+
+    const marketplaceListingMatch = pathname.match(/^\/api\/marketplace\/listings\/(MKT-[0-9A-F]{12})$/);
+    if (marketplaceListingMatch && req.method === 'GET') {
+        const auth = requireKnownUser(req, res, parsedUrl.searchParams.get('userId') || '');
+        if (!auth) return;
+        const entry = db.getMarketplaceListingForUser(auth.userId, marketplaceListingMatch[1]);
+        if (!entry) { sendJson(res, 404, { ok: false, error: 'marketplace_listing_not_found' }); return; }
+        if (!FEATURES.marketplaceEnabled
+            && !(entry.listing && (entry.listing.sellerIsMe === true || entry.listing.isBuyer === true))) {
+            sendJson(res, 503, { ok: false, error: 'marketplace_disabled' });
+            return;
+        }
+        sendJson(res, 200, {
+            ok: true,
+            ...entry,
+            marketplacePaused: !FEATURES.marketplaceEnabled,
+            config: marketplacePublicConfig()
+        });
+        return;
+    }
+
+    if (pathname === '/api/marketplace/listings' && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            if (!FEATURES.marketplaceEnabled) { sendJson(res, 503, { ok: false, error: 'marketplace_disabled' }); return; }
+            const assetType = data.assetType === 'part' || data.type === 'part' ? 'part' : (data.assetType === 'car' || data.type === 'car' || data.instanceId ? 'car' : '');
+            if (!assetType) { sendJson(res, 422, { ok: false, error: 'invalid_marketplace_asset_type' }); return; }
+            const instanceId = typeof (data.instanceId || data.carInstanceId) === 'string'
+                && /^[A-Za-z0-9_.:-]{1,120}$/.test(data.instanceId || data.carInstanceId)
+                ? (data.instanceId || data.carInstanceId)
+                : '';
+            const partId = typeof data.partId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(data.partId) ? data.partId : '';
+            if (assetType === 'car' && !instanceId) { sendJson(res, 422, { ok: false, error: 'invalid_car_instance_id' }); return; }
+            if (assetType === 'part' && !partId) { sendJson(res, 422, { ok: false, error: 'invalid_part_id' }); return; }
+            if (assetType === 'car' && (userHasActiveRaceForCar(auth.userId, instanceId) || userIsInActiveRoom(auth.userId))) {
+                sendJson(res, 409, {
+                    ok: false,
+                    error: 'car_in_active_race_or_room',
+                    message: 'Termina o abandona la carrera/sala activa antes de poner este coche a la venta.'
+                });
+                return;
+            }
+            try {
+                const result = db.createMarketplaceListing(auth.userId, {
+                    assetType,
+                    instanceId,
+                    partId,
+                    quantity: data.quantity,
+                    priceCr: data.priceCr,
+                    durationDays: data.durationDays,
+                    idempotencyKey: data.idempotencyKey
+                });
+                if (!result.ok) {
+                    const status = result.error === 'car_not_found' ? 404
+                        : result.error === 'marketplace_listing_limit_reached' ? 429
+                        : ['marketplace_price_out_of_range', 'marketplace_price_too_low', 'invalid_part', 'car_not_transferable'].includes(result.error) ? 422
+                        : 409;
+                    sendJson(res, status, {
+                        ok: false,
+                        error: result.error || 'marketplace_listing_failed',
+                        registry: result.registry || undefined,
+                        economy: result.profile ? economyProfileResponse(result.profile) : undefined
+                    });
+                    return;
+                }
+                securityAuditLogs.push({
+                    event: 'MARKETPLACE_LISTING_CREATED_HTTP',
+                    userId: auth.userId,
+                    listingId: result.listing.id,
+                    assetType,
+                    priceCr: result.listing.priceCr,
+                    time: new Date().toISOString()
+                });
+                sendJson(res, 200, {
+                    ok: true,
+                    duplicate: result.duplicate === true,
+                    listing: result.listing,
+                    config: marketplacePublicConfig(),
+                    economy: economyProfileResponse(result.profile)
+                });
+            } catch (e) {
+                console.error('Error creando anuncio de mercado:', e);
+                sendJson(res, 500, { ok: false, error: 'marketplace_listing_failed' });
+            }
+        });
+        return;
+    }
+
+    const marketplaceActionMatch = pathname.match(/^\/api\/marketplace\/listings\/(MKT-[0-9A-F]{12})\/(buy|cancel)$/);
+    if (marketplaceActionMatch && req.method === 'POST') {
+        readJsonBody(req, res, 16 * 1024, (data) => {
+            const auth = requireKnownUser(req, res, data.userId, data);
+            if (!auth) return;
+            const listingId = marketplaceActionMatch[1];
+            const action = marketplaceActionMatch[2];
+            // En una pausa se bloquean nuevas liquidaciones, pero cancelar un
+            // anuncio propio debe seguir disponible para liberar el escrow.
+            if (action === 'buy' && !FEATURES.marketplaceEnabled) {
+                sendJson(res, 503, { ok: false, error: 'marketplace_disabled' });
+                return;
+            }
+            try {
+                if (action === 'cancel') {
+                    const result = db.cancelMarketplaceListing(auth.userId, listingId);
+                    if (!result.ok) {
+                        sendJson(res, result.error === 'marketplace_listing_not_found' ? 404 : 409, {
+                            ok: false,
+                            error: result.error || 'marketplace_cancel_failed',
+                            listing: result.listing || undefined,
+                            economy: result.profile ? economyProfileResponse(result.profile) : undefined
+                        });
+                        return;
+                    }
+                    sendJson(res, 200, {
+                        ok: true,
+                        duplicate: result.duplicate === true,
+                        listing: result.listing,
+                        marketplacePaused: !FEATURES.marketplaceEnabled,
+                        recoveryOnly: !FEATURES.marketplaceEnabled,
+                        config: marketplacePublicConfig(),
+                        economy: economyProfileResponse(result.profile)
+                    });
+                    return;
+                }
+                const result = db.buyMarketplaceListing(auth.userId, listingId);
+                if (!result.ok) {
+                    const status = result.error === 'marketplace_listing_not_found' ? 404
+                        : ['marketplace_price_invalid', 'marketplace_part_invalid', 'marketplace_car_invalid'].includes(result.error) ? 422
+                        : 409;
+                    sendJson(res, status, {
+                        ok: false,
+                        error: result.error || 'marketplace_purchase_failed',
+                        listing: result.listing || undefined,
+                        economy: result.buyerProfile ? economyProfileResponse(result.buyerProfile) : undefined
+                    });
+                    return;
+                }
+                if (!result.duplicate) notifyMarketplaceSeller(result.listing.sellerUserId, result);
+                sendJson(res, 200, {
+                    ok: true,
+                    duplicate: result.duplicate === true,
+                    listing: result.listing,
+                    trade: result.trade,
+                    config: marketplacePublicConfig(),
+                    economy: economyProfileResponse(result.buyerProfile)
+                });
+            } catch (e) {
+                console.error('Error en acción de mercado:', e);
+                sendJson(res, 500, { ok: false, error: action === 'buy' ? 'marketplace_purchase_failed' : 'marketplace_cancel_failed' });
+            }
         });
         return;
     }
@@ -3040,6 +3453,16 @@ const server = http.createServer((req, res) => {
         }
 
         if (req.method === 'DELETE') {
+            const activeMarketplaceListings = db.countActiveMarketplaceListingsForUser(saveId);
+            if (activeMarketplaceListings > 0) {
+                sendJson(res, 409, {
+                    ok: false,
+                    error: 'active_marketplace_listings',
+                    message: 'Retira primero tus anuncios activos del mercado antes de restablecer la cuenta.',
+                    activeMarketplaceListings
+                });
+                return;
+            }
             const existed = db.deletePlayerSave(saveId);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true, deleted: existed }));
@@ -3163,6 +3586,12 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📡 URL IPv4:  http://127.0.0.1:${PORT}`);
     console.log(`💾 Base SQLite y guardados en: ${db.DB_FILE}`);
     try { console.log('🗄️ Estado BD:', db.getDatabaseHealth()); } catch (e) {}
+    try {
+        const readiness = launchReadiness();
+        if (readiness.blockers.length) console.warn('⚠️ Launch blockers:', readiness.blockers.join(', '));
+        if (readiness.warnings.length) console.warn('ℹ️ Launch warnings:', readiness.warnings.join(', '));
+        if (!readiness.blockers.length && !readiness.warnings.length) console.log('✅ Launch readiness: sin bloqueos detectados');
+    } catch (e) {}
     scheduleDatabaseBackups();
     console.log(`=======================================================`);
 

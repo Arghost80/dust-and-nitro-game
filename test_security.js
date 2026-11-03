@@ -153,7 +153,7 @@ function removeIfExists(file) {
 
         // Salud y cabeceras
         let result = await requestJson(base, '/healthz');
-        check(result.status === 200 && result.data.ok === true && result.data.version === '1.0.5', '/healthz responde sin exponer datos internos', result.data);
+        check(result.status === 200 && result.data.ok === true && result.data.version === '1.0.6', '/healthz responde sin exponer datos internos', result.data);
         check(String(result.headers.get('cache-control') || '').includes('no-store'), '/healthz usa Cache-Control: no-store');
         const head = await rawRequest(34672, { method: 'HEAD', path: '/healthz' });
         check(head.status === 200 && head.body === '', 'HEAD /healthz funciona para el health check');

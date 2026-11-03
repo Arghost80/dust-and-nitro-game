@@ -437,10 +437,21 @@ function applyAction(garage, action, args = {}) {
     return runAction(garage, action, args);
 }
 
+let cachedWorkshopPartsCatalog = null;
+
+function getWorkshopPartsCatalog() {
+    if (cachedWorkshopPartsCatalog) return cloneJson(cachedWorkshopPartsCatalog, {});
+    const { context } = createEconomyContext(null, {});
+    const raw = vm.runInContext('JSON.stringify(WORKSHOP_PIECES_CATALOG)', context, { timeout: 1000 });
+    cachedWorkshopPartsCatalog = JSON.parse(String(raw || '{}'));
+    return cloneJson(cachedWorkshopPartsCatalog, {});
+}
+
 module.exports = {
     createDefaultGarage,
     runAction,
     applyAction,
+    getWorkshopPartsCatalog,
     SHOP_COMPONENTS,
     SUPPORTED_ACTIONS: [...Object.keys(ACTION_EXPRESSIONS), 'buy_shop_component']
 };

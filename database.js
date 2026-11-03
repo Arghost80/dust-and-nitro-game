@@ -16,7 +16,7 @@ const path = require('path');
 const crypto = require('crypto');
 const SqliteDatabase = require('better-sqlite3');
 
-const SCHEMA_VERSION = 105;
+const SCHEMA_VERSION = 106;
 const DATA_DIR = process.env.DATA_DIR || process.env.DB_DIR || __dirname;
 const EXPLICIT_DB_FILE = process.env.DB_FILE ? path.resolve(process.env.DB_FILE) : null;
 const DB_FILE = EXPLICIT_DB_FILE || path.join(DATA_DIR, 'game_database.sqlite');
@@ -39,6 +39,25 @@ const TEAM_BOOTSTRAP_ACCOUNT_IDS = new Set(
 function isTeamBootstrapAccount(userId) {
     return TEAM_BOOTSTRAP_ACCOUNT_IDS.has(String(userId || ''));
 }
+
+function boundedIntEnv(name, fallback, min, max) {
+    const value = Math.floor(Number(process.env[name]));
+    return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+}
+
+// Mercado interno autoritativo (v106). La comisión histórica del cliente era
+// 7,5 % y ahora queda fijada en servidor: el comprador paga el precio íntegro,
+// el vendedor recibe el neto y la diferencia sale de circulación registrada
+// como plataforma/quema/pool en la fila de la operación.
+const MARKETPLACE_CONFIG = Object.freeze({
+    feeBps: boundedIntEnv('MARKETPLACE_FEE_BPS', 750, 0, 3000),
+    minCarPriceCr: boundedIntEnv('MARKETPLACE_MIN_CAR_PRICE_CR', 50, 1, 1000000),
+    minPartPriceCr: boundedIntEnv('MARKETPLACE_MIN_PART_PRICE_CR', 10, 1, 1000000),
+    maxPriceCr: boundedIntEnv('MARKETPLACE_MAX_PRICE_CR', 10000000, 1000, 1000000000),
+    maxActiveListingsPerUser: boundedIntEnv('MARKETPLACE_MAX_ACTIVE_LISTINGS', 20, 1, 100),
+    defaultListingDays: boundedIntEnv('MARKETPLACE_LISTING_DAYS', 30, 1, 90),
+    maxPartQuantity: boundedIntEnv('MARKETPLACE_MAX_PART_QUANTITY', 999, 1, 10000)
+});
 
 const DEFAULT_CARS_CATALOG = [
     { id: 'v8_interceptor', name: 'INTERCEPTOR V8', price: 0, speed: 380, handling: 4.8, accel: 320, color: '#e63946', unlocked: true },
@@ -330,6 +349,76 @@ function createSchema(db) {
         );
         CREATE INDEX IF NOT EXISTS idx_nft_mint_claims_owner
             ON nft_mint_claims(owner_user_id, status, created_at DESC);
+        CREATE TABLE IF NOT EXISTS marketplace_listings (
+            listing_id TEXT PRIMARY KEY,
+            seller_user_id TEXT NOT NULL,
+            seller_pilot_name TEXT NOT NULL DEFAULT '',
+            asset_type TEXT NOT NULL CHECK(asset_type IN ('car', 'part')),
+            car_instance_id TEXT,
+            registry_serial INTEGER REFERENCES nft_car_registry(serial),
+            part_id TEXT,
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
+            price_cr INTEGER NOT NULL CHECK(price_cr > 0),
+            status TEXT NOT NULL DEFAULT 'active',
+            asset_json TEXT NOT NULL,
+            public_snapshot_json TEXT NOT NULL DEFAULT '{}',
+            idempotency_key TEXT,
+            buyer_user_id TEXT,
+            gross_cr INTEGER,
+            fee_bps INTEGER,
+            fee_cr INTEGER,
+            platform_fee_cr INTEGER,
+            burn_fee_cr INTEGER,
+            rewards_fee_cr INTEGER,
+            seller_net_cr INTEGER,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            sold_at TEXT,
+            cancelled_at TEXT,
+            cancel_reason TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_status_created
+            ON marketplace_listings(status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_seller_status
+            ON marketplace_listings(seller_user_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_buyer_status
+            ON marketplace_listings(buyer_user_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_expiry
+            ON marketplace_listings(status, expires_at ASC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_seller_idempotency
+            ON marketplace_listings(seller_user_id, idempotency_key)
+            WHERE idempotency_key IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_active_car_instance
+            ON marketplace_listings(seller_user_id, car_instance_id)
+            WHERE status = 'active' AND asset_type = 'car' AND car_instance_id IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_active_registry
+            ON marketplace_listings(registry_serial)
+            WHERE status = 'active' AND registry_serial IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS marketplace_trades (
+            trade_id TEXT PRIMARY KEY,
+            listing_id TEXT NOT NULL UNIQUE REFERENCES marketplace_listings(listing_id),
+            seller_user_id TEXT NOT NULL,
+            buyer_user_id TEXT NOT NULL,
+            asset_type TEXT NOT NULL CHECK(asset_type IN ('car', 'part')),
+            registry_serial INTEGER REFERENCES nft_car_registry(serial),
+            source_car_instance_id TEXT,
+            delivered_car_instance_id TEXT,
+            part_id TEXT,
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
+            gross_cr INTEGER NOT NULL,
+            fee_cr INTEGER NOT NULL,
+            platform_fee_cr INTEGER NOT NULL,
+            burn_fee_cr INTEGER NOT NULL,
+            rewards_fee_cr INTEGER NOT NULL,
+            seller_net_cr INTEGER NOT NULL,
+            asset_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_marketplace_trades_seller
+            ON marketplace_trades(seller_user_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_marketplace_trades_buyer
+            ON marketplace_trades(buyer_user_id, created_at DESC);
         CREATE TABLE IF NOT EXISTS leaderboard_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
@@ -421,6 +510,34 @@ function prepareStatements(db) {
         insertNftMintClaim: db.prepare('INSERT INTO nft_mint_claims(claim_id, registry_serial, owner_user_id, car_instance_id, status, network, metadata_hash, snapshot_json, claim_nonce_hash, created_at, updated_at) VALUES (?, ?, ?, ?, \'prepared\', ?, ?, ?, ?, ?, ?)'),
         updateNftMintClaimPreparation: db.prepare('UPDATE nft_mint_claims SET owner_user_id = ?, car_instance_id = ?, status = \'prepared\', network = ?, metadata_hash = ?, snapshot_json = ?, claim_nonce_hash = ?, updated_at = ? WHERE registry_serial = ?'),
         updateNftMintClaimStatus: db.prepare('UPDATE nft_mint_claims SET status = ?, updated_at = ? WHERE claim_id = ?'),
+        transferNftRegistryOwner: db.prepare('UPDATE nft_car_registry SET owner_user_id = ?, car_instance_id = ?, updated_at = ? WHERE serial = ? AND owner_user_id = ?'),
+        transferNftMintClaimOwner: db.prepare('UPDATE nft_mint_claims SET owner_user_id = ?, car_instance_id = ?, wallet_address = NULL, wallet_verified_at = NULL, snapshot_json = ?, claim_nonce_hash = ?, updated_at = ? WHERE registry_serial = ?'),
+        insertMarketplaceListing: db.prepare(`INSERT INTO marketplace_listings(
+            listing_id, seller_user_id, seller_pilot_name, asset_type, car_instance_id,
+            registry_serial, part_id, quantity, price_cr, status, asset_json,
+            public_snapshot_json, idempotency_key, gross_cr, fee_bps, fee_cr,
+            platform_fee_cr, burn_fee_cr, rewards_fee_cr, seller_net_cr,
+            created_at, expires_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+        getMarketplaceListing: db.prepare('SELECT * FROM marketplace_listings WHERE listing_id = ?'),
+        getMarketplaceListingByIdempotency: db.prepare('SELECT * FROM marketplace_listings WHERE seller_user_id = ? AND idempotency_key = ?'),
+        getActiveMarketplaceListingBySellerCar: db.prepare("SELECT * FROM marketplace_listings WHERE seller_user_id = ? AND car_instance_id = ? AND status = 'active'"),
+        getActiveMarketplaceListingBySerial: db.prepare("SELECT * FROM marketplace_listings WHERE registry_serial = ? AND status = 'active'"),
+        countActiveMarketplaceListingsBySeller: db.prepare("SELECT COUNT(*) AS count FROM marketplace_listings WHERE seller_user_id = ? AND status = 'active'"),
+        listActiveMarketplaceListings: db.prepare("SELECT * FROM marketplace_listings WHERE status = 'active' ORDER BY created_at DESC LIMIT ? OFFSET ?"),
+        listMarketplaceListingsBySeller: db.prepare('SELECT * FROM marketplace_listings WHERE seller_user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'),
+        listExpiredMarketplaceListings: db.prepare("SELECT * FROM marketplace_listings WHERE status = 'active' AND expires_at <= ? ORDER BY expires_at ASC LIMIT ?"),
+        markMarketplaceListingCancelled: db.prepare("UPDATE marketplace_listings SET status = ?, cancelled_at = ?, cancel_reason = ?, updated_at = ? WHERE listing_id = ? AND status = 'active'"),
+        markMarketplaceListingSold: db.prepare(`UPDATE marketplace_listings SET status = 'sold', buyer_user_id = ?, gross_cr = ?,
+            fee_cr = ?, platform_fee_cr = ?, burn_fee_cr = ?, rewards_fee_cr = ?, seller_net_cr = ?,
+            sold_at = ?, updated_at = ? WHERE listing_id = ? AND status = 'active'`),
+        insertMarketplaceTrade: db.prepare(`INSERT INTO marketplace_trades(
+            trade_id, listing_id, seller_user_id, buyer_user_id, asset_type, registry_serial,
+            source_car_instance_id, delivered_car_instance_id, part_id, quantity, gross_cr,
+            fee_cr, platform_fee_cr, burn_fee_cr, rewards_fee_cr, seller_net_cr, asset_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+        getMarketplaceTradeByListing: db.prepare('SELECT * FROM marketplace_trades WHERE listing_id = ?'),
+        listMarketplaceTradesByUser: db.prepare('SELECT * FROM marketplace_trades WHERE seller_user_id = ? OR buyer_user_id = ? ORDER BY created_at DESC LIMIT ?'),
         getLeaderboardEntry: db.prepare('SELECT * FROM leaderboard_entries WHERE user_id = ? AND track_id = ?'),
         insertLeaderboardEntry: db.prepare('INSERT INTO leaderboard_entries(user_id, username, track_id, track_name, time_seconds, car_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
         updateLeaderboardEntry: db.prepare('UPDATE leaderboard_entries SET username = ?, track_name = ?, time_seconds = ?, car_name = ?, updated_at = ? WHERE user_id = ? AND track_id = ?'),
@@ -678,6 +795,8 @@ function getDatabaseHealth() {
         processedPaymentCharges: count('processed_payment_charges'),
         nftRegisteredCars: count('nft_car_registry'),
         nftMintClaims: count('nft_mint_claims'),
+        marketplaceListings: count('marketplace_listings'),
+        marketplaceTrades: count('marketplace_trades'),
         leaderboardEntries: count('leaderboard_entries')
     };
 }
@@ -1255,6 +1374,831 @@ function getPublicNftRegistryEntry(serial) {
     };
 }
 
+// ===== MERCADO INTERNO ENTRE JUGADORES (v106) =====
+// Publicar mueve el activo fuera del garaje/inventario a una fila de escrow.
+// Así no puede correr, mejorarse ni venderse dos veces mientras el anuncio
+// está activo. Comprar transfiere exactamente ese objeto: en un coche se
+// conservan instancia, serie/índice NFT, nivel, XP, energía, ramas de piezas,
+// hitos, color y estadísticas. Un coche ya acuñado o con la acuñación enviada
+// no se liquida aquí fingiendo un traspaso de wallet: requiere la
+// transferencia/indexación on-chain que se añadirá con el mint real.
+function marketplacePartDefinition(partId) {
+    try {
+        const economyEngine = require('./economy_engine');
+        if (typeof economyEngine.getWorkshopPartsCatalog === 'function') {
+            return economyEngine.getWorkshopPartsCatalog()[String(partId || '')] || null;
+        }
+    } catch (e) {}
+    return null;
+}
+
+function marketplaceFeeBreakdown(priceCr) {
+    const price = Math.max(0, Math.floor(Number(priceCr) || 0));
+    const feeCr = Math.floor((price * MARKETPLACE_CONFIG.feeBps + 5000) / 10000);
+    const platformFeeCr = Math.floor(feeCr / 3);
+    const burnFeeCr = Math.floor(feeCr / 3);
+    const rewardsFeeCr = Math.max(0, feeCr - platformFeeCr - burnFeeCr);
+    return {
+        priceCr: price,
+        grossCr: price,
+        feeBps: MARKETPLACE_CONFIG.feeBps,
+        feeCr,
+        platformFeeCr,
+        burnFeeCr,
+        rewardsFeeCr,
+        sellerNetCr: price - feeCr
+    };
+}
+
+function publicMarketplaceRegistry(registry) {
+    if (!registry) return null;
+    return {
+        serial: registry.serial,
+        registryId: registry.registryId,
+        status: registry.status,
+        chainNetwork: registry.chainNetwork,
+        collectionAddress: registry.collectionAddress,
+        nftItemAddress: registry.nftItemAddress,
+        nftIndex: registry.nftIndex,
+        metadataHash: registry.metadataHash,
+        snapshot: registry.snapshot
+    };
+}
+
+function marketplaceListingFromRow(row, viewerUserId = '', options = {}) {
+    if (!row) return null;
+    const viewer = String(viewerUserId || '');
+    const isSeller = viewer !== '' && viewer === String(row.seller_user_id || '');
+    const isBuyer = viewer !== '' && viewer === String(row.buyer_user_id || '');
+    const asset = parseJsonColumn(row.asset_json, null);
+    const snapshot = parseJsonColumn(row.public_snapshot_json, {});
+    const registry = row.registry_serial != null
+        ? publicMarketplaceRegistry(nftRegistryFromRow(statements.getNftRegistryBySerial.get(Number(row.registry_serial))))
+        : null;
+    const fees = marketplaceFeeBreakdown(row.price_cr);
+    const listing = {
+        id: row.listing_id,
+        listingId: row.listing_id,
+        type: row.asset_type,
+        assetType: row.asset_type,
+        status: row.status,
+        seller: cleanDbText(row.seller_pilot_name, 60, 'Piloto Apex'),
+        sellerPilotName: cleanDbText(row.seller_pilot_name, 60, 'Piloto Apex'),
+        sellerIsMe: isSeller,
+        isSeller,
+        isBuyer,
+        priceCr: Math.floor(Number(row.price_cr) || 0),
+        feeBps: row.fee_bps == null ? MARKETPLACE_CONFIG.feeBps : Math.floor(Number(row.fee_bps) || 0),
+        feeCr: row.fee_cr == null ? fees.feeCr : Math.floor(Number(row.fee_cr) || 0),
+        platformFeeCr: row.platform_fee_cr == null ? fees.platformFeeCr : Math.floor(Number(row.platform_fee_cr) || 0),
+        burnFeeCr: row.burn_fee_cr == null ? fees.burnFeeCr : Math.floor(Number(row.burn_fee_cr) || 0),
+        rewardsFeeCr: row.rewards_fee_cr == null ? fees.rewardsFeeCr : Math.floor(Number(row.rewards_fee_cr) || 0),
+        sellerNetCr: row.seller_net_cr == null ? fees.sellerNetCr : Math.floor(Number(row.seller_net_cr) || 0),
+        quantity: Math.max(1, Math.floor(Number(row.quantity) || 1)),
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        updatedAt: row.updated_at,
+        soldAt: row.sold_at || null,
+        cancelledAt: row.cancelled_at || null,
+        registry,
+        snapshot
+    };
+    if (row.asset_type === 'car') {
+        listing.car = isPlainObject(asset) ? asset : null;
+        listing.carData = listing.car;
+        listing.carInstanceId = row.car_instance_id || (listing.car && listing.car.instanceId) || null;
+        listing.name = cleanDbText(snapshot.name || (listing.car && listing.car.name), 100, 'Coche Apex');
+        listing.icon = '🏎️';
+        listing.category = registry && registry.status === 'minted' ? 'Vehículo NFT TON' : 'Vehículo registrado';
+        listing.rarity = cleanDbText(snapshot.rarity || (listing.car && listing.car.rarity), 30, 'common').toLowerCase();
+    } else {
+        listing.partId = row.part_id || (asset && asset.partId) || null;
+        listing.part = snapshot || null;
+        listing.name = cleanDbText(snapshot.name, 100, listing.partId || 'Pieza');
+        listing.icon = cleanDbText(snapshot.icon, 12, '🔧') || '🔧';
+        listing.category = cleanDbText(snapshot.category, 80, 'Pieza');
+        listing.rarity = cleanDbText(snapshot.rarity, 30, 'common').toLowerCase();
+    }
+    if (isSeller || isBuyer || options.includeAccountIds === true) {
+        listing.sellerUserId = String(row.seller_user_id || '');
+        listing.buyerUserId = row.buyer_user_id ? String(row.buyer_user_id) : null;
+    }
+    return listing;
+}
+
+function marketplaceTradeFromRow(row, viewerUserId = '') {
+    if (!row) return null;
+    const viewer = String(viewerUserId || '');
+    const isParty = viewer === String(row.seller_user_id || '') || viewer === String(row.buyer_user_id || '');
+    return {
+        tradeId: row.trade_id,
+        listingId: row.listing_id,
+        assetType: row.asset_type,
+        registrySerial: row.registry_serial == null ? null : Number(row.registry_serial),
+        sourceCarInstanceId: isParty ? (row.source_car_instance_id || null) : undefined,
+        deliveredCarInstanceId: isParty ? (row.delivered_car_instance_id || null) : undefined,
+        partId: row.part_id || null,
+        quantity: Math.max(1, Math.floor(Number(row.quantity) || 1)),
+        grossCr: Math.floor(Number(row.gross_cr) || 0),
+        feeCr: Math.floor(Number(row.fee_cr) || 0),
+        platformFeeCr: Math.floor(Number(row.platform_fee_cr) || 0),
+        burnFeeCr: Math.floor(Number(row.burn_fee_cr) || 0),
+        rewardsFeeCr: Math.floor(Number(row.rewards_fee_cr) || 0),
+        sellerNetCr: Math.floor(Number(row.seller_net_cr) || 0),
+        sellerIsMe: viewer === String(row.seller_user_id || ''),
+        buyerIsMe: viewer === String(row.buyer_user_id || ''),
+        createdAt: row.created_at
+    };
+}
+
+function findAvailableCarInstanceId(ownerUserId, garage, seed) {
+    const owner = String(ownerUserId || '');
+    const cars = garage && Array.isArray(garage.garage) ? garage.garage : [];
+    const base = String(seed || 'marketplace_car').replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 72) || 'marketplace_car';
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const candidate = `${base}_mkt_${crypto.randomBytes(5).toString('hex')}`.slice(0, 120);
+        if (cars.some(car => car && car.instanceId === candidate)) continue;
+        if (statements.getNftRegistryByOwnerInstance.get(owner, candidate)) continue;
+        return candidate;
+    }
+    throw new Error('marketplace_instance_collision');
+}
+
+function transferRegistryAndClaimInstanceWithin(serial, fromOwnerUserId, toOwnerUserId, newInstanceId, car) {
+    const safeSerial = Math.floor(Number(serial) || 0);
+    if (!safeSerial) return null;
+    const changed = statements.transferNftRegistryOwner.run(
+        String(toOwnerUserId),
+        String(newInstanceId),
+        nowIso(),
+        safeSerial,
+        String(fromOwnerUserId)
+    );
+    if (!changed || changed.changes !== 1) throw new Error('nft_registry_transfer_conflict');
+    const registry = nftRegistryFromRow(statements.getNftRegistryBySerial.get(safeSerial));
+    const claim = nftMintClaimFromRow(statements.getNftMintClaimBySerial.get(safeSerial));
+    if (claim) {
+        const snapshot = isPlainObject(claim.snapshot) ? cloneJson(claim.snapshot, {}) : {};
+        snapshot.progressionAtLastTransfer = nftProgressionSnapshot(car);
+        snapshot.lastTransferredAt = nowIso();
+        const nonceHash = crypto.createHash('sha256')
+            .update(`apex-nft-claim-transfer-v1:${safeSerial}:${crypto.randomBytes(32).toString('hex')}`)
+            .digest('hex');
+        statements.transferNftMintClaimOwner.run(
+            String(toOwnerUserId),
+            String(newInstanceId),
+            JSON.stringify(snapshot),
+            nonceHash,
+            nowIso(),
+            safeSerial
+        );
+    }
+    if (car) patchCarWithNftRegistry(car, registry);
+    return {
+        registry,
+        claim: nftMintClaimFromRow(statements.getNftMintClaimBySerial.get(safeSerial))
+    };
+}
+
+function returnMarketplaceAssetWithin(listingRow, garage, ownerUserId) {
+    const owner = String(ownerUserId || '');
+    const asset = parseJsonColumn(listingRow.asset_json, null);
+    if (!isPlainObject(asset)) throw new Error('marketplace_asset_missing');
+    if (listingRow.asset_type === 'part') {
+        const partId = String(listingRow.part_id || asset.partId || '');
+        const quantity = Math.max(1, Math.floor(Number(listingRow.quantity) || 1));
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(partId)) throw new Error('marketplace_part_invalid');
+        if (!isPlainObject(garage.partsInventory)) garage.partsInventory = {};
+        garage.partsInventory[partId] = Math.max(0, Math.floor(Number(garage.partsInventory[partId]) || 0)) + quantity;
+        return { asset: { partId, quantity }, deliveredInstanceId: null, remappedInstanceId: false };
+    }
+    const car = cloneJson(asset, null);
+    if (!car || typeof car.instanceId !== 'string') throw new Error('marketplace_car_invalid');
+    const originalInstanceId = String(car.instanceId);
+    let deliveredInstanceId = originalInstanceId;
+    const collidesInGarage = garage.garage.some(entry => entry && entry.instanceId === deliveredInstanceId);
+    const registryRow = listingRow.registry_serial == null
+        ? null
+        : statements.getNftRegistryBySerial.get(Number(listingRow.registry_serial));
+    const collidesInRegistry = Boolean(
+        statements.getNftRegistryByOwnerInstance.get(owner, deliveredInstanceId)
+        && (!registryRow || Number(statements.getNftRegistryByOwnerInstance.get(owner, deliveredInstanceId).serial) !== Number(registryRow.serial))
+    );
+    if (collidesInGarage || collidesInRegistry) {
+        deliveredInstanceId = findAvailableCarInstanceId(owner, garage, originalInstanceId);
+        car.instanceId = deliveredInstanceId;
+    }
+    garage.garage.push(car);
+    if (registryRow && (deliveredInstanceId !== originalInstanceId || String(registryRow.owner_user_id) !== owner)) {
+        transferRegistryAndClaimInstanceWithin(
+            Number(registryRow.serial),
+            String(registryRow.owner_user_id),
+            owner,
+            deliveredInstanceId,
+            car
+        );
+    } else if (registryRow) {
+        patchCarWithNftRegistry(car, nftRegistryFromRow(registryRow));
+    }
+    if (!garage.equippedInstanceId || !garage.garage.some(entry => entry && entry.instanceId === garage.equippedInstanceId)) {
+        garage.equippedInstanceId = garage.garage[0].instanceId;
+    }
+    return { asset: car, deliveredInstanceId, remappedInstanceId: deliveredInstanceId !== originalInstanceId };
+}
+
+function settleExpiredMarketplaceListingsWithin(limit = 100, nowMs = Date.now()) {
+    const safeLimit = Math.max(1, Math.min(500, Math.floor(Number(limit) || 100)));
+    const rows = statements.listExpiredMarketplaceListings.all(nowIso(nowMs), safeLimit);
+    const settled = [];
+    for (const row of rows) {
+        const sellerId = String(row.seller_user_id || '');
+        try {
+            // Savepoint por anuncio: un activo corrupto no puede dejar a medias
+            // la devolución ni bloquear la caducidad de los demás.
+            sqlite.transaction(() => {
+                const before = ensureEconomyProfileWithin(sellerId);
+                const garage = cloneJson(before.garage);
+                const returned = returnMarketplaceAssetWithin(row, garage, sellerId);
+                if (!validateGarageShape(garage)) throw new Error('marketplace_expiry_invalid_garage');
+                const changed = statements.markMarketplaceListingCancelled.run('expired', nowIso(nowMs), 'expired', nowIso(nowMs), row.listing_id);
+                if (!changed || changed.changes !== 1) throw new Error('marketplace_listing_not_active');
+                const profile = persistEconomyGarageWithin(sellerId, garage);
+                insertLedgerWithin(sellerId, 'marketplace_listing_expired', `marketplace-expire:${row.listing_id}`, before.garage, profile.garage, {
+                    listingId: row.listing_id,
+                    assetType: row.asset_type,
+                    deliveredInstanceId: returned.deliveredInstanceId || undefined
+                });
+                recordAuditEvent(sellerId, 'MARKETPLACE_LISTING_EXPIRED_RETURNED', {
+                    listingId: row.listing_id,
+                    assetType: row.asset_type,
+                    registrySerial: row.registry_serial || undefined
+                });
+            })();
+            settled.push(row.listing_id);
+        } catch (e) {
+            try {
+                statements.markMarketplaceListingCancelled.run('expired_unreturned', nowIso(nowMs), String(e.message || e).slice(0, 120), nowIso(nowMs), row.listing_id);
+            } catch (ignored) {}
+            recordAuditEvent(sellerId || null, 'MARKETPLACE_LISTING_EXPIRY_FAILED', {
+                listingId: row.listing_id,
+                error: String(e.message || e).slice(0, 200)
+            });
+        }
+    }
+    return settled;
+}
+
+function createMarketplaceListingWithin(sellerUserId, input = {}) {
+    settleExpiredMarketplaceListingsWithin(25);
+    const sellerId = String(sellerUserId || '');
+    const before = ensureEconomyProfileWithin(sellerId);
+    const idempotencyKey = typeof input.idempotencyKey === 'string' && /^[A-Za-z0-9_.:-]{8,180}$/.test(input.idempotencyKey)
+        ? input.idempotencyKey
+        : null;
+    if (idempotencyKey) {
+        const existing = statements.getMarketplaceListingByIdempotency.get(sellerId, idempotencyKey);
+        if (existing) {
+            return {
+                ok: true,
+                duplicate: true,
+                listing: marketplaceListingFromRow(existing, sellerId),
+                profile: before
+            };
+        }
+    }
+    const activeCount = Number(statements.countActiveMarketplaceListingsBySeller.get(sellerId).count || 0);
+    if (activeCount >= MARKETPLACE_CONFIG.maxActiveListingsPerUser) {
+        return { ok: false, error: 'marketplace_listing_limit_reached', profile: before };
+    }
+    const assetType = input.assetType === 'part' || input.type === 'part' ? 'part' : 'car';
+    const priceCr = Math.floor(Number(input.priceCr) || 0);
+    const minimum = assetType === 'car' ? MARKETPLACE_CONFIG.minCarPriceCr : MARKETPLACE_CONFIG.minPartPriceCr;
+    if (!Number.isFinite(priceCr) || priceCr < minimum || priceCr > MARKETPLACE_CONFIG.maxPriceCr) {
+        return { ok: false, error: 'marketplace_price_out_of_range', profile: before };
+    }
+    const quotedFees = marketplaceFeeBreakdown(priceCr);
+    if (quotedFees.sellerNetCr <= 0) {
+        return { ok: false, error: 'marketplace_price_too_low', profile: before };
+    }
+    const durationDays = Math.max(1, Math.min(90, Math.floor(Number(input.durationDays) || MARKETPLACE_CONFIG.defaultListingDays)));
+    const nowMs = Date.now();
+    const expiresAtMs = nowMs + durationDays * 24 * 60 * 60 * 1000;
+    const garage = cloneJson(before.garage);
+    const sellerPilotName = cleanDbText(garage.pilotName, 60, 'Piloto Apex');
+
+    let carInstanceId = null;
+    let registrySerial = null;
+    let partId = null;
+    let quantity = 1;
+    let asset = null;
+    let publicSnapshot = {};
+
+    if (assetType === 'car') {
+        registerEligibleCarsWithin(sellerId, garage, 'marketplace_listing');
+        carInstanceId = typeof (input.instanceId || input.carInstanceId) === 'string'
+            ? String(input.instanceId || input.carInstanceId)
+            : '';
+        const carIndex = garage.garage.findIndex(car => car && car.instanceId === carInstanceId);
+        if (carIndex < 0) return { ok: false, error: 'car_not_found', profile: before };
+        const car = garage.garage[carIndex];
+        if (!isNftEligibleCar(car)) return { ok: false, error: 'car_not_transferable', profile: before };
+        if (garage.garage.length <= 1) return { ok: false, error: 'must_keep_one_car', profile: before };
+        const registry = nftRegistryFromRow(statements.getNftRegistryByOwnerInstance.get(sellerId, carInstanceId));
+        if (!registry) return { ok: false, error: 'nft_registry_missing', profile: before };
+        registrySerial = registry.serial;
+        const claim = nftMintClaimFromRow(statements.getNftMintClaimBySerial.get(registry.serial));
+        if (['minted', 'mint_pending', 'mint_submitted', 'submitted'].includes(registry.status)
+            || (claim && ['submitted', 'minted'].includes(claim.status))) {
+            return {
+                ok: false,
+                error: 'minted_nft_requires_onchain_transfer',
+                registry: publicMarketplaceRegistry(registry),
+                profile: before
+            };
+        }
+        if (statements.getActiveMarketplaceListingBySellerCar.get(sellerId, carInstanceId)
+            || statements.getActiveMarketplaceListingBySerial.get(registry.serial)) {
+            return { ok: false, error: 'car_already_listed', profile: before };
+        }
+        patchCarWithNftRegistry(car, registry);
+        asset = cloneJson(car, null);
+        publicSnapshot = {
+            ...createNftCarSnapshot(car, 'marketplace_listing'),
+            progression: {
+                ...nftProgressionSnapshot(car),
+                xpNeeded: Math.max(0, Math.floor(Number(car.xpNeeded) || 0)),
+                claimedMilestones: Array.isArray(car.claimedMilestones) ? cloneJson(car.claimedMilestones, []) : [],
+                milestoneStats: isPlainObject(car.milestoneStats) ? cloneJson(car.milestoneStats, {}) : {}
+            },
+            registryStatus: registry.status,
+            registryId: registry.registryId,
+            serial: registry.serial
+        };
+        garage.garage.splice(carIndex, 1);
+        if (garage.equippedInstanceId === carInstanceId) {
+            const starter = garage.garage.find(entry => entry && (entry.rarity === 'starter' || entry.instanceId === 'inst_starter_01'));
+            garage.equippedInstanceId = (starter || garage.garage[0]).instanceId;
+        }
+    } else {
+        partId = typeof input.partId === 'string' ? input.partId.trim() : '';
+        quantity = Math.max(1, Math.min(MARKETPLACE_CONFIG.maxPartQuantity, Math.floor(Number(input.quantity) || 1)));
+        const definition = marketplacePartDefinition(partId);
+        if (!definition || !/^[A-Za-z0-9_-]{1,80}$/.test(partId)) {
+            return { ok: false, error: 'invalid_part', profile: before };
+        }
+        if (!isPlainObject(garage.partsInventory)) garage.partsInventory = {};
+        const available = Math.max(0, Math.floor(Number(garage.partsInventory[partId]) || 0));
+        if (available < quantity) return { ok: false, error: 'part_not_enough', profile: before };
+        garage.partsInventory[partId] = available - quantity;
+        asset = { partId, quantity };
+        publicSnapshot = {
+            partId,
+            name: cleanDbText(definition.name, 100, partId),
+            icon: cleanDbText(definition.icon, 12, '🔧') || '🔧',
+            category: cleanDbText(definition.category, 80, 'Pieza'),
+            rarity: cleanDbText(definition.rarity, 30, 'common').toLowerCase(),
+            desc: cleanDbText(definition.desc, 240)
+        };
+    }
+
+    if (!asset || !validateGarageShape(garage)) {
+        return { ok: false, error: 'marketplace_asset_invalid', profile: before };
+    }
+
+    let listingId = null;
+    for (let attempt = 0; attempt < 5 && !listingId; attempt++) {
+        const candidate = `MKT-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+        if (!statements.getMarketplaceListing.get(candidate)) listingId = candidate;
+    }
+    if (!listingId) return { ok: false, error: 'marketplace_listing_id_failed', profile: before };
+
+    statements.insertMarketplaceListing.run(
+        listingId,
+        sellerId,
+        sellerPilotName,
+        assetType,
+        carInstanceId,
+        registrySerial,
+        partId,
+        quantity,
+        priceCr,
+        JSON.stringify(asset),
+        JSON.stringify(publicSnapshot),
+        idempotencyKey,
+        quotedFees.grossCr,
+        quotedFees.feeBps,
+        quotedFees.feeCr,
+        quotedFees.platformFeeCr,
+        quotedFees.burnFeeCr,
+        quotedFees.rewardsFeeCr,
+        quotedFees.sellerNetCr,
+        nowIso(nowMs),
+        nowIso(expiresAtMs),
+        nowIso(nowMs)
+    );
+    const profile = persistEconomyGarageWithin(sellerId, garage);
+    insertLedgerWithin(sellerId, 'marketplace_listing_created', `marketplace-list:${listingId}`, before.garage, profile.garage, {
+        listingId,
+        assetType,
+        carInstanceId: carInstanceId || undefined,
+        registrySerial: registrySerial || undefined,
+        partId: partId || undefined,
+        quantity,
+        priceCr,
+        expiresAt: nowIso(expiresAtMs)
+    });
+    recordAuditEvent(sellerId, 'MARKETPLACE_LISTING_CREATED', {
+        listingId,
+        assetType,
+        registrySerial: registrySerial || undefined,
+        partId: partId || undefined,
+        quantity,
+        priceCr
+    });
+    return {
+        ok: true,
+        listing: marketplaceListingFromRow(statements.getMarketplaceListing.get(listingId), sellerId),
+        profile
+    };
+}
+
+function createMarketplaceListing(sellerUserId, input = {}) {
+    return transaction(() => createMarketplaceListingWithin(sellerUserId, input));
+}
+
+function cancelMarketplaceListingWithin(actorUserId, listingId, options = {}) {
+    settleExpiredMarketplaceListingsWithin(25);
+    const row = statements.getMarketplaceListing.get(String(listingId || ''));
+    if (!row) return { ok: false, error: 'marketplace_listing_not_found' };
+    const sellerId = String(row.seller_user_id || '');
+    const actorId = String(actorUserId || '');
+    const isAdmin = options.admin === true;
+    if (!isAdmin && actorId !== sellerId) return { ok: false, error: 'marketplace_listing_not_found' };
+    if (row.status === 'cancelled' || row.status === 'expired') {
+        return {
+            ok: true,
+            duplicate: true,
+            listing: marketplaceListingFromRow(row, actorId),
+            profile: ensureEconomyProfileWithin(sellerId)
+        };
+    }
+    if (row.status !== 'active') {
+        return { ok: false, error: 'marketplace_listing_not_active', listing: marketplaceListingFromRow(row, actorId) };
+    }
+    const before = ensureEconomyProfileWithin(sellerId);
+    const garage = cloneJson(before.garage);
+    const returned = returnMarketplaceAssetWithin(row, garage, sellerId);
+    if (!validateGarageShape(garage)) throw new Error('marketplace_return_invalid_garage');
+    const reason = cleanDbText(options.reason, 80, isAdmin ? 'admin_cancelled' : 'seller_cancelled');
+    const changed = statements.markMarketplaceListingCancelled.run('cancelled', nowIso(), reason, nowIso(), row.listing_id);
+    if (!changed || changed.changes !== 1) return { ok: false, error: 'marketplace_listing_not_active', profile: before };
+    const profile = persistEconomyGarageWithin(sellerId, garage);
+    insertLedgerWithin(sellerId, isAdmin ? 'marketplace_listing_admin_cancelled' : 'marketplace_listing_cancelled', `marketplace-cancel:${row.listing_id}`, before.garage, profile.garage, {
+        listingId: row.listing_id,
+        assetType: row.asset_type,
+        deliveredInstanceId: returned.deliveredInstanceId || undefined,
+        admin: isAdmin || undefined,
+        reason
+    });
+    recordAuditEvent(sellerId, isAdmin ? 'MARKETPLACE_LISTING_ADMIN_CANCELLED' : 'MARKETPLACE_LISTING_CANCELLED', {
+        listingId: row.listing_id,
+        actorUserId: actorId || undefined,
+        assetType: row.asset_type,
+        registrySerial: row.registry_serial || undefined,
+        reason
+    });
+    return {
+        ok: true,
+        listing: marketplaceListingFromRow(statements.getMarketplaceListing.get(row.listing_id), actorId),
+        profile
+    };
+}
+
+function cancelMarketplaceListing(actorUserId, listingId, options = {}) {
+    try {
+        return transaction(() => cancelMarketplaceListingWithin(actorUserId, listingId, options));
+    } catch (e) {
+        if (e && e.message === 'marketplace_return_invalid_garage') {
+            return { ok: false, error: e.message };
+        }
+        throw e;
+    }
+}
+
+function buyMarketplaceListingWithin(buyerUserId, listingId) {
+    settleExpiredMarketplaceListingsWithin(25);
+    const buyerId = String(buyerUserId || '');
+    let row = statements.getMarketplaceListing.get(String(listingId || ''));
+    if (!row) return { ok: false, error: 'marketplace_listing_not_found' };
+    if (row.status === 'sold' && String(row.buyer_user_id || '') === buyerId) {
+        return {
+            ok: true,
+            duplicate: true,
+            listing: marketplaceListingFromRow(row, buyerId),
+            trade: marketplaceTradeFromRow(statements.getMarketplaceTradeByListing.get(row.listing_id), buyerId),
+            buyerProfile: ensureEconomyProfileWithin(buyerId),
+            sellerProfile: ensureEconomyProfileWithin(String(row.seller_user_id || ''))
+        };
+    }
+    if (row.status !== 'active') {
+        return { ok: false, error: 'marketplace_listing_not_available', listing: marketplaceListingFromRow(row, buyerId) };
+    }
+    const sellerId = String(row.seller_user_id || '');
+    if (!sellerId || sellerId === buyerId) return { ok: false, error: 'cannot_buy_own_listing', listing: marketplaceListingFromRow(row, buyerId) };
+
+    const sellerBefore = ensureEconomyProfileWithin(sellerId);
+    const buyerBefore = ensureEconomyProfileWithin(buyerId);
+    const sellerGarage = cloneJson(sellerBefore.garage);
+    const buyerGarage = cloneJson(buyerBefore.garage);
+    const priceCr = Math.floor(Number(row.price_cr) || 0);
+    const currentFees = marketplaceFeeBreakdown(priceCr);
+    // Los anuncios nuevos guardan la comisión cotizada al publicarse. Usarla
+    // aquí evita que un cambio posterior de configuración altere el neto que
+    // el vendedor vio y aceptó. Filas antiguas sin cotización usan la actual.
+    const fees = row.seller_net_cr == null || row.fee_cr == null
+        ? currentFees
+        : {
+            priceCr,
+            grossCr: Math.floor(Number(row.gross_cr) || priceCr),
+            feeBps: row.fee_bps == null ? currentFees.feeBps : Math.floor(Number(row.fee_bps) || 0),
+            feeCr: Math.max(0, Math.floor(Number(row.fee_cr) || 0)),
+            platformFeeCr: Math.max(0, Math.floor(Number(row.platform_fee_cr) || 0)),
+            burnFeeCr: Math.max(0, Math.floor(Number(row.burn_fee_cr) || 0)),
+            rewardsFeeCr: Math.max(0, Math.floor(Number(row.rewards_fee_cr) || 0)),
+            sellerNetCr: Math.max(0, Math.floor(Number(row.seller_net_cr) || 0))
+        };
+    if (fees.grossCr !== priceCr || fees.feeCr !== fees.platformFeeCr + fees.burnFeeCr + fees.rewardsFeeCr
+        || fees.sellerNetCr !== priceCr - fees.feeCr) {
+        return { ok: false, error: 'marketplace_price_invalid', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+    }
+    if (priceCr <= 0 || fees.sellerNetCr <= 0) return { ok: false, error: 'marketplace_price_invalid', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+    if (Math.floor(Number(buyerGarage.credits) || 0) < priceCr) {
+        return { ok: false, error: 'credits_insufficient', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+    }
+
+    const asset = parseJsonColumn(row.asset_json, null);
+    if (!isPlainObject(asset)) return { ok: false, error: 'marketplace_asset_missing', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+    let deliveredAsset = cloneJson(asset, null);
+    let deliveredInstanceId = null;
+    let registryRowForTransfer = null;
+
+    if (row.asset_type === 'car') {
+        if (!deliveredAsset || typeof deliveredAsset.instanceId !== 'string') {
+            return { ok: false, error: 'marketplace_car_invalid', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+        }
+        if (sellerGarage.garage.some(car => car && car.instanceId === deliveredAsset.instanceId)) {
+            return { ok: false, error: 'marketplace_asset_integrity_error', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+        }
+        registryRowForTransfer = row.registry_serial == null
+            ? null
+            : statements.getNftRegistryBySerial.get(Number(row.registry_serial));
+        const registryRow = registryRowForTransfer;
+        if (row.registry_serial != null && (!registryRow || String(registryRow.owner_user_id) !== sellerId)) {
+            return { ok: false, error: 'marketplace_registry_owner_mismatch', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+        }
+        const claim = registryRow ? nftMintClaimFromRow(statements.getNftMintClaimBySerial.get(Number(registryRow.serial))) : null;
+        if (registryRow && (['minted', 'mint_pending', 'mint_submitted', 'submitted'].includes(registryRow.status)
+            || (claim && ['submitted', 'minted'].includes(claim.status)))) {
+            return { ok: false, error: 'minted_nft_requires_onchain_transfer', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+        }
+        deliveredInstanceId = String(deliveredAsset.instanceId);
+        const collidesInGarage = buyerGarage.garage.some(car => car && car.instanceId === deliveredInstanceId);
+        const buyerRegistryCollision = statements.getNftRegistryByOwnerInstance.get(buyerId, deliveredInstanceId);
+        if (collidesInGarage || (buyerRegistryCollision && Number(buyerRegistryCollision.serial) !== Number(row.registry_serial))) {
+            deliveredInstanceId = findAvailableCarInstanceId(buyerId, buyerGarage, deliveredInstanceId);
+            deliveredAsset.instanceId = deliveredInstanceId;
+        }
+        deliveredAsset.marketplaceTradeCount = Math.max(0, Math.floor(Number(deliveredAsset.marketplaceTradeCount) || 0)) + 1;
+        deliveredAsset.lastMarketplaceAcquiredAt = Date.now();
+        buyerGarage.garage.push(deliveredAsset);
+        // La transferencia SQL del registro/claim se hace más abajo, después
+        // de validar ambos garajes ya liquidados en memoria. Así, un error de
+        // validación ordinario no puede confirmar solo la mitad on-chain/off-chain.
+    } else {
+        const partId = String(row.part_id || deliveredAsset.partId || '');
+        const quantity = Math.max(1, Math.floor(Number(row.quantity) || 1));
+        const definition = marketplacePartDefinition(partId);
+        if (!definition) return { ok: false, error: 'marketplace_part_invalid', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+        if (!isPlainObject(buyerGarage.partsInventory)) buyerGarage.partsInventory = {};
+        buyerGarage.partsInventory[partId] = Math.max(0, Math.floor(Number(buyerGarage.partsInventory[partId]) || 0)) + quantity;
+        deliveredAsset = { partId, quantity };
+    }
+
+    const tradeId = `TRD-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+    if (row.asset_type === 'car') deliveredAsset.lastMarketplaceTradeId = tradeId;
+    buyerGarage.credits = Math.floor(Number(buyerGarage.credits) || 0) - priceCr;
+    sellerGarage.credits = Math.floor(Number(sellerGarage.credits) || 0) + fees.sellerNetCr;
+    if (!validateGarageShape(buyerGarage) || !validateGarageShape(sellerGarage)) {
+        return { ok: false, error: 'marketplace_transfer_invalid_garage', buyerProfile: buyerBefore, sellerProfile: sellerBefore };
+    }
+
+    if (row.asset_type === 'car') {
+        if (registryRowForTransfer) {
+            transferRegistryAndClaimInstanceWithin(
+                Number(registryRowForTransfer.serial),
+                sellerId,
+                buyerId,
+                deliveredInstanceId,
+                deliveredAsset
+            );
+        } else {
+            registerEligibleCarsWithin(buyerId, buyerGarage, 'marketplace_purchase');
+        }
+        if (!validateGarageShape(buyerGarage) || !validateGarageShape(sellerGarage)) {
+            // Ya hay SQL de titularidad ejecutado: debe lanzarse para que la
+            // transacción completa haga rollback, no devolver y confirmar.
+            throw new Error('marketplace_transfer_invalid_garage');
+        }
+    }
+
+    const sellerProfile = persistEconomyGarageWithin(sellerId, sellerGarage);
+    const buyerProfile = persistEconomyGarageWithin(buyerId, buyerGarage);
+    const soldChanged = statements.markMarketplaceListingSold.run(
+        buyerId,
+        priceCr,
+        fees.feeCr,
+        fees.platformFeeCr,
+        fees.burnFeeCr,
+        fees.rewardsFeeCr,
+        fees.sellerNetCr,
+        nowIso(),
+        nowIso(),
+        row.listing_id
+    );
+    if (!soldChanged || soldChanged.changes !== 1) throw new Error('marketplace_listing_sale_conflict');
+    statements.insertMarketplaceTrade.run(
+        tradeId,
+        row.listing_id,
+        sellerId,
+        buyerId,
+        row.asset_type,
+        row.registry_serial == null ? null : Number(row.registry_serial),
+        row.car_instance_id || null,
+        deliveredInstanceId,
+        row.part_id || null,
+        Math.max(1, Math.floor(Number(row.quantity) || 1)),
+        priceCr,
+        fees.feeCr,
+        fees.platformFeeCr,
+        fees.burnFeeCr,
+        fees.rewardsFeeCr,
+        fees.sellerNetCr,
+        JSON.stringify(deliveredAsset),
+        nowIso()
+    );
+    insertLedgerWithin(buyerId, 'marketplace_purchase', `marketplace-buy:${row.listing_id}:buyer`, buyerBefore.garage, buyerProfile.garage, {
+        listingId: row.listing_id,
+        tradeId,
+        assetType: row.asset_type,
+        registrySerial: row.registry_serial || undefined,
+        partId: row.part_id || undefined,
+        quantity: Math.max(1, Math.floor(Number(row.quantity) || 1)),
+        priceCr,
+        deliveredInstanceId: deliveredInstanceId || undefined
+    });
+    insertLedgerWithin(sellerId, 'marketplace_sale', `marketplace-buy:${row.listing_id}:seller`, sellerBefore.garage, sellerProfile.garage, {
+        listingId: row.listing_id,
+        tradeId,
+        assetType: row.asset_type,
+        registrySerial: row.registry_serial || undefined,
+        partId: row.part_id || undefined,
+        quantity: Math.max(1, Math.floor(Number(row.quantity) || 1)),
+        grossCr: priceCr,
+        feeCr: fees.feeCr,
+        sellerNetCr: fees.sellerNetCr
+    });
+    recordAuditEvent(buyerId, 'MARKETPLACE_PURCHASE_COMPLETED', {
+        listingId: row.listing_id,
+        tradeId,
+        assetType: row.asset_type,
+        registrySerial: row.registry_serial || undefined,
+        priceCr
+    });
+    recordAuditEvent(sellerId, 'MARKETPLACE_SALE_COMPLETED', {
+        listingId: row.listing_id,
+        tradeId,
+        assetType: row.asset_type,
+        registrySerial: row.registry_serial || undefined,
+        priceCr,
+        sellerNetCr: fees.sellerNetCr
+    });
+    row = statements.getMarketplaceListing.get(row.listing_id);
+    return {
+        ok: true,
+        listing: marketplaceListingFromRow(row, buyerId),
+        trade: marketplaceTradeFromRow(statements.getMarketplaceTradeByListing.get(row.listing_id), buyerId),
+        buyerProfile,
+        sellerProfile,
+        fees
+    };
+}
+
+function buyMarketplaceListing(buyerUserId, listingId) {
+    try {
+        return transaction(() => buyMarketplaceListingWithin(buyerUserId, listingId));
+    } catch (e) {
+        if (e && e.message === 'marketplace_transfer_invalid_garage') {
+            return { ok: false, error: e.message };
+        }
+        throw e;
+    }
+}
+
+function listMarketplaceListings(viewerUserId, options = {}) {
+    return transaction(() => {
+        settleExpiredMarketplaceListingsWithin(50);
+        const viewer = String(viewerUserId || '');
+        const type = ['car', 'part'].includes(options.type) ? options.type : 'all';
+        const rarity = typeof options.rarity === 'string' ? options.rarity.trim().toLowerCase().slice(0, 30) : '';
+        const query = typeof options.q === 'string' ? options.q.trim().toLowerCase().slice(0, 80) : '';
+        const limit = Math.max(1, Math.min(100, Math.floor(Number(options.limit) || 50)));
+        const sort = ['price_asc', 'price_desc', 'oldest'].includes(options.sort) ? options.sort : 'newest';
+        const rows = statements.listActiveMarketplaceListings.all(500, 0);
+        const counts = { all: rows.length, cars: 0, parts: 0, mine: 0 };
+        let listings = rows.map(row => {
+            if (row.asset_type === 'car') counts.cars++;
+            if (row.asset_type === 'part') counts.parts++;
+            if (String(row.seller_user_id || '') === viewer) counts.mine++;
+            return marketplaceListingFromRow(row, viewer);
+        });
+        listings = listings.filter(listing => {
+            if (type !== 'all' && listing.type !== type) return false;
+            if (rarity && listing.rarity !== rarity) return false;
+            if (query) {
+                const haystack = `${listing.name} ${listing.category} ${listing.seller} ${listing.partId || ''} ${listing.registry ? listing.registry.registryId || '' : ''}`.toLowerCase();
+                if (!haystack.includes(query)) return false;
+            }
+            return true;
+        });
+        if (sort === 'price_asc') listings.sort((a, b) => a.priceCr - b.priceCr || String(b.createdAt).localeCompare(String(a.createdAt)));
+        else if (sort === 'price_desc') listings.sort((a, b) => b.priceCr - a.priceCr || String(b.createdAt).localeCompare(String(a.createdAt)));
+        else if (sort === 'oldest') listings.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+        const total = listings.length;
+        const offset = Math.max(0, Math.min(total, Math.floor(Number(options.offset) || 0)));
+        const mine = viewer
+            ? statements.listMarketplaceListingsBySeller.all(viewer, 100, 0).map(row => marketplaceListingFromRow(row, viewer))
+            : [];
+        return {
+            ok: true,
+            listings: listings.slice(offset, offset + limit),
+            mine,
+            counts,
+            total,
+            limit,
+            offset,
+            config: { ...MARKETPLACE_CONFIG }
+        };
+    });
+}
+
+function getMarketplaceListingForUser(viewerUserId, listingId, options = {}) {
+    return transaction(() => {
+        settleExpiredMarketplaceListingsWithin(25);
+        const row = statements.getMarketplaceListing.get(String(listingId || ''));
+        if (!row) return null;
+        const viewer = String(viewerUserId || '');
+        const party = viewer === String(row.seller_user_id || '') || viewer === String(row.buyer_user_id || '');
+        if (row.status !== 'active' && !party && options.admin !== true) return null;
+        return {
+            listing: marketplaceListingFromRow(row, viewer, { includeAccountIds: options.admin === true }),
+            trade: marketplaceTradeFromRow(statements.getMarketplaceTradeByListing.get(row.listing_id), viewer)
+        };
+    });
+}
+
+function listMarketplaceTradesForUser(userId, limit = 50) {
+    const key = String(userId || '');
+    const safeLimit = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)));
+    return statements.listMarketplaceTradesByUser.all(key, key, safeLimit)
+        .map(row => marketplaceTradeFromRow(row, key));
+}
+
+function countActiveMarketplaceListingsForUser(userId) {
+    return transaction(() => {
+        settleExpiredMarketplaceListingsWithin(25);
+        return Number(statements.countActiveMarketplaceListingsBySeller.get(String(userId || '')).count || 0);
+    });
+}
+
+function getMarketplaceStats() {
+    const statusRows = sqlite.prepare('SELECT status, COUNT(*) AS count FROM marketplace_listings GROUP BY status').all();
+    const totals = sqlite.prepare(`SELECT COUNT(*) AS trades, COALESCE(SUM(gross_cr), 0) AS grossCr,
+        COALESCE(SUM(fee_cr), 0) AS feeCr, COALESCE(SUM(seller_net_cr), 0) AS sellerNetCr
+        FROM marketplace_trades`).get();
+    return {
+        listingsByStatus: Object.fromEntries(statusRows.map(row => [row.status, Number(row.count || 0)])),
+        trades: Number(totals.trades || 0),
+        grossCr: Number(totals.grossCr || 0),
+        feeCr: Number(totals.feeCr || 0),
+        sellerNetCr: Number(totals.sellerNetCr || 0),
+        config: { ...MARKETPLACE_CONFIG }
+    };
+}
+
+function expireMarketplaceListings(limit = 100) {
+    return transaction(() => settleExpiredMarketplaceListingsWithin(limit));
+}
+
 function createDefaultGarage(userId, pilotName) {
     // Carga diferida para evitar un ciclo database -> economy_engine en el arranque.
     const economyEngine = require('./economy_engine');
@@ -1383,7 +2327,11 @@ function ensureEconomyProfileWithin(userId, options = {}) {
         garage.updatedAt = Date.now();
         statements.updateEconomyProfile.run(JSON.stringify(garage), nowIso(), key);
     }
-    insertLedgerWithin(key, action, `${action}:${key}`, { credits: 0, gems: 0 }, garage, {
+    // La clave debe ser única por encarnación del perfil: el ledger histórico
+    // se conserva tras un restablecimiento, así que reutilizar
+    // `${action}:${key}` haría imposible recrear la cuenta al volver a entrar.
+    const profileLedgerKey = `${action}:${key}:${crypto.randomBytes(8).toString('hex')}`;
+    insertLedgerWithin(key, action, profileLedgerKey, { credits: 0, gems: 0 }, garage, {
         trustedSeed: Boolean(options.trustedSeed),
         registeredNftSerials: registered.registeredSerials
     });
@@ -1632,6 +2580,12 @@ function putPlayerSave(userId, incoming) {
 function deletePlayerSave(userId) {
     const key = String(userId);
     return transaction(() => {
+        settleExpiredMarketplaceListingsWithin(25);
+        const activeMarketplaceListings = Number(statements.countActiveMarketplaceListingsBySeller.get(key).count || 0);
+        if (activeMarketplaceListings > 0) {
+            recordAuditEvent(key, 'player_save_delete_blocked_marketplace', { activeMarketplaceListings });
+            return false;
+        }
         const existed = Boolean(statements.getSave.get(key));
         statements.deleteSave.run(key);
         const profileExisted = Boolean(statements.getEconomyProfile.get(key));
@@ -2323,6 +3277,17 @@ module.exports = {
     cancelNftConversionPreparation,
     getNftClaimForUser,
     getPublicNftRegistryEntry,
+    MARKETPLACE_CONFIG,
+    marketplaceFeeBreakdown,
+    expireMarketplaceListings,
+    createMarketplaceListing,
+    cancelMarketplaceListing,
+    buyMarketplaceListing,
+    listMarketplaceListings,
+    getMarketplaceListingForUser,
+    listMarketplaceTradesForUser,
+    countActiveMarketplaceListingsForUser,
+    getMarketplaceStats,
     getMetaValue,
     setMetaValue,
     getEconomyProfile,

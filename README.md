@@ -1,8 +1,8 @@
 # APEX Motorsport / Dust & Nitro
 
-Juego de carreras 2D para navegador y Telegram Mini App. La v105 usa Node.js con SQLite y una economía autoritativa en servidor: el navegador presenta el juego, pero los saldos, coches, piezas, nitros, energía económica, cofres, referidos, anuncios verificados, compras TON/Telegram Stars y el registro global de coches se resuelven y persisten en el servidor.
+Juego de carreras 2D para navegador y Telegram Mini App. La v106 usa Node.js con SQLite y una economía autoritativa en servidor: el navegador presenta el juego, pero los saldos, coches, piezas, nitros, energía económica, cofres, referidos, anuncios verificados, compras TON/Telegram Stars, el registro global de coches y el mercado P2P se resuelven y persisten en el servidor.
 
-Versión actual: **1.0.5**. Consulta `CAMBIOS_v105.md` para el detalle de la actualización y `CAMBIOS_v104.md` para la base autoritativa anterior.
+Versión actual: **1.0.6**. Consulta `CAMBIOS_v106.md` para el mercado real entre jugadores, `CAMBIOS_v105.md` para Telegram Stars y la base NFT, y `CAMBIOS_v104.md` para la economía autoritativa anterior.
 
 ## Ejecutar en local
 
@@ -36,12 +36,12 @@ npm run check
 npm test
 ```
 
-La suite incluye lógica/DOM del hub, guardado seguro con SQLite temporal, regresiones HTTP de seguridad, economía sellada, Adsgram reclamable una sola vez, ranking por circuito, compras TON con libro ficticio y cotización fijada solo para las pruebas, Telegram Stars con un mock local de Bot API, registro/preparación NFT off-chain, dotación privada de cuentas de equipo, validación de circuitos y tiles.
+La suite incluye lógica/DOM del hub, guardado seguro con SQLite temporal, regresiones HTTP de seguridad, economía sellada, Adsgram reclamable una sola vez, ranking por circuito, compras TON con libro ficticio y cotización fijada solo para las pruebas, Telegram Stars con un mock local de Bot API, registro/preparación NFT off-chain, dotación privada de cuentas de equipo, mercado P2P real contra HTTP/SQLite con varias cuentas y reinicios, validación de circuitos y tiles.
 
-## Arquitectura v105
+## Arquitectura v106
 
-- `server.js`: HTTP, autenticación, CORS/CSP, API, sesiones y resultados de carrera, compras TON y Telegram Stars, metadatos/registro NFT, Adsgram, referidos, recuperación, copias y auditoría. Si existe `BOT_TOKEN`, arranca también el bot en el mismo proceso.
-- `database.js`: SQLite con WAL, claves foráneas, tiempo de espera ante bloqueos, permisos `0600`, transacciones, libro económico, pedidos, cargos externos procesados una sola vez, registro global de coches y claims de conversión; conserva la migración automática desde el JSON de v103. El esquema actual es **105**.
+- `server.js`: HTTP, autenticación, CORS/CSP, API, sesiones y resultados de carrera, compras TON y Telegram Stars, metadatos/registro NFT, mercado P2P en escrow, Adsgram, referidos, recuperación, copias, auditoría y `/readyz`. Si existe `BOT_TOKEN`, arranca también el bot en el mismo proceso.
+- `database.js`: SQLite con WAL, claves foráneas, tiempo de espera ante bloqueos, permisos `0600`, transacciones, libro económico, pedidos, cargos externos procesados una sola vez, registro global de coches, claims de conversión, anuncios/trades de mercado y custodia de activos en escrow; conserva la migración automática desde el JSON de v103. El esquema actual es **106**.
 - `economy_engine.js`: ejecuta las reglas económicas compartidas en una VM aislada con aleatoriedad criptográfica y una lista cerrada de acciones; también contiene las acciones internas no expuestas para abonar Stars y aplicar la dotación de equipo.
 - `telegram_api.js`: cliente compartido de Telegram Bot API con token solo desde entorno, host oficial obligatorio en producción y mock únicamente fuera de producción.
 - `telegram_stars.js`: catálogo, pedidos, facturas `XTR`, recuperación de entrega y reembolsos guardados de Telegram Stars.
@@ -77,7 +77,7 @@ Variables importantes:
 - `BOT_TOKEN`: token del bot. Es obligatorio para validar `initData` de Telegram y para ejecutar el bot; sin él, Telegram falla cerrado.
 - `WEBAPP_URL`: URL HTTPS pública usada por los botones y enlaces del bot.
 - `SERVER_SECRET_KEY`: secreto estable para seudónimos públicos y compatibilidad heredada. Debe conservarse entre reinicios.
-- `ADMIN_AUDIT_TOKEN`: protege auditoría, revisión administrativa de compras y copias manuales. Sin él quedan deshabilitadas.
+- `ADMIN_AUDIT_TOKEN`: protege auditoría, readiness administrativa, revisión/cancelación administrativa del mercado, revisión de compras y copias manuales. Sin él quedan deshabilitadas.
 - `ADSGRAM_WEBHOOK_SECRET`: autentica el webhook de Adsgram. Sin él, el webhook queda deshabilitado.
 - `TREASURY_WALLET_ADDRESS`: dirección pública receptora de pagos TON. Por defecto usa la wallet oficial del proyecto; solo debe cambiarse si se rota la tesorería.
 - `TONCENTER_API_KEY` y `TONAPI_KEY`: claves opcionales, recomendadas en producción, para verificar pagos TON y consultar la cotización con menos límites.
@@ -93,6 +93,9 @@ Variables importantes:
 - `TON_NFT_NETWORK`, `TON_NFT_COLLECTION_ADDRESS`, `TON_NFT_COLLECTION_OWNER_ADDRESS`, `TON_NFT_ROYALTY_ADDRESS`, `TON_NFT_CLAIM_AMOUNT_NANOTONS`, `TON_NFT_ITEM_RESERVE_NANOTONS`, `TON_NFT_COLLECTION_RESERVE_NANOTONS` y `TON_NFT_METADATA_BASE_URL`: configuración pública/futura de la conversión NFT. El valor seguro actual es testnet, sin colección y con importes de referencia sujetos a medición.
 - `TEAM_BOOTSTRAP_TELEGRAM_IDS`: lista privada, separada por comas, de IDs numéricos de Telegram que reciben **una sola vez** la dotación interna de equipo. No escribas los IDs reales en Git; configúralos solo en el proveedor. La acción conserva el progreso, completa los modelos que falten, sube el saldo hasta al menos 100.000 `$CR` si está por debajo y maximiza los coches presentes al aplicarse. No recarga después de gastar. Esas cuentas siguen siendo cuentas normales para carreras y ranking oficial: la dotación no crea una etiqueta pública ni una exclusión automática.
 - `DB_BACKUP_ENABLED`, `DB_BACKUP_DIR`, `DB_BACKUP_INTERVAL_HOURS` y `DB_BACKUP_RETENTION`: copias SQLite automáticas y retención. El destino debe estar en almacenamiento persistente y, para recuperación real ante desastres, copiarse también fuera del servicio.
+- `ENABLE_MARKETPLACE`: interruptor del mercado P2P real. Debe desplegarse primero en `false`; se pasa a `true` solo tras comprobar `/readyz` con esquema 106, probar restauración y ejecutar una compra/cancelación de control entre dos cuentas. Con `false`, el escaparate y las compras quedan cerrados, pero el vendedor puede retirar sus anuncios activos para recuperar el escrow.
+- `MARKETPLACE_FEE_BPS`: comisión en puntos básicos aplicada a anuncios nuevos. El defecto `750` equivale al **7,5 %**; la cotización completa queda persistida en cada anuncio para que cambios posteriores no alteren operaciones ya publicadas.
+- `MARKETPLACE_MIN_CAR_PRICE_CR`, `MARKETPLACE_MIN_PART_PRICE_CR`, `MARKETPLACE_MAX_PRICE_CR`, `MARKETPLACE_MAX_ACTIVE_LISTINGS`, `MARKETPLACE_LISTING_DAYS` y `MARKETPLACE_MAX_PART_QUANTITY`: precios y límites operativos. Los defectos son 50, 10 y 10.000.000 `$CR`; 20 anuncios por cuenta; 30 días; y 999 piezas por lote. El servidor acota cualquier valor fuera de rango.
 
 Interruptores operativos y valores seguros por defecto:
 
@@ -105,7 +108,7 @@ Interruptores operativos y valores seguros por defecto:
 | `NFT_ENTITLEMENTS_ENABLED` | `true` | Registro global y preparación/cancelación off-chain de conversión NFT |
 | `TON_NFT_MINTING_ENABLED` | `false` | Acuñación real en TON; no activar sin contrato, wallet verificada, testnet y metadatos permanentes |
 | `ENABLE_WAGER_STAKES` | `false` | No activar sin escrow y liquidación transaccional en servidor |
-| `ENABLE_MARKETPLACE` | `false` | No activar sin mercado transaccional en servidor |
+| `ENABLE_MARKETPLACE` | `false` | Mercado P2P real en servidor; activar solo tras las comprobaciones de despliegue de la v106. Apagado bloquea altas/compras, no la retirada del propio escrow |
 | `ENABLE_WEEKLY_TOURNAMENT` | `false` | No activar sin inscripción y premios en servidor |
 | `ENABLE_REFERRAL_REWARDS` | `true` | Referidos reales confirmados por servidor |
 | `ENABLE_AD_REWARDS` | `true` | Recompensas solo tras webhook y reclamación autenticada |
@@ -149,11 +152,28 @@ Las cuentas numéricas de Telegram y las cuentas de navegador `usr_...` siguen s
 
 Los `$CR` son moneda interna: no hay token emitido, swaps, conversión de vuelta a Stars/TON/dinero ni retiradas. Los pagos TON sin pedido previo o sin comentario exacto no se acreditan automáticamente y requieren revisión manual con el ID de pedido y el hash de transacción.
 
+## Mercado P2P real: venta de coches y piezas sueltas
+
+La v106 sustituye la demo local por un mercado autoritativo entre cuentas del servidor, liquidado exclusivamente en `$CR`:
+
+- Al publicar, el servidor retira el coche exacto o la cantidad de piezas del garaje/inventario y los conserva en **escrow** en SQLite. Mientras el anuncio sigue activo, ese activo no puede equiparse, usarse en carrera ni volver a venderse.
+- El escaparate muestra el nombre de piloto, nunca el ID persistente del vendedor. En coches muestra también la progresión pública que se entregará: nivel, XP, piezas instaladas, hitos, color, energía y serie `APEX-CAR-######`.
+- La compra se liquida en **una única transacción SQLite**: descuenta el bruto al comprador, acredita el neto al vendedor, entrega el mismo activo, sincroniza ambos guardados espejo y asienta trade, ledgers y auditoría. Si cualquier validación falla, no se mueve saldo ni activo.
+- Un coche comprado conserva exactamente su objeto y progresión. La titularidad de su registro global también cambia; si el `instanceId` interno colisiona en el comprador, solo se remapea ese identificador, sin cambiar la serie global.
+- Si el coche off-chain tenía una preparación NFT elegible, el claim pasa al comprador, con la wallet del vendedor desvinculada y un nonce nuevo. Un coche ya **acuñado o con la acuñación enviada** no puede liquidarse fingiendo una transferencia off-chain: requerirá transferencia e indexación on-chain verificadas.
+- Las piezas se venden como un lote de 1 a 999 unidades por un precio total. Por defecto, los precios válidos son 50–10.000.000 `$CR` por coche y 10–10.000.000 `$CR` por lote de piezas; cada cuenta puede mantener 20 anuncios y duran 30 días.
+- La comisión por defecto es **7,5 %**. El comprador paga el precio anunciado y el vendedor recibe el neto. Bruto, comisión, reparto plataforma/quema/recompensas y neto quedan cotizados y persistidos al crear el anuncio, antes de mostrarlos en la interfaz.
+- El vendedor puede retirar un anuncio activo y recibe el activo exactamente como estaba. Al caducar, el servidor también lo devuelve. Una cuenta no puede restablecerse mientras conserve escrow activo.
+- Publicar y aceptar una compra es idempotente frente a reintentos; dos compras simultáneas solo pueden liquidar una vez. No se permite autocompra con la misma cuenta, vender el coche inicial ni quedarse sin ningún coche jugable.
+- El mercado no fusiona las cuentas Telegram y navegador: la entrega se hace a la cuenta compradora concreta que confirma la operación. Publicar un activo desde un perfil y comprarlo desde otro es una venta pública normal entre dos cuentas del servidor, con su comisión y sin fusionar saldos, historia ni progreso.
+
+El interruptor `ENABLE_MARKETPLACE` permanece en `false` en el despliegue inicial. Durante una pausa no se aceptan anuncios ni compras y el escaparate público se oculta; el historial propio y la retirada de anuncios activos continúan disponibles para que nadie pierda el acceso a su escrow.
+
 ## Registro NFT: preparación off-chain, todavía sin acuñar
 
 Los coches actuales **todavía no son NFT de blockchain**: no se ha desplegado la colección, no se ha vinculado una wallet verificada y ningún coche tiene una dirección/hash de acuñación real. La interfaz y las páginas legales deben seguir diciendo “off-chain / no acuñado” mientras eso sea cierto.
 
-Lo que sí existe en v105 es el registro autoritativo previo a la futura conversión:
+Lo que ya existe desde la v105 —y la v106 transfiere junto con las ventas internas elegibles— es el registro autoritativo previo a la futura conversión:
 
 - Cada coche elegible no inicial se registra una sola vez por propietario e `instanceId`.
 - SQLite asigna una serie global autoincremental; el índice futuro es `serie - 1` y el identificador visible es `APEX-CAR-######`.
@@ -171,7 +191,9 @@ El callback del SDK en el navegador no concede nada por sí solo. El webhook aut
 
 ## Funciones pausadas por seguridad
 
-Las apuestas, el mercado P2P y el torneo semanal permanecen pausados por defecto. La interfaz no descuenta saldo para esas funciones y el servidor devuelve cierre controlado. No deben reactivarse solo cambiando una variable: antes necesitan retención/escrow, transferencias entre cuentas, liquidación, reembolsos y auditoría completamente transaccionales en servidor.
+Las apuestas con saldo y el torneo semanal con entrada permanecen pausados: todavía no deben reactivarse solo cambiando una variable, porque necesitan su propio escrow, liquidación, reembolsos y auditoría transaccional.
+
+El mercado P2P ya es transaccional en la v106, pero también nace apagado como control operativo. Solo debe activarse tras desplegar cliente/servidor 1.0.6, confirmar el esquema 106, comprobar una restauración y superar una operación de control de publicación, compra, retirada y caducidad con cuentas reales de prueba.
 
 ## Bot, soporte y páginas legales
 
@@ -187,7 +209,7 @@ Comandos principales del bot:
 
 El bot también procesa los eventos de pago de Telegram Stars y persiste su offset de actualizaciones para no reprocesar cargos al reiniciar. `/paysupport` distingue pedidos TON y Stars y muestra al propietario el siguiente paso seguro sin revelar datos de otra cuenta.
 
-Las páginas `/support.html`, `/terms.html` y `/privacy.html` explican la naturaleza virtual de `$CR`/coches, el uso de Stars dentro de Telegram y de TON solo en el flujo web habilitado, que los coches registrados todavía no están acuñados, la verificación de pagos y anuncios, los datos guardados y cómo pedir ayuda o un reembolso sin revelar secretos.
+Las páginas `/support.html`, `/terms.html` y `/privacy.html` explican la naturaleza virtual de `$CR`/coches, el uso de Stars dentro de Telegram y de TON solo en el flujo web habilitado, las reglas del escrow y la comisión del mercado, que los coches registrados todavía no están acuñados, la verificación de pagos y anuncios, los datos guardados y cómo pedir ayuda o un reembolso sin revelar secretos.
 
 ## Despliegue en Render
 
@@ -199,10 +221,12 @@ Antes de publicar:
 2. Mantén una sola instancia mientras SQLite local sea la fuente de verdad.
 3. Comprueba que `DATA_DIR=/var/data` y que las copias caen en el disco persistente.
 4. Configura `BOT_TOKEN`, `WEBAPP_URL`, `SERVER_SECRET_KEY`, `ADMIN_AUDIT_TOKEN`, `ADSGRAM_WEBHOOK_SECRET` y las claves de indexadores.
-5. Deja `TELEGRAM_TON_PURCHASES_ENABLED=false`, `TON_NFT_MINTING_ENABLED=false`, `TON_NFT_NETWORK=ton-testnet`, `TON_NFT_COLLECTION_ADDRESS=` vacío, `ENABLE_WAGER_STAKES=false`, `ENABLE_MARKETPLACE=false` y `ENABLE_WEEKLY_TOURNAMENT=false` hasta completar sus flujos seguros. Configura `TEAM_BOOTSTRAP_TELEGRAM_IDS` solo en el panel de Render si quieres activar la dotación interna; no lo subas con valores al repositorio.
-6. Revisa `/healthz`, `/api/config`, las tres páginas legales, los metadatos de colección y una carrera completa en Android e iOS dentro de Telegram. Confirma que `/api/config` anuncia Stars activo, TON directo en Telegram desactivado y mint desactivado.
+5. En el primer despliegue deja `TELEGRAM_TON_PURCHASES_ENABLED=false`, `TON_NFT_MINTING_ENABLED=false`, `TON_NFT_NETWORK=ton-testnet`, `TON_NFT_COLLECTION_ADDRESS=` vacío, `ENABLE_WAGER_STAKES=false`, `ENABLE_MARKETPLACE=false` y `ENABLE_WEEKLY_TOURNAMENT=false`. Revisa también `MARKETPLACE_FEE_BPS=750` y los límites `MARKETPLACE_*`. Configura `TEAM_BOOTSTRAP_TELEGRAM_IDS` solo en el panel de Render si quieres activar la dotación interna; no lo subas con valores al repositorio.
+6. Revisa `/healthz`, `/readyz`, `/api/config`, las tres páginas legales, los metadatos de colección y una carrera completa en Android e iOS dentro de Telegram. Confirma que la versión es `1.0.6`, el esquema es `106`, Stars está activo, TON directo en Telegram y mint están desactivados, el bot responde y los assets se cargan con `?v=106`.
 7. En web, haz compras TON reales controladas del paquete mínimo y del cofre Rookie; en Telegram, compra el paquete Stars de 100 ⭐ con una cuenta de prueba/propietario. Verifica un único abono, que repetir status/claim no duplica nada y que `/paysupport` recupera el pedido.
-8. Prueba restauración desde una copia SQLite en un entorno separado antes de anunciar el lanzamiento. No anuncies coches como NFT acuñados hasta completar la fase real de contratos/wallet/testnet/metadatos permanentes.
+8. Prueba restauración desde una copia SQLite en un entorno separado. Comprueba además que existe una copia externa al disco de Render: las copias en el mismo disco no protegen frente a la pérdida del propio disco.
+9. Solo entonces pon `ENABLE_MARKETPLACE=true` y redespliega/reinicia la **única** instancia. Con dos cuentas de control publica y compra una pieza y un coche de bajo valor; verifican bruto/neto, que el coche conserva nivel/piezas/serie, que repetir la compra no duplica y que retirar otro anuncio devuelve exactamente el activo. Deja documentados los IDs de anuncio/trade de la prueba.
+10. No anuncies coches como NFT acuñados hasta completar la fase real de contratos/wallet/testnet/metadatos permanentes. El mercado interno de la v106 no transfiere wallets ni convierte un coche off-chain en NFT.
 
 SQLite/WAL es adecuado para este servicio único y pequeño. Para varias instancias, alta concurrencia o recuperación multi-región habrá que migrar a un servicio de base de datos gestionado y adaptar bloqueos/transacciones.
 

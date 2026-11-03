@@ -1,4 +1,4 @@
-// ===== APEX MOTORSPORT - BOT DE TELEGRAM (v105) =====
+// ===== APEX MOTORSPORT - BOT DE TELEGRAM (v106) =====
 // Usa long polling para no requerir túneles HTTPS en desarrollo local y el
 // cliente compartido de Bot API para facturas/pagos Telegram Stars.
 
@@ -480,6 +480,34 @@ function persistLastUpdateId() {
     try { db.setMetaValue('telegramBotLastUpdateId', lastUpdateId); } catch (e) {}
 }
 
+const botHealth = {
+    startedAt: new Date().toISOString(),
+    commandsSyncedAt: null,
+    lastPollStartedAt: null,
+    lastSuccessAt: null,
+    lastUpdateId,
+    lastErrorAt: null,
+    lastError: null,
+    consecutiveFailures: 0
+};
+global.__APEX_TELEGRAM_BOT_HEALTH__ = botHealth;
+
+function markBotPollSuccess(updateCount) {
+    botHealth.lastSuccessAt = new Date().toISOString();
+    botHealth.lastUpdateId = lastUpdateId;
+    botHealth.lastUpdateCount = Number(updateCount) || 0;
+    botHealth.consecutiveFailures = 0;
+    botHealth.lastError = null;
+    try { db.setMetaValue('telegramBotLastPollSuccessAt', botHealth.lastSuccessAt); } catch (e) {}
+}
+
+function markBotPollError(error) {
+    botHealth.lastErrorAt = new Date().toISOString();
+    botHealth.lastError = String(error && error.message ? error.message : error || 'telegram_polling_error').slice(0, 240);
+    botHealth.consecutiveFailures += 1;
+    try { db.setMetaValue('telegramBotLastPollErrorAt', botHealth.lastErrorAt); } catch (e) {}
+}
+
 function isPaymentUpdate(update) {
     return Boolean(update && (
         update.pre_checkout_query
@@ -502,6 +530,7 @@ async function startPolling() {
                 { command: 'privacy', description: 'Política de privacidad' }
             ]
         });
+        botHealth.commandsSyncedAt = new Date().toISOString();
     } catch (commandsErr) {
         console.warn('Aviso: no se pudieron sincronizar los comandos del bot:', commandsErr.message);
     }
@@ -522,6 +551,7 @@ async function startPolling() {
     let pollingBackoffMs = 1000;
     while (true) {
         try {
+            botHealth.lastPollStartedAt = new Date().toISOString();
             const res = await telegramRequest('getUpdates', {
                 offset: lastUpdateId + 1,
                 timeout: 25,
@@ -531,6 +561,7 @@ async function startPolling() {
             if (!res || res.ok !== true || !Array.isArray(res.result)) {
                 const description = escapeHtml(res && res.description ? res.description : 'Respuesta no válida de Telegram');
                 const errorCode = safeNumber(res && res.error_code, 0);
+                markBotPollError(new Error(`${errorCode || 'telegram'}: ${description}`));
                 console.error(`Error en polling de Telegram (${errorCode || 'sin código'}): ${description}. Reintentando en ${Math.round(pollingBackoffMs / 1000)}s`);
                 await new Promise(r => setTimeout(r, pollingBackoffMs));
                 pollingBackoffMs = Math.min(60000, pollingBackoffMs * 2);
@@ -538,6 +569,7 @@ async function startPolling() {
             }
 
             pollingBackoffMs = 1000;
+            markBotPollSuccess(res.result.length);
             let retryPaymentUpdate = false;
             for (const update of res.result) {
                 if (!update || !Number.isFinite(Number(update.update_id))) continue;
@@ -570,6 +602,7 @@ async function startPolling() {
                 await new Promise(r => setTimeout(r, 2000));
             }
         } catch (err) {
+            markBotPollError(err);
             console.error(`Error en polling: ${err.message}. Reintentando en ${Math.round(pollingBackoffMs / 1000)}s`);
             await new Promise(r => setTimeout(r, pollingBackoffMs));
             pollingBackoffMs = Math.min(60000, Math.max(4000, pollingBackoffMs * 2));
@@ -584,7 +617,10 @@ module.exports = {
         handleSuccessfulStarsPayment,
         handleRefundedStarsPayment,
         sendPaySupport,
-        isPaymentUpdate
+        isPaymentUpdate,
+        botHealth,
+        markBotPollSuccess,
+        markBotPollError
     }
 };
 

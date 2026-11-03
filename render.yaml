@@ -39,6 +39,20 @@ services:
         value: "false"
       - key: ENABLE_MARKETPLACE
         value: "false"
+      - key: MARKETPLACE_FEE_BPS
+        value: "750"
+      - key: MARKETPLACE_MIN_CAR_PRICE_CR
+        value: "50"
+      - key: MARKETPLACE_MIN_PART_PRICE_CR
+        value: "10"
+      - key: MARKETPLACE_MAX_PRICE_CR
+        value: "10000000"
+      - key: MARKETPLACE_MAX_ACTIVE_LISTINGS
+        value: "20"
+      - key: MARKETPLACE_LISTING_DAYS
+        value: "30"
+      - key: MARKETPLACE_MAX_PART_QUANTITY
+        value: "999"
       - key: ENABLE_WEEKLY_TOURNAMENT
         value: "false"
       - key: ENABLE_REFERRAL_REWARDS

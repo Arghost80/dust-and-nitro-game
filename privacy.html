@@ -19,10 +19,10 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <main><section class="card">
 <p><a href="/">← Volver al juego</a></p>
 <h1>Política de privacidad</h1>
-<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.5</p>
+<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.6</p>
 <nav><a href="/support.html">Soporte</a><a href="/terms.html">Términos</a><a href="/">Jugar</a></nav>
 
-<div class="notice"><strong>Resumen:</strong> usamos los datos necesarios para identificar tu cuenta, guardar tu progreso, ejecutar la economía en el servidor, verificar compras y anuncios, evitar fraudes y prestar soporte. No vendemos tus datos personales.</div>
+<div class="notice"><strong>Resumen:</strong> usamos los datos necesarios para identificar tu cuenta, guardar tu progreso, ejecutar la economía y el mercado entre jugadores en el servidor, verificar compras y anuncios, evitar fraudes y prestar soporte. No vendemos tus datos personales.</div>
 
 <h2>1. Datos que tratamos</h2>
 <table>
@@ -31,6 +31,7 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <tr><td>Cuenta de Telegram</td><td>ID numérico, nombre de usuario o nombre mostrado que Telegram entrega a la Mini App</td><td>Autenticación, nombre de piloto, guardado y rankings</td></tr>
 <tr><td>Cuenta de navegador</td><td>ID <code>usr_…</code>, hash de la credencial de dispositivo y, si lo creas, hash del código de recuperación</td><td>Evitar que otra persona abra tu partida y permitir recuperación</td></tr>
 <tr><td>Progreso y economía</td><td>Historia, ajustes, garaje, saldos, coches, piezas, energía, nitros, misiones, patrocinios, referidos y libro de movimientos</td><td>Prestar el juego y mantener una única fuente autoritativa</td></tr>
+<tr><td>Mercado entre jugadores</td><td>ID de anuncio y de operación, activo y cantidad depositados, progresión pública del coche, precio bruto, comisión e importe neto, estado, fechas, nombre de piloto visible e identificadores internos de comprador y vendedor</td><td>Retener el activo en escrow, mostrar el anuncio, liquidar o devolver la operación, evitar duplicados/fraude y atender disputas. El escaparate muestra tu nombre de piloto, no tu ID persistente de cuenta</td></tr>
 <tr><td>Carreras y ranking</td><td>Nombre de piloto, circuito, tiempo, coche, posición y estadísticas</td><td>Registrar resultados y mostrar clasificaciones</td></tr>
 <tr><td>Compras TON</td><td>ID y estado del pedido, producto, importe/cotización, hash de transacción y datos públicos necesarios para verificar el pago</td><td>Detectar el pago, entregar el producto una sola vez, recuperar pedidos y resolver incidencias</td></tr>
 <tr><td>Compras con Telegram Stars</td><td>ID de Telegram y del pedido, paquete e importe XTR, carga útil interna de la factura, identificadores de cargo de Telegram/proveedor, estado de entrega y reembolsos</td><td>Crear la factura, confirmar el pago mediante el bot, acreditar $CR una sola vez, evitar duplicados y gestionar reembolsos o soporte</td></tr>
@@ -59,12 +60,12 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <p>Cada tercero trata los datos conforme a sus propias políticas. Las transacciones TON son públicas en la cadena; la dirección remitente, importe, comentario y hash pueden ser visibles para cualquiera que consulte la red.</p>
 
 <h2>5. Conservación</h2>
-<p>Conservamos la cuenta y su progreso mientras el servicio esté activo o hasta que solicites su eliminación. Los pedidos, hashes TON e identificadores de cargo de Telegram pueden conservarse durante más tiempo para evitar dobles entregas, gestionar reembolsos, resolver reclamaciones y cumplir obligaciones aplicables. Los registros globales de coches pueden conservarse para no reutilizar una serie ni crear dos derechos de conversión para el mismo coche. Las copias de seguridad se rotan periódicamente; los registros de seguridad se conservan el tiempo razonable para investigar abusos e incidencias.</p>
+<p>Conservamos la cuenta y su progreso mientras el servicio esté activo o hasta que solicites su eliminación. Los pedidos, hashes TON e identificadores de cargo de Telegram pueden conservarse durante más tiempo para evitar dobles entregas, gestionar reembolsos, resolver reclamaciones y cumplir obligaciones aplicables. Los asientos económicos y un historial mínimo de anuncios y operaciones del mercado pueden conservarse tras un restablecimiento para impedir duplicidades, demostrar qué cuenta recibió un activo y resolver disputas; los anuncios activos deben retirarse o caducar antes de restablecer. Los registros globales de coches pueden conservarse para no reutilizar una serie ni crear dos derechos de conversión para el mismo coche. Las copias de seguridad se rotan periódicamente; los registros de seguridad se conservan el tiempo razonable para investigar abusos e incidencias.</p>
 
 <h2>6. Tus opciones y derechos</h2>
 <ul>
 <li>Puedes cambiar tu nombre de piloto y otros ajustes dentro del juego.</li>
-<li>El botón de restablecer borra el guardado asociado según se indica en pantalla.</li>
+<li>El botón de restablecer borra el guardado asociado según se indica en pantalla. Antes debes retirar cualquier anuncio activo del mercado, porque su activo está en escrow y no forma parte del garaje visible.</li>
 <li>Para solicitar acceso, corrección o eliminación de datos, contacta mediante <code>/support</code> en el bot o la página de <a href="/support.html">soporte</a>. Podremos pedirte que demuestres el control de la cuenta de Telegram o del dispositivo sin revelar secretos.</li>
 <li>Si dejas de usar el juego, puedes borrar el almacenamiento local de tu navegador o WebView.</li>
 </ul>

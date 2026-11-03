@@ -237,6 +237,17 @@ function getNftPublicConfig() {
     return apexServerConfig && apexServerConfig.nft ? apexServerConfig.nft : null;
 }
 
+function getMarketplacePublicConfig() {
+    return apexServerConfig && apexServerConfig.marketplace ? apexServerConfig.marketplace : null;
+}
+
+function marketplaceUiEnabled() {
+    if (!authoritativeEconomyEnabled()) return true;
+    const config = getMarketplacePublicConfig();
+    if (config && typeof config.enabled === 'boolean') return config.enabled;
+    return serverFeatureEnabled('marketplaceEnabled', false);
+}
+
 function isTelegramNumericAccount() {
     return /^\d{5,20}$/.test(String(getApexUserId() || ''));
 }
@@ -1489,6 +1500,9 @@ function renderNftRegistryBoxHtml(car) {
     } else {
         actions = `<button class="btn-nft-secondary" disabled>CONVERSIÓN EN PAUSA</button>`;
     }
+    if (marketplaceUiEnabled() && !['minted', 'mint_pending', 'mint_submitted', 'submitted'].includes(String(registry.status || ''))) {
+        actions += `<button class="btn-nft-secondary" onclick="handleListMarketplaceCar('${encodedInstanceId}')">🤝 VENDER EN MERCADO</button>`;
+    }
     return `
         <div class="nft-registry-box nft-registry-box-${escapeHtml(status.key)}">
             <div class="nft-registry-title">🧾 ${escapeHtml(registry.registryId || 'REGISTRO GLOBAL')} · ÍNDICE NFT ${registry.nftIndex != null ? escapeHtml(registry.nftIndex) : '—'}</div>
@@ -1566,11 +1580,15 @@ function openNftConversionModal(encodedInstanceId) {
     const network = config.network || 'ton-testnet';
     const mintingEnabled = config.mintingEnabled === true;
     const metadataUrl = claim && claim.metadataUri ? String(claim.metadataUri) : (registry && registry.serial && prepared ? `/api/nft/metadata/${registry.serial}` : '');
-    const primaryAction = minted
+    const basePrimaryAction = minted
         ? '<button class="btn-settings-save" onclick="closeNftConversionModal()">CERRAR</button>'
         : (prepared || mintPending
             ? `<button class="btn-settings-save" onclick="closeNftConversionModal()">ENTENDIDO</button><button class="btn-nft-secondary" onclick="cancelNftConversionPreparation('${encodeURIComponent(instanceId)}')">CANCELAR PREPARACIÓN</button>`
             : `<button class="btn-settings-save btn-nft-prepare" onclick="prepareNftConversion('${encodeURIComponent(instanceId)}')" ${!nftEntitlementsUiEnabled() ? 'disabled' : ''}>PREPARAR CONVERSIÓN</button><button class="btn-nft-secondary" onclick="closeNftConversionModal()">AHORA NO</button>`);
+    const marketplaceAction = marketplaceUiEnabled() && authoritativeEconomyEnabled() && !minted && !mintPending
+        ? `<button class="btn-nft-secondary" onclick="closeNftConversionModal();handleListMarketplaceCar('${encodeURIComponent(instanceId)}')">🤝 VENDER ESTE COCHE</button>`
+        : '';
+    const primaryAction = `${basePrimaryAction}${marketplaceAction}`;
 
     modal.innerHTML = `
         <div class="settings-dialog nft-conversion-dialog">
@@ -1596,6 +1614,9 @@ function openNftConversionModal(encodedInstanceId) {
                 </div>
                 ${registry && registry.metadataHash ? `<div class="nft-modal-hash">Huella de metadatos base: <code>${escapeHtml(shortChainValue(registry.metadataHash, 14, 10))}</code></div>` : ''}
                 ${claim ? `<div class="nft-modal-claim">Claim único: <code>${escapeHtml(claim.claimId || '')}</code> · Estado: <strong>${escapeHtml(claim.status || '')}</strong>${metadataUrl ? `<br><a href="${escapeHtml(metadataUrl)}" target="_blank" rel="noopener">Ver metadatos públicos previstos</a>` : ''}</div>` : ''}
+                ${minted || mintPending
+                    ? '<div class="nft-modal-note">Este coche no se liquida en el mercado interno mientras su acuñación/propiedad on-chain deba resolverse: la reventa NFT exigirá transferencia e indexación verificadas en TON.</div>'
+                    : '<div class="nft-modal-note">Si vendes este coche en el mercado interno, el comprador recibe exactamente este coche con su progreso y, si existe, su preparación NFT; cualquier wallet anterior quedará desvinculada y el nuevo dueño deberá verificar la suya cuando se active la acuñación.</div>'}
                 ${minted ? `<div class="nft-modal-note nft-modal-note-ok">✅ Este coche ya consta acuñado. ${registry.nftItemAddress ? `Ítem: <code>${escapeHtml(shortChainValue(registry.nftItemAddress))}</code>` : ''}</div>` : `
                     <div class="nft-modal-note">
                         <strong>Importante:</strong> preparar la conversión reserva este coche y su identidad única, pero <strong>todavía no lo acuña ni te cobra TON</strong>.
@@ -5091,19 +5112,50 @@ if (typeof window !== 'undefined') {
 }
 
 function resetAllSaveData() {
-    if (confirm(t('settings_reset_confirm'))) {
-        localStorage.removeItem('apex_web3_garage_save');
-        localStorage.removeItem('dustrac_story_save');
-        // v100: borrar también la copia del servidor, o al recargar volvería la partida anterior
+    if (!confirm(t('settings_reset_confirm'))) return;
+
+    const finishLocalReset = () => {
         try {
-            if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.clearRemote === 'function') {
-                window.CloudSave.clearRemote().then(() => location.reload(), () => location.reload());
-                setTimeout(() => location.reload(), 3000); // respaldo si la red tarda
-                return;
-            }
+            localStorage.removeItem('apex_web3_garage_save');
+            localStorage.removeItem('dustrac_story_save');
+            localStorage.removeItem('apex_cloud_meta');
         } catch (e) {}
         location.reload();
+    };
+
+    // En producción hay que borrar primero la copia de servidor: si se borra
+    // solo el espejo local, al recargar volvería la partida anterior. Si el
+    // servidor lo bloquea (p. ej. por un coche/pieza en escrow del mercado),
+    // no se toca nada y se explica el motivo.
+    try {
+        if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.clearRemote === 'function') {
+            showHubToast('🧹 Solicitando el restablecimiento al servidor…');
+            window.CloudSave.clearRemote().then(result => {
+                const ok = result === true || (result && result.ok === true);
+                if (!ok) {
+                    const data = result && result.data ? result.data : {};
+                    if (data.error === 'active_marketplace_listings') {
+                        alert('⚠️ No puedes restablecer la cuenta mientras tengas anuncios activos en el mercado.\n\nRetira primero tus coches/piezas en escrow desde el Mercado P2P y vuelve a intentarlo. No se ha borrado nada.');
+                        if (typeof openPartsMarketplaceModal === 'function') openPartsMarketplaceModal('sell');
+                    } else {
+                        alert('⚠️ No se pudo confirmar el restablecimiento en el servidor. No se ha borrado tu partida local ni remota. Revisa la conexión y vuelve a intentarlo.');
+                    }
+                    syncAuthoritativeEconomy();
+                    return;
+                }
+                finishLocalReset();
+            }, () => {
+                alert('⚠️ Sin conexión para restablecer la cuenta en el servidor. No se ha borrado nada.');
+            });
+            return;
+        }
+    } catch (e) {
+        alert('⚠️ No se pudo iniciar el restablecimiento. No se ha borrado nada.');
+        return;
     }
+
+    // Solo se llega aquí en el entorno local/desarrollo sin CloudSave.
+    finishLocalReset();
 }
 
 function closeSettingsModal() {
@@ -5783,28 +5835,312 @@ function handleClaimCarMilestone(instanceId, mLevel, statKey) {
 let marketplaceActiveTab = 'buy';
 let marketplaceFilterType = 'all'; // 'all', 'parts', 'cars'
 let marketplaceSellType = 'parts'; // 'parts', 'cars'
+let marketplaceServerState = null;
+let marketplaceServerLoadedForUser = '';
+let marketplaceServerLoading = false;
+let marketplaceServerError = '';
+let marketplaceServerRequestSeq = 0;
+let marketplaceActionInFlight = false;
+let marketplaceSearchQuery = '';
+let marketplaceSort = 'newest';
+let marketplaceSearchTimer = null;
+
+function serverMarketplaceEnabled() {
+    return authoritativeEconomyEnabled();
+}
+
+function marketplaceClientConfig() {
+    const serverConfig = (marketplaceServerState && marketplaceServerState.config) || getMarketplacePublicConfig() || {};
+    return {
+        feeBps: Number.isFinite(Number(serverConfig.feeBps)) ? Number(serverConfig.feeBps) : 750,
+        minCarPriceCr: Number.isFinite(Number(serverConfig.minCarPriceCr)) ? Number(serverConfig.minCarPriceCr) : 50,
+        minPartPriceCr: Number.isFinite(Number(serverConfig.minPartPriceCr)) ? Number(serverConfig.minPartPriceCr) : 10,
+        maxPartQuantity: Number.isFinite(Number(serverConfig.maxPartQuantity)) ? Number(serverConfig.maxPartQuantity) : 999,
+        maxPriceCr: Number.isFinite(Number(serverConfig.maxPriceCr)) ? Number(serverConfig.maxPriceCr) : 10000000,
+        maxActiveListingsPerUser: Number.isFinite(Number(serverConfig.maxActiveListingsPerUser)) ? Number(serverConfig.maxActiveListingsPerUser) : 20,
+        defaultListingDays: Number.isFinite(Number(serverConfig.defaultListingDays)) ? Number(serverConfig.defaultListingDays) : 30
+    };
+}
+
+function marketplaceFeePreview(priceCr) {
+    const config = marketplaceClientConfig();
+    const price = Math.max(0, Math.floor(Number(priceCr) || 0));
+    const feeCr = Math.floor((price * config.feeBps + 5000) / 10000);
+    const platformFeeCr = Math.floor(feeCr / 3);
+    const burnFeeCr = Math.floor(feeCr / 3);
+    return {
+        priceCr: price,
+        feeCr,
+        platformFeeCr,
+        burnFeeCr,
+        rewardsFeeCr: Math.max(0, feeCr - platformFeeCr - burnFeeCr),
+        sellerNetCr: price - feeCr,
+        feePct: (config.feeBps / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 })
+    };
+}
+
+function marketplaceErrorMessage(error) {
+    const messages = {
+        marketplace_disabled: 'El mercado está pausado en el servidor. No se ha movido ningún objeto ni saldo.',
+        marketplace_listing_not_found: 'Ese anuncio ya no existe. Actualiza el mercado.',
+        marketplace_listing_not_available: 'Ese anuncio ya no está disponible: puede haberse vendido, retirado o caducado.',
+        marketplace_listing_not_active: 'Ese anuncio ya no está activo.',
+        marketplace_listing_limit_reached: 'Has alcanzado el máximo de anuncios activos. Retira uno antes de publicar otro.',
+        marketplace_price_out_of_range: 'El precio está fuera del rango permitido por el servidor.',
+        marketplace_price_too_low: 'El precio es demasiado bajo para publicar el anuncio.',
+        marketplace_price_invalid: 'El servidor no acepta el precio de este anuncio.',
+        marketplace_asset_invalid: 'El servidor no pudo validar ese activo.',
+        marketplace_asset_missing: 'El activo en escrow no está disponible. No se ha cobrado nada.',
+        marketplace_car_invalid: 'El coche de este anuncio no es válido.',
+        marketplace_part_invalid: 'La pieza de este anuncio no es válida.',
+        marketplace_registry_owner_mismatch: 'La titularidad registrada del coche no coincide con el anuncio. No se ha cobrado nada.',
+        marketplace_asset_integrity_error: 'Detectamos una inconsistencia con el activo en escrow. No se ha completado la operación.',
+        car_not_found: 'Ese coche ya no está en tu garaje de servidor.',
+        car_not_transferable: 'Ese coche no es transferible. El coche inicial permanece vinculado a tu cuenta.',
+        car_already_listed: 'Ese coche ya tiene un anuncio activo.',
+        car_in_active_race_or_room: 'Termina o abandona la carrera/sala activa antes de poner este coche a la venta.',
+        must_keep_one_car: 'Debes conservar al menos un coche jugable en tu garaje.',
+        nft_registry_missing: 'Este coche aún no tiene número global en el servidor. Sincroniza el registro antes de venderlo.',
+        minted_nft_requires_onchain_transfer: 'Este coche ya está en proceso/acuñado como NFT. No fingiremos un traspaso de wallet: su reventa debe hacerse con transferencia e indexación on-chain.',
+        cannot_buy_own_listing: 'No puedes comprar tu propio anuncio. Puedes retirarlo para recuperar el objeto.',
+        own_listing: 'No puedes comprar tu propio anuncio. Puedes retirarlo para recuperar el objeto.',
+        credits_insufficient: 'No tienes suficientes $CR en tu garaje de servidor para completar la compra.',
+        invalid_part: 'Esa pieza no pertenece al catálogo válido del taller.',
+        part_not_enough: 'No tienes suficientes unidades de esa pieza en tu inventario de servidor.',
+        invalid_marketplace_asset_type: 'El tipo de anuncio no es válido.',
+        invalid_car_instance_id: 'La instancia del coche no es válida.',
+        invalid_part_id: 'El identificador de la pieza no es válido.',
+        unauthorized: 'Tu sesión no pudo verificarse. Reabre el juego y vuelve a entrar.',
+        telegram_auth_required: 'Tu sesión de Telegram no pudo verificarse. Cierra y vuelve a abrir la Mini App.',
+        device_secret_required: 'No se pudo verificar este dispositivo. Reabre el juego en el navegador original o recupera tu cuenta.',
+        rate_limited: 'Demasiadas acciones seguidas. Espera unos segundos y vuelve a intentarlo.',
+        marketplace_unavailable: 'No se pudo contactar con el mercado. No se ha movido ningún objeto ni saldo localmente.'
+    };
+    return messages[String(error || '')] || 'No se pudo completar la operación de mercado. No se ha aplicado ningún cambio local.';
+}
+
+function marketplaceTimeLabel(listing) {
+    if (listing && listing.timeAgo) return String(listing.timeAgo);
+    const created = Date.parse(listing && listing.createdAt ? listing.createdAt : '');
+    if (!Number.isFinite(created)) return 'anuncio de servidor';
+    const diffMinutes = Math.max(0, Math.floor((Date.now() - created) / 60000));
+    if (diffMinutes < 1) return 'hace unos segundos';
+    if (diffMinutes < 60) return `hace ${diffMinutes}m`;
+    if (diffMinutes < 1440) return `hace ${Math.floor(diffMinutes / 60)}h`;
+    return `hace ${Math.floor(diffMinutes / 1440)}d`;
+}
+
+function marketplaceExpiryLabel(listing) {
+    const expires = Date.parse(listing && listing.expiresAt ? listing.expiresAt : '');
+    if (!Number.isFinite(expires)) return '';
+    const diffMs = expires - Date.now();
+    if (diffMs <= 0) return 'caducado';
+    const days = Math.floor(diffMs / 86400000);
+    if (days >= 1) return `caduca en ${days}d`;
+    const hours = Math.floor(diffMs / 3600000);
+    if (hours >= 1) return `caduca en ${hours}h`;
+    return `caduca en ${Math.max(1, Math.floor(diffMs / 60000))}m`;
+}
+
+function marketplaceCarProgressionHtml(listing) {
+    if (!listing || (listing.type !== 'car' && listing.assetType !== 'car')) return '';
+    const car = listing.car || listing.carData || {};
+    const progression = (listing.snapshot && listing.snapshot.progression) || {};
+    const registry = listing.registry || {};
+    const level = Math.max(1, Math.floor(Number(car.level || progression.level || 1)));
+    const xp = Math.max(0, Math.floor(Number(car.xp || progression.xp || 0)));
+    const xpNeeded = Math.max(0, Math.floor(Number(car.xpNeeded || progression.xpNeeded || 0)));
+    const energy = Math.max(0, Math.floor(Number(car.energy != null ? car.energy : (progression.energy || 0))));
+    const maxEnergy = Math.max(1, Math.floor(Number(car.maxEnergy || progression.maxEnergy || 10)));
+    const colorName = car.colorName || progression.colorName || 'Color oficial';
+    const parts = car.parts || progression.parts || {};
+    const labels = {
+        speed_power: 'Motor',
+        braking: 'Frenos',
+        handling_grip: 'Agarre',
+        accel_traction: 'Tracción',
+        aero_lightness: 'Aero'
+    };
+    const installed = Object.entries(parts)
+        .filter(([, value]) => Number(value) > 0)
+        .map(([key, value]) => `${labels[key] || key} Nv.${Math.floor(Number(value) || 0)}`);
+    const milestones = Array.isArray(car.claimedMilestones)
+        ? car.claimedMilestones.length
+        : (Array.isArray(progression.claimedMilestones) ? progression.claimedMilestones.length : 0);
+    const registryText = registry.registryId
+        ? `${registry.registryId} · índice ${registry.nftIndex != null ? registry.nftIndex : '—'} · ${registry.status || 'offchain'}`
+        : 'registro global incluido';
+    return `
+        <div style="font-size:10.5px;color:#cbd5e1;margin-top:5px;line-height:1.45;">
+            ⭐ Nv. ${level} · ${xp.toLocaleString('es-ES')}${xpNeeded ? `/${xpNeeded.toLocaleString('es-ES')}` : ''} XP · ⚡ ${energy}/${maxEnergy} · 🎨 ${escapeHtml(colorName)}<br>
+            🔧 ${installed.length ? escapeHtml(installed.join(' · ')) : 'Sin ramas mejoradas'} · 👑 ${milestones} hito${milestones === 1 ? '' : 's'}<br>
+            🧾 ${escapeHtml(registryText)} · se transfiere el mismo coche, no una copia nueva
+        </div>`;
+}
+
+function marketplaceClientListings() {
+    if (serverMarketplaceEnabled()) {
+        return marketplaceServerState && Array.isArray(marketplaceServerState.listings)
+            ? marketplaceServerState.listings
+            : [];
+    }
+    return (typeof getMarketplaceListings === 'function') ? getMarketplaceListings() : [];
+}
+
+function marketplaceClientMineListings() {
+    if (serverMarketplaceEnabled()) {
+        return marketplaceServerState && Array.isArray(marketplaceServerState.mine)
+            ? marketplaceServerState.mine
+            : [];
+    }
+    return marketplaceClientListings().filter(listing => listing && listing.sellerIsMe);
+}
+
+function marketplaceListingById(listingId) {
+    const id = String(listingId || '');
+    return marketplaceClientListings().find(listing => String(listing.id || listing.listingId) === id)
+        || marketplaceClientMineListings().find(listing => String(listing.id || listing.listingId) === id)
+        || null;
+}
+
+function applyMarketplaceApiResult(data) {
+    if (!data || typeof data !== 'object') return;
+    if (data.config) apexServerConfig = { ...(apexServerConfig || {}), marketplace: data.config };
+    if (data.economy && data.economy.garage) applyAuthoritativeGarage(data.economy.garage);
+    apexNftRegistryLoadedForUser = '';
+    if (typeof renderHubHeader === 'function') renderHubHeader();
+    if (currentHubView === 'garage' && typeof renderGarageView === 'function') renderGarageView();
+    if (currentHubView === 'inventory' && typeof renderInventoryView === 'function') renderInventoryView();
+    // La titularidad del registro puede cambiar: refresca en segundo plano sin
+    // bloquear la confirmación de compra/venta ya autorizada por servidor.
+    if (typeof loadNftRegistry === 'function') loadNftRegistry(true);
+}
+
+function marketplaceApiRequest(path, options = {}) {
+    const method = options.method || 'GET';
+    const run = () => fetch(path, {
+        method,
+        headers: apexApiHeaders({ Accept: 'application/json' }),
+        body: options.body ? JSON.stringify(options.body) : undefined
+    })
+        .then(response => response.json().catch(() => null).then(data => ({ status: response.status, data })))
+        .then(({ status, data }) => {
+            if (data) applyMarketplaceApiResult(data);
+            return { ok: status >= 200 && status < 300 && data && data.ok === true, status, data };
+        })
+        .catch(() => ({ ok: false, status: 0, data: { ok: false, error: 'marketplace_unavailable' } }));
+    if (method === 'GET') return run();
+    _serverEconomyQueue = _serverEconomyQueue.then(run, run);
+    return _serverEconomyQueue;
+}
+
+function loadServerMarketplace(force = false, rerender = true) {
+    if (!serverMarketplaceEnabled()) return Promise.resolve(null);
+    const userId = getApexUserId();
+    if (!force && marketplaceServerState && marketplaceServerLoadedForUser === userId) {
+        if (rerender) renderPartsMarketplaceModal();
+        return Promise.resolve(marketplaceServerState);
+    }
+    const seq = ++marketplaceServerRequestSeq;
+    marketplaceServerLoading = true;
+    marketplaceServerError = '';
+    const params = new URLSearchParams({
+        userId,
+        type: 'all',
+        q: marketplaceSearchQuery || '',
+        sort: marketplaceSort || 'newest',
+        limit: '100'
+    });
+    return marketplaceApiRequest(`/api/marketplace/listings?${params.toString()}`)
+        .then(({ ok, data }) => {
+            if (seq !== marketplaceServerRequestSeq) return marketplaceServerState;
+            marketplaceServerLoading = false;
+            if (!ok || !data) {
+                marketplaceServerError = (data && data.error) || 'marketplace_unavailable';
+                if (rerender) renderPartsMarketplaceModal();
+                return null;
+            }
+            marketplaceServerState = data;
+            marketplaceServerLoadedForUser = userId;
+            if (rerender) renderPartsMarketplaceModal();
+            return data;
+        })
+        .catch(() => {
+            if (seq !== marketplaceServerRequestSeq) return marketplaceServerState;
+            marketplaceServerLoading = false;
+            marketplaceServerError = 'marketplace_unavailable';
+            if (rerender) renderPartsMarketplaceModal();
+            return null;
+        });
+}
+
+function refreshMarketplaceFromServer() {
+    hubAudio.playClick();
+    if (!serverMarketplaceEnabled()) {
+        renderPartsMarketplaceModal();
+        return Promise.resolve(null);
+    }
+    showHubToast('🔄 Actualizando mercado y garaje desde el servidor…');
+    return Promise.all([syncAuthoritativeEconomy(), loadServerMarketplace(true, false), loadNftRegistry(true)])
+        .then(() => {
+            renderPartsMarketplaceModal();
+            showHubToast(marketplaceServerError ? '⚠️ No se pudo actualizar el mercado.' : '✅ Mercado actualizado.');
+        });
+}
+
+function setMarketplaceSearch(value) {
+    marketplaceSearchQuery = String(value || '').slice(0, 80);
+    if (marketplaceSearchTimer) clearTimeout(marketplaceSearchTimer);
+    marketplaceSearchTimer = setTimeout(() => {
+        if (serverMarketplaceEnabled()) loadServerMarketplace(true, true);
+        else renderPartsMarketplaceModal();
+    }, 320);
+}
+
+function setMarketplaceSort(value) {
+    hubAudio.playClick();
+    marketplaceSort = ['price_asc', 'price_desc', 'oldest'].includes(value) ? value : 'newest';
+    if (serverMarketplaceEnabled()) loadServerMarketplace(true, true);
+    else renderPartsMarketplaceModal();
+}
+
+function marketplaceMineListingsHtml() {
+    const mine = marketplaceClientMineListings();
+    if (!mine.length) return '';
+    return `
+        <div style="padding:12px 14px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.45);border-radius:10px;margin-bottom:12px;">
+            <div style="font-size:12px;font-weight:900;color:#6ee7b7;margin-bottom:8px;">⭐ MIS ANUNCIOS (${mine.length})</div>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+                ${mine.slice(0, 12).map(listing => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;background:rgba(15,23,42,0.55);border-radius:8px;">
+                        <div style="min-width:0;">
+                            <div style="font-size:12px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(listing.icon || '📦')} ${escapeHtml(listing.name || 'Artículo')}</div>
+                            <div style="font-size:10.5px;color:#94a3b8;">${escapeHtml(listing.id || '')} · ${escapeHtml(listing.status || 'active')} · ${escapeHtml(marketplaceExpiryLabel(listing))} · recibirías ${(Number(listing.sellerNetCr || marketplaceFeePreview(listing.priceCr).sellerNetCr) || 0).toLocaleString('es-ES')} $CR</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+                            <strong style="color:#fde047;font-size:12px;">${(Number(listing.priceCr) || 0).toLocaleString('es-ES')} $CR</strong>
+                            ${(listing.status || 'active') === 'active' ? `<button class="btn-secondary" style="padding:6px 9px;background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#fca5a5;font-size:10px;font-weight:800;border-radius:6px;cursor:pointer;" onclick="handleCancelMarketplaceListing('${safeDomId(listing.id)}')">RETIRAR</button>` : ''}
+                        </div>
+                    </div>`).join('')}
+            </div>
+        </div>`;
+}
 
 function setMarketplaceFilter(filter) {
     hubAudio.playClick();
     marketplaceFilterType = filter;
-    openPartsMarketplaceModal('buy');
+    marketplaceActiveTab = 'buy';
+    renderPartsMarketplaceModal();
 }
 
 function setMarketplaceSellType(sellType) {
     hubAudio.playClick();
     marketplaceSellType = sellType;
-    openPartsMarketplaceModal('sell');
+    marketplaceActiveTab = 'sell';
+    renderPartsMarketplaceModal();
 }
 
-function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
-    hubAudio.playClick();
-    if (marketplacePaused()) {
-        showFeaturePausedModal('marketplace-modal', '🤝 MERCADO P2P EN PAUSA', 'El mercado permanece cerrado hasta persistir anuncios, bloquear el objeto vendido y transferir saldo/objeto en una única transacción de servidor. Tus piezas y coches están a salvo en tu inventario.');
-        return;
-    }
-    marketplaceActiveTab = activeTab;
-    if (sellType) marketplaceSellType = sellType;
-
+function renderPartsMarketplaceModal() {
     let modal = document.getElementById('marketplace-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -5814,19 +6150,31 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
     }
 
     const userData = loadNftUserData();
-    const allListings = (typeof getMarketplaceListings === 'function') ? getMarketplaceListings() : [];
+    const allListings = marketplaceClientListings();
     const inv = userData.partsInventory || {};
     const garage = userData.garage || [];
+    const marketConfig = marketplaceClientConfig();
+    const feePreview = marketplaceFeePreview(1000);
+    const serverMode = serverMarketplaceEnabled();
+    const paused = serverMode && marketplacePaused();
 
-    // Filtrar listings por tipo
+    // Filtrar listings por tipo. En servidor la búsqueda/orden se resuelven en
+    // la API; en desarrollo local se filtra la demo histórica en memoria.
+    const query = marketplaceSearchQuery.trim().toLowerCase();
     const listings = allListings.filter(l => {
-        if (marketplaceFilterType === 'parts') return l.type === 'part';
-        if (marketplaceFilterType === 'cars') return l.type === 'car';
+        if (marketplaceFilterType === 'parts' && l.type !== 'part') return false;
+        if (marketplaceFilterType === 'cars' && l.type !== 'car') return false;
+        if (!serverMode && query) {
+            const haystack = `${l.name || ''} ${l.category || ''} ${l.seller || ''}`.toLowerCase();
+            if (!haystack.includes(query)) return false;
+        }
         return true;
     });
 
-    const partsCount = allListings.filter(l => l.type === 'part').length;
-    const carsCount = allListings.filter(l => l.type === 'car').length;
+    const serverCounts = marketplaceServerState && marketplaceServerState.counts ? marketplaceServerState.counts : null;
+    const partsCount = serverCounts ? Number(serverCounts.parts || 0) : allListings.filter(l => l.type === 'part').length;
+    const carsCount = serverCounts ? Number(serverCounts.cars || 0) : allListings.filter(l => l.type === 'car').length;
+    const totalListingsCount = serverCounts ? Number(serverCounts.all || 0) : allListings.length;
 
     modal.innerHTML = `
         <div class="settings-dialog" style="max-width: 680px;">
@@ -5835,7 +6183,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                     <span style="font-size: 26px;">🤝</span>
                     <div>
                         <h2 style="margin: 0; font-size: 18px; color: #00f5d4;">MERCADO P2P ENTRE JUGADORES DE LA COMUNIDAD TELEGRAM</h2>
-                        <span style="font-size: 11px; color: #cbd5e1;">Comercio directo entre usuarios • La plataforma NO compra piezas ni coches</span>
+                        <span style="font-size: 11px; color: #cbd5e1;">${paused ? 'Mercado en pausa • Puedes retirar tus anuncios activos y recuperar el escrow' : (serverMode ? `Anuncios reales en escrow de servidor • Comisión ${feePreview.feePct}% al vender • Caducan a los ${marketConfig.defaultListingDays} días` : 'Comercio directo entre usuarios • La plataforma NO compra piezas ni coches')}</span>
                     </div>
                 </div>
                 <button class="settings-close-x" onclick="closePartsMarketplaceModal()">✖</button>
@@ -5844,7 +6192,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
             <!-- Pestañas Principales: Comprar vs Publicar en Venta -->
             <div style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(15, 23, 42, 0.8);">
                 <button style="flex: 1; padding: 12px; background: ${marketplaceActiveTab === 'buy' ? 'rgba(0, 245, 212, 0.18)' : 'transparent'}; border: none; border-bottom: 2px solid ${marketplaceActiveTab === 'buy' ? '#00f5d4' : 'transparent'}; color: ${marketplaceActiveTab === 'buy' ? '#00f5d4' : '#94a3b8'}; font-weight: 900; font-size: 12px; cursor: pointer;" onclick="openPartsMarketplaceModal('buy')">
-                    🛍️ COMPRAR EN EL MERCADO (${allListings.length})
+                    🛍️ COMPRAR EN EL MERCADO (${totalListingsCount})
                 </button>
                 <button style="flex: 1; padding: 12px; background: ${marketplaceActiveTab === 'sell' ? 'rgba(0, 245, 212, 0.18)' : 'transparent'}; border: none; border-bottom: 2px solid ${marketplaceActiveTab === 'sell' ? '#00f5d4' : 'transparent'}; color: ${marketplaceActiveTab === 'sell' ? '#00f5d4' : '#94a3b8'}; font-weight: 900; font-size: 12px; cursor: pointer;" onclick="openPartsMarketplaceModal('sell')">
                     🏷️ PUBLICAR EN VENTA (P2P)
@@ -5852,11 +6200,26 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
             </div>
 
             <div class="settings-body" style="padding: 16px 18px; max-height: 440px; overflow-y: auto;">
+                ${paused ? '<div style="padding:12px 14px;margin-bottom:12px;border:1px solid rgba(251,191,36,0.65);background:rgba(120,53,15,0.28);border-radius:10px;color:#fde68a;font-size:12px;line-height:1.5;">⏸️ <strong>Mercado pausado:</strong> no se aceptan compras ni nuevas publicaciones. Tus anuncios activos siguen visibles en <strong>Publicar en venta → Mis anuncios</strong> y puedes retirarlos para recuperar exactamente el coche o las piezas depositadas.</div>' : ''}
                 ${marketplaceActiveTab === 'buy' ? `
+                    ${serverMode ? `
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                            <input id="marketplace-search-input" type="search" value="${escapeHtml(marketplaceSearchQuery)}" placeholder="Buscar coche, pieza, piloto o APEX-CAR…" oninput="setMarketplaceSearch(this.value)" style="flex:1 1 240px;min-width:0;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.16);background:rgba(15,23,42,0.75);color:#fff;font-size:12px;">
+                            <select onchange="setMarketplaceSort(this.value)" style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.16);background:rgba(15,23,42,0.75);color:#fff;font-size:12px;">
+                                <option value="newest" ${marketplaceSort === 'newest' ? 'selected' : ''}>Más recientes</option>
+                                <option value="price_asc" ${marketplaceSort === 'price_asc' ? 'selected' : ''}>Precio: menor a mayor</option>
+                                <option value="price_desc" ${marketplaceSort === 'price_desc' ? 'selected' : ''}>Precio: mayor a menor</option>
+                                <option value="oldest" ${marketplaceSort === 'oldest' ? 'selected' : ''}>Más antiguos</option>
+                            </select>
+                            <button class="btn-secondary" onclick="refreshMarketplaceFromServer()" style="padding:10px 12px;border-radius:8px;border:1px solid rgba(0,245,212,0.5);background:rgba(0,245,212,0.12);color:#67e8f9;font-weight:900;font-size:11px;cursor:pointer;">🔄 ACTUALIZAR</button>
+                        </div>
+                        ${marketplaceServerLoading && !marketplaceServerState ? '<div style="padding:12px;margin-bottom:12px;border:1px dashed rgba(0,245,212,0.45);border-radius:10px;color:#a5f3fc;text-align:center;font-size:12px;">⏳ Cargando anuncios reales del servidor…</div>' : ''}
+                        ${marketplaceServerError ? `<div style="padding:12px;margin-bottom:12px;border:1px solid rgba(248,113,113,0.6);background:rgba(127,29,29,0.25);border-radius:10px;color:#fecaca;font-size:12px;line-height:1.45;">⚠️ ${escapeHtml(marketplaceErrorMessage(marketplaceServerError))}</div>` : ''}
+                    ` : ''}
                     <!-- Filtros por tipo en Comprar -->
-                    <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                    <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
                         <button style="padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 6px; border: 1px solid ${marketplaceFilterType === 'all' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceFilterType === 'all' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceFilterType === 'all' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceFilter('all')">
-                            🌐 TODOS (${allListings.length})
+                            🌐 TODOS (${totalListingsCount})
                         </button>
                         <button style="padding: 6px 12px; font-size: 11px; font-weight: 800; border-radius: 6px; border: 1px solid ${marketplaceFilterType === 'parts' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceFilterType === 'parts' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceFilterType === 'parts' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceFilter('parts')">
                             📦 PIEZAS (${partsCount})
@@ -5880,14 +6243,16 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                     <div>
                                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                             <div style="font-size: 14px; font-weight: 900; color: #ffffff;">${escapeHtml(lst.name)}</div>
-                                            <span class="badge-rarity badge-rarity-${['common','uncommon','rare','legendary','starter'].includes(lst.rarity) ? lst.rarity : 'common'}">${escapeHtml(String(lst.rarity || 'common').toUpperCase())}</span>
+                                            <span class="badge-rarity badge-rarity-${['common','uncommon','rare','epic','legendary','starter'].includes(lst.rarity) ? lst.rarity : 'common'}">${escapeHtml(String(lst.rarity || 'common').toUpperCase())}</span>
                                             ${lst.sellerIsMe ? `
                                                 <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; padding: 2px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 900;">⭐ TU ANUNCIO</span>
                                             ` : ''}
                                         </div>
                                         <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
-                                            Vendedor: <strong style="color: ${lst.sellerIsMe ? '#10b981' : '#00f5d4'};">${escapeHtml(lst.seller)}</strong> • ${escapeHtml(lst.category)} • ${escapeHtml(lst.timeAgo)}
+                                            Vendedor: <strong style="color: ${lst.sellerIsMe ? '#10b981' : '#00f5d4'};">${escapeHtml(lst.seller)}</strong> • ${escapeHtml(lst.category)} • ${escapeHtml(marketplaceTimeLabel(lst))}${marketplaceExpiryLabel(lst) ? ` • ${escapeHtml(marketplaceExpiryLabel(lst))}` : ''}${Number(lst.quantity || 1) > 1 ? ` • x${Number(lst.quantity)}` : ''}
                                         </div>
+                                        ${marketplaceCarProgressionHtml(lst)}
+                                        ${lst.type === 'part' && lst.snapshot && lst.snapshot.desc ? `<div style="font-size:10.5px;color:#94a3b8;margin-top:4px;line-height:1.4;">${escapeHtml(lst.snapshot.desc)}</div>` : ''}
                                     </div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 12px;">
@@ -5908,6 +6273,8 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                 ` : `
                     <!-- Pestaña de Publicar en Venta -->
                     <div style="display: flex; flex-direction: column; gap: 12px;">
+                        ${marketplaceMineListingsHtml()}
+                        ${serverMode ? `<div style="padding:10px 12px;border:1px solid rgba(0,245,212,0.35);background:rgba(0,245,212,0.07);border-radius:10px;color:#cbd5e1;font-size:11.5px;line-height:1.5;">🔒 Al publicar, el servidor retira el coche/pieza de tu garaje y lo guarda en escrow: no podrás usarlo ni venderlo dos veces. Si lo retiras o caduca, vuelve exactamente igual. En coches se conserva nivel, XP, piezas, hitos, color, energía y número global.</div>` : ''}
                         <!-- Selector de lo que el jugador desea vender -->
                         <div style="display: flex; gap: 8px; margin-bottom: 6px;">
                             <button style="flex: 1; padding: 8px; font-size: 11px; font-weight: 900; border-radius: 6px; border: 1px solid ${marketplaceSellType === 'parts' ? '#00f5d4' : 'rgba(255,255,255,0.15)'}; background: ${marketplaceSellType === 'parts' ? 'rgba(0,245,212,0.2)' : 'rgba(15,23,42,0.6)'}; color: ${marketplaceSellType === 'parts' ? '#00f5d4' : '#cbd5e1'}; cursor: pointer;" onclick="setMarketplaceSellType('parts')">
@@ -5947,8 +6314,9 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                             <div style="text-align: right;">
                                                 <div style="font-size: 11px; color: #94a3b8;">Precio sugerido:</div>
                                                 <div style="font-size: 13px; font-weight: 900; color: #fde047;">~${askPrice.toLocaleString()} $CR</div>
+                                                <div style="font-size: 10px; color: #94a3b8;">Recibirías ~${netCr.toLocaleString()} $CR</div>
                                             </div>
-                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${safeDomId(partKey)}', ${Number(askPrice) || 0})">
+                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplacePart('${safeDomId(partKey)}', ${Number(askPrice) || 0})" ${paused ? 'disabled' : ''}>
                                                 🏷️ PONER PRECIO Y VENDER
                                             </button>
                                         </div>
@@ -5968,6 +6336,9 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                 const totalFee = Math.round(basePrice * 0.075);
                                 const netCr = Math.max(1, basePrice - totalFee);
                                 const isEquipped = (userData.equippedInstanceId === car.instanceId);
+                                const nftEntry = (typeof getCarNftEntry === 'function') ? getCarNftEntry(car) : null;
+                                const registryLabel = nftEntry && nftEntry.registry ? (nftEntry.registry.registryId || `#${nftEntry.registry.serial || ''}`) : 'registro al sincronizar';
+                                const installedStages = Object.values(car.parts || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
                                 return `
                                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; gap: 12px;">
                                         <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
@@ -5978,7 +6349,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                                     <span class="badge-rarity badge-rarity-${car.rarity}">${(car.rarity || 'common').toUpperCase()}</span>
                                                     ${isEquipped ? `<span style="font-size: 9px; color: #fde047; font-weight: 800;">[EQUIPADO]</span>` : ''}
                                                 </div>
-                                                <div style="font-size: 11px; color: #94a3b8;">Nivel ${car.level || 1} • Color: ${car.colorName || 'Oficial'}</div>
+                                                <div style="font-size: 11px; color: #94a3b8; line-height:1.45;">Nivel ${car.level || 1} • ${Number(car.xp || 0).toLocaleString('es-ES')} XP • ${installedStages} stages de piezas • Color: ${escapeHtml(car.colorName || 'Oficial')}<br>🧾 ${escapeHtml(registryLabel)} · se vende exactamente este coche y su progreso</div>
                                             </div>
                                         </div>
                                         <div style="display: flex; align-items: center; gap: 12px;">
@@ -5986,7 +6357,7 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
                                                 <div style="font-size: 11px; color: #94a3b8;">Precio sugerido:</div>
                                                 <div style="font-size: 13px; font-weight: 900; color: #fde047;">~${basePrice.toLocaleString()} $CR</div>
                                             </div>
-                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${safeDomId(car.instanceId)}', ${Number(basePrice) || 0})">
+                                            <button class="btn-primary" style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:#fff; font-weight:900; font-size:11px; border-radius:6px; cursor:pointer; white-space: nowrap;" onclick="handleListMarketplaceCar('${encodeURIComponent(String(car.instanceId || ''))}', ${Number(basePrice) || 0})">
                                                 🏷️ PONER PRECIO Y VENDER
                                             </button>
                                         </div>
@@ -6008,9 +6379,83 @@ function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
     modal.classList.remove('hidden');
 }
 
+function openPartsMarketplaceModal(activeTab = 'buy', sellType = null) {
+    hubAudio.playClick();
+    marketplaceActiveTab = activeTab;
+    if (sellType) marketplaceSellType = sellType;
+    if (!serverMarketplaceEnabled()) {
+        renderPartsMarketplaceModal();
+        return Promise.resolve(null);
+    }
+    renderPartsMarketplaceModal();
+    return loadApexServerConfig()
+        .then(() => Promise.all([
+            syncAuthoritativeEconomy(),
+            loadServerMarketplace(true, false),
+            loadNftRegistry(false)
+        ]).then(() => {
+            // Durante una pausa no se compran ni se publican anuncios, pero
+            // sí se cargan los propios para poder liberar el escrow.
+            if (marketplacePaused()
+                && marketplaceClientMineListings().some(listing => (listing.status || 'active') === 'active')) {
+                marketplaceActiveTab = 'sell';
+            }
+            renderPartsMarketplaceModal();
+            return marketplaceServerState;
+        }))
+        .catch(() => {
+            marketplaceServerError = 'marketplace_unavailable';
+            renderPartsMarketplaceModal();
+            return null;
+        });
+}
+
 function handleBuyMarketplaceItem(listingId) {
     hubAudio.playClick();
     if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
+    if (serverMarketplaceEnabled()) {
+        if (marketplaceActionInFlight) return Promise.resolve(null);
+        const safeListingId = String(listingId || '').toUpperCase();
+        const listing = marketplaceListingById(safeListingId);
+        if (!listing) {
+            alert('Ese anuncio ya no aparece en la caché del servidor. Actualiza el mercado antes de comprar.');
+            return loadServerMarketplace(true, true);
+        }
+        const price = Math.floor(Number(listing.priceCr) || 0);
+        const car = listing.car || listing.carData || {};
+        const progressionLine = listing.type === 'car'
+            ? `\n\nRecibirás exactamente este coche: nivel ${car.level || 1}, XP, piezas instaladas, hitos, color, energía y número global se conservan.`
+            : `\n\nRecibirás ${Number(listing.quantity || 1)} unidad(es) en tu inventario de servidor.`;
+        if (!confirm(`¿Comprar "${listing.name}" de ${listing.seller} por ${price.toLocaleString('es-ES')} $CR?${progressionLine}\n\nEl vendedor recibirá ${(Number(listing.sellerNetCr || marketplaceFeePreview(price).sellerNetCr) || 0).toLocaleString('es-ES')} $CR tras la comisión de servidor.`)) {
+            return Promise.resolve(null);
+        }
+        marketplaceActionInFlight = true;
+        showHubToast('🤝 Liquidando la compra en el servidor…');
+        return marketplaceApiRequest(`/api/marketplace/listings/${encodeURIComponent(safeListingId)}/buy`, {
+            method: 'POST',
+            body: { userId: getApexUserId() }
+        }).then(({ ok, data }) => {
+            marketplaceActionInFlight = false;
+            if (!ok || !data) {
+                alert(marketplaceErrorMessage(data && data.error));
+                return loadServerMarketplace(true, true);
+            }
+            hubAudio.playOpenCrate();
+            return loadServerMarketplace(true, false).then(() => {
+                marketplaceActiveTab = 'buy';
+                renderPartsMarketplaceModal();
+                if (currentHubView === 'garage' && typeof renderGarageView === 'function') renderGarageView();
+                if (currentHubView === 'inventory' && typeof renderInventoryView === 'function') renderInventoryView();
+                const trade = data.trade || {};
+                alert(`🎉 ¡Compra completada!\n\nHas recibido "${data.listing.name}" por ${(Number(trade.grossCr || data.listing.priceCr) || 0).toLocaleString('es-ES')} $CR.\n\nEl servidor ya transfirió el activo y acreditó al vendedor ${(Number(trade.sellerNetCr || data.listing.sellerNetCr) || 0).toLocaleString('es-ES')} $CR netos.`);
+                return data;
+            });
+        }).catch(() => {
+            marketplaceActionInFlight = false;
+            alert(marketplaceErrorMessage('marketplace_unavailable'));
+            return null;
+        });
+    }
     if (typeof buyMarketplaceItem !== 'function') return;
     const res = buyMarketplaceItem(listingId);
     if (!res.success) {
@@ -6037,6 +6482,70 @@ function handleBuyMarketplacePart(listingId) {
 function handleListMarketplacePart(partKey, defaultPrice) {
     hubAudio.playClick();
     if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
+    if (serverMarketplaceEnabled()) {
+        if (marketplaceActionInFlight) return Promise.resolve(null);
+        const config = marketplaceClientConfig();
+        const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey };
+        const userData = loadNftUserData();
+        const available = Math.max(0, Math.floor(Number((userData.partsInventory || {})[partKey]) || 0));
+        if (available <= 0) {
+            alert('No tienes unidades de esa pieza en tu inventario de servidor. Sincroniza tu garaje y vuelve a intentarlo.');
+            return syncAuthoritativeEconomy().then(() => renderPartsMarketplaceModal());
+        }
+        const maxQuantity = Math.min(available, Math.max(1, Math.floor(Number(config.maxPartQuantity) || 999)));
+        const quantityInput = prompt(`¿Cuántas unidades de "${pDef.name}" quieres publicar como un único lote?\n\nTienes ${available} en tu inventario. Puedes publicar entre 1 y ${maxQuantity} en este anuncio.`, 1);
+        if (quantityInput === null) return Promise.resolve(null);
+        const quantity = parseInt(String(quantityInput).replace(/[^\d-]/g, ''), 10);
+        if (!Number.isFinite(quantity) || quantity < 1 || quantity > maxQuantity) {
+            alert(`Introduce una cantidad válida entre 1 y ${maxQuantity}.`);
+            return Promise.resolve(null);
+        }
+        const suggestedTotal = Math.max(config.minPartPriceCr, (Number(defaultPrice) || 250) * quantity);
+        const input = prompt(`¿Qué precio TOTAL en $CR deseas fijar para vender ${quantity}x "${pDef.name}"?\n\nLas ${quantity} unidades saldrán de tu inventario y quedarán bloqueadas en escrow hasta que se vendan, las retires o caduquen. Mínimo: ${config.minPartPriceCr.toLocaleString('es-ES')} $CR por todo el lote.`, suggestedTotal);
+        if (input === null) return Promise.resolve(null);
+        const priceCr = parseInt(String(input).replace(/[^\d-]/g, ''), 10);
+        if (!Number.isFinite(priceCr) || priceCr < config.minPartPriceCr || priceCr > config.maxPriceCr) {
+            alert(`Introduce un precio válido entre ${config.minPartPriceCr.toLocaleString('es-ES')} y ${config.maxPriceCr.toLocaleString('es-ES')} $CR.`);
+            return Promise.resolve(null);
+        }
+        const preview = marketplaceFeePreview(priceCr);
+        if (!confirm(`Publicar 1x "${pDef.name}" por ${priceCr.toLocaleString('es-ES')} $CR.\n\nSi otro jugador la compra recibirás ${preview.sellerNetCr.toLocaleString('es-ES')} $CR; la comisión de servidor será ${preview.feeCr.toLocaleString('es-ES')} $CR.`)) {
+            return Promise.resolve(null);
+        }
+        marketplaceActionInFlight = true;
+        showHubToast('🏷️ Publicando tu pieza en escrow de servidor…');
+        return marketplaceApiRequest('/api/marketplace/listings', {
+            method: 'POST',
+            body: {
+                userId: getApexUserId(),
+                assetType: 'part',
+                partId: partKey,
+                quantity,
+                priceCr,
+                durationDays: config.defaultListingDays,
+                idempotencyKey: createEconomyIdempotencyKey('marketplace-list-part')
+            }
+        }).then(({ ok, data }) => {
+            marketplaceActionInFlight = false;
+            if (!ok || !data) {
+                alert(marketplaceErrorMessage(data && data.error));
+                return loadServerMarketplace(true, true);
+            }
+            hubAudio.playOpenCrate();
+            return loadServerMarketplace(true, false).then(() => {
+                marketplaceActiveTab = 'sell';
+                marketplaceSellType = 'parts';
+                renderPartsMarketplaceModal();
+                if (currentHubView === 'inventory' && typeof renderInventoryView === 'function') renderInventoryView();
+                alert(`🏷️ ¡Pieza publicada!\n\n"${pDef.name}" está visible para otros pilotos por ${priceCr.toLocaleString('es-ES')} $CR.\n\nLa unidad quedó en escrow. Si nadie la compra, podrás retirarla o volverá al caducar.`);
+                return data;
+            });
+        }).catch(() => {
+            marketplaceActionInFlight = false;
+            alert(marketplaceErrorMessage('marketplace_unavailable'));
+            return null;
+        });
+    }
     if (typeof listPartOnMarketplace !== 'function') return;
     const pDef = (typeof WORKSHOP_PIECES_CATALOG !== 'undefined' && WORKSHOP_PIECES_CATALOG[partKey]) || { name: partKey };
     const promptMsg = `¿Qué precio en $CR deseas fijar para vender "${pDef.name}"?\n\n(Tú eliges libremente el precio. Mínimo: 10 $CR)`;
@@ -6061,7 +6570,68 @@ function handleListMarketplacePart(partKey, defaultPrice) {
 function handleListMarketplaceCar(instanceId, defaultPrice) {
     hubAudio.playClick();
     if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
+    if (serverMarketplaceEnabled()) {
+        if (marketplaceActionInFlight) return Promise.resolve(null);
+        let decodedInstanceId = String(instanceId || '');
+        try { decodedInstanceId = decodeURIComponent(decodedInstanceId); } catch (e) {}
+        const config = marketplaceClientConfig();
+        const userData = loadNftUserData();
+        const car = (userData.garage || []).find(c => String(c.instanceId) === decodedInstanceId);
+        if (!car) {
+            alert('Ese coche ya no está en tu garaje visible. Actualiza el garaje desde el servidor antes de venderlo.');
+            return syncAuthoritativeEconomy().then(() => renderPartsMarketplaceModal());
+        }
+        if (isStarterClientCar(car)) {
+            alert('El coche inicial no es transferible: permanece vinculado a tu cuenta para que nunca te quedes sin coche jugable.');
+            return Promise.resolve(null);
+        }
+        const suggested = Number(defaultPrice) || (car.rarity === 'common' ? 1000 : (car.rarity === 'uncommon' ? 2500 : (car.rarity === 'rare' ? 6000 : 25000)));
+        const input = prompt(`¿Qué precio en $CR deseas fijar para vender tu coche "${car.name}"?\n\nSe venderá exactamente este coche: nivel ${car.level || 1}, XP, piezas instaladas, hitos, color, energía y número global se transferirán al comprador.\n\nAl publicarlo saldrá de tu garaje y quedará bloqueado en escrow. Mínimo: ${config.minCarPriceCr.toLocaleString('es-ES')} $CR.`, suggested);
+        if (input === null) return Promise.resolve(null);
+        const priceCr = parseInt(String(input).replace(/[^\d-]/g, ''), 10);
+        if (!Number.isFinite(priceCr) || priceCr < config.minCarPriceCr || priceCr > config.maxPriceCr) {
+            alert(`Introduce un precio válido entre ${config.minCarPriceCr.toLocaleString('es-ES')} y ${config.maxPriceCr.toLocaleString('es-ES')} $CR.`);
+            return Promise.resolve(null);
+        }
+        const preview = marketplaceFeePreview(priceCr);
+        if (!confirm(`Publicar "${car.name}" por ${priceCr.toLocaleString('es-ES')} $CR.\n\nSi otro jugador lo compra recibirás ${preview.sellerNetCr.toLocaleString('es-ES')} $CR; la comisión de servidor será ${preview.feeCr.toLocaleString('es-ES')} $CR.\n\nMientras esté anunciado no podrás correr, equipar, tunear ni convertir este coche.`)) {
+            return Promise.resolve(null);
+        }
+        marketplaceActionInFlight = true;
+        showHubToast('🏷️ Publicando tu coche en escrow de servidor…');
+        return marketplaceApiRequest('/api/marketplace/listings', {
+            method: 'POST',
+            body: {
+                userId: getApexUserId(),
+                assetType: 'car',
+                instanceId: decodedInstanceId,
+                priceCr,
+                durationDays: config.defaultListingDays,
+                idempotencyKey: createEconomyIdempotencyKey('marketplace-list-car')
+            }
+        }).then(({ ok, data }) => {
+            marketplaceActionInFlight = false;
+            if (!ok || !data) {
+                alert((data && data.message) || marketplaceErrorMessage(data && data.error));
+                return loadServerMarketplace(true, true);
+            }
+            hubAudio.playOpenCrate();
+            return loadServerMarketplace(true, false).then(() => {
+                marketplaceActiveTab = 'sell';
+                marketplaceSellType = 'cars';
+                renderPartsMarketplaceModal();
+                if (currentHubView === 'garage' && typeof renderGarageView === 'function') renderGarageView();
+                alert(`🏷️ ¡Coche publicado!\n\n"${car.name}" está visible para otros pilotos por ${priceCr.toLocaleString('es-ES')} $CR.\n\nQuedó bloqueado en escrow con todo su nivel y piezas. Puedes retirarlo cuando quieras si aún no se ha vendido.`);
+                return data;
+            });
+        }).catch(() => {
+            marketplaceActionInFlight = false;
+            alert(marketplaceErrorMessage('marketplace_unavailable'));
+            return null;
+        });
+    }
     if (typeof listCarOnMarketplace !== 'function') return;
+    try { instanceId = decodeURIComponent(String(instanceId || '')); } catch (e) {}
     const userData = loadNftUserData();
     const car = (userData.garage || []).find(c => c.instanceId === instanceId);
     const carName = car ? car.name : 'Coche NFT';
@@ -6087,7 +6657,40 @@ function handleListMarketplaceCar(instanceId, defaultPrice) {
 
 function handleCancelMarketplaceListing(listingId) {
     hubAudio.playClick();
-    if (marketplacePaused()) { alert('🛠️ El mercado P2P está en pausa. No se ha movido ningún objeto ni saldo.'); return; }
+    // Cancelar es la operación de recuperación: sigue disponible aunque el
+    // mercado esté pausado para compras y nuevas publicaciones.
+    if (serverMarketplaceEnabled()) {
+        if (marketplaceActionInFlight) return Promise.resolve(null);
+        const safeListingId = String(listingId || '').toUpperCase();
+        const listing = marketplaceListingById(safeListingId);
+        const name = listing ? listing.name : 'este anuncio';
+        if (!confirm(`¿Retirar "${name}" del mercado?\n\nEl servidor devolverá el activo exactamente igual a tu garaje/inventario.`)) {
+            return Promise.resolve(null);
+        }
+        marketplaceActionInFlight = true;
+        showHubToast('↩️ Retirando anuncio y devolviendo el activo…');
+        return marketplaceApiRequest(`/api/marketplace/listings/${encodeURIComponent(safeListingId)}/cancel`, {
+            method: 'POST',
+            body: { userId: getApexUserId() }
+        }).then(({ ok, data }) => {
+            marketplaceActionInFlight = false;
+            if (!ok || !data) {
+                alert(marketplaceErrorMessage(data && data.error));
+                return loadServerMarketplace(true, true);
+            }
+            return loadServerMarketplace(true, false).then(() => {
+                renderPartsMarketplaceModal();
+                if (currentHubView === 'garage' && typeof renderGarageView === 'function') renderGarageView();
+                if (currentHubView === 'inventory' && typeof renderInventoryView === 'function') renderInventoryView();
+                alert(`✅ ¡Anuncio retirado!\n\n"${data.listing.name}" ha vuelto a tu cuenta exactamente como estaba.`);
+                return data;
+            });
+        }).catch(() => {
+            marketplaceActionInFlight = false;
+            alert(marketplaceErrorMessage('marketplace_unavailable'));
+            return null;
+        });
+    }
     if (typeof cancelMarketplaceListing !== 'function') return;
     const res = cancelMarketplaceListing(listingId);
     if (!res.success) {
@@ -6235,6 +6838,11 @@ if (typeof window !== 'undefined') {
     window.setInventoryCategory = setInventoryCategory;
     window.setInventoryRarity = setInventoryRarity;
     window.openPartsMarketplaceModal = openPartsMarketplaceModal;
+    window.renderPartsMarketplaceModal = renderPartsMarketplaceModal;
+    window.loadServerMarketplace = loadServerMarketplace;
+    window.refreshMarketplaceFromServer = refreshMarketplaceFromServer;
+    window.setMarketplaceSearch = setMarketplaceSearch;
+    window.setMarketplaceSort = setMarketplaceSort;
     window.closePartsMarketplaceModal = closePartsMarketplaceModal;
     window.setMarketplaceFilter = setMarketplaceFilter;
     window.setMarketplaceSellType = setMarketplaceSellType;

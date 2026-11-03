@@ -19,7 +19,7 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <main><section class="card">
 <p><a href="/">← Volver al juego</a></p>
 <h1>Soporte y recuperación</h1>
-<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.5</p>
+<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.6</p>
 <nav><a href="/terms.html">Términos</a><a href="/privacy.html">Privacidad</a><a href="/">Jugar</a></nav>
 
 <div class="notice danger"><strong>Nunca compartas</strong> tu frase semilla, claves privadas, contraseña de Telegram o wallet, credencial de dispositivo ni código de recuperación. Soporte puede trabajar con tu ID de cuenta, ID del pedido, recibo o identificador del cargo de Telegram Stars y hash público de una transacción TON; no necesita tus secretos.</div>
@@ -68,7 +68,7 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <p>El correo opcional no está verificado y no permite recuperar la cuenta por sí solo.</p>
 
 <h2>4. Mi saldo o un coche no coincide con lo que veía</h2>
-<p>Desde la versión 1.0.4 el servidor es la fuente autoritativa de saldos, coches, piezas, energía y recompensas; en la 1.0.5 también conserva el registro global y el estado de conversión de cada coche. Cierra y vuelve a abrir el hub con conexión para sincronizar la representación local. Si una compra TON o de Stars está pagada, usa primero “Recuperar pedidos” o “Comprobar en servidor”. En el garaje, “Sincronizar registro” vuelve a descargar la serie global. Si el problema continúa, envía tu ID de cuenta, la hora aproximada y qué acción hiciste.</p>
+<p>Desde la versión 1.0.4 el servidor es la fuente autoritativa de saldos, coches, piezas, energía y recompensas; en la 1.0.6 también conserva el registro global, el estado de conversión y cualquier coche o lote retenido en el escrow del mercado. Cierra y vuelve a abrir el hub con conexión para sincronizar la representación local. Si una compra TON o de Stars está pagada, usa primero “Recuperar pedidos” o “Comprobar en servidor”. En el garaje, “Sincronizar registro” vuelve a descargar la serie global. Si el coche estaba anunciado, revisa también Mercado → “Mis anuncios”: mientras siga activo no aparece como coche usable en el garaje. Si el problema continúa, envía tu ID de cuenta, la hora aproximada, el ID del anuncio <code>MKT-…</code> si lo hay y qué acción hiciste.</p>
 
 <h2>5. Vi un anuncio y no recibí energía o nitro</h2>
 <p>Las recompensas de producción esperan la confirmación de Adsgram en el servidor. Espera unos segundos y vuelve a intentarlo desde la misma pantalla. Si Adsgram no confirma el evento, el juego no puede acreditarlo solo por el aviso visual del anuncio.</p>
@@ -76,9 +76,18 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <h2>6. Una carrera no acreditó recompensa</h2>
 <p>Las carreras oficiales necesitan una sesión de servidor válida, energía disponible y un resultado dentro de los límites físicos del circuito. Revisa tu conexión y vuelve a intentarlo. Los tiempos del ranking son el mejor tiempo por piloto y circuito; no hay pilotos de demostración.</p>
 
-<h2>7. Funciones en pausa</h2>
-<p>El mercado entre jugadores, las apuestas/duelos con saldo y el torneo semanal con entrada están pausados para no mover objetos ni $CR sin escrow y liquidación autoritativa. No se ha descontado saldo por abrir esas pantallas.</p>
-<p>La <strong>acuñación NFT en TON también está pausada</strong>. En la versión 1.0.5 puedes ver la serie global y preparar o cancelar la conversión de un coche elegible, pero eso no crea un NFT, no pide tu wallet y no cobra TON. Desconfía de cualquier pantalla o persona que te pida enviar TON o revelar tu frase semilla para “activar” el coche.</p>
+<h2>7. Mercado P2P de coches y piezas</h2>
+<p>Cuando el mercado esté activado en el servidor, desde Mercado podrás publicar coches elegibles y lotes de piezas sueltas por el precio total en $CR que elijas. Al publicar, el servidor los retira a escrow: ya no están en tu garaje o inventario usable mientras el anuncio siga activo. Si compras un coche, recibes <strong>ese mismo coche</strong> con su nivel, XP, piezas instaladas, hitos, color, energía y serie global; no una copia nueva. La compra descuenta el precio bruto al comprador y acredita al vendedor el neto tras la comisión mostrada antes de confirmar (7,5 % por defecto).</p>
+<ul>
+<li>Para recuperar un anuncio propio sin venderlo, entra en Mercado → “Mis anuncios” y pulsa “Retirar”. Si llega la caducidad, el servidor devuelve el activo automáticamente.</li>
+<li>Si el operador pausa el mercado, no podrán crearse anuncios ni cerrarse compras, pero podrás seguir viendo tu historial y retirando tus anuncios activos.</li>
+<li>El coche inicial no puede venderse y siempre debes conservar un coche jugable. Un coche ya enviado a acuñar o acuñado no se vende por la vía interna hasta que exista transferencia on-chain verificada.</li>
+<li>Si una compra parece no reflejarse, entra con la misma cuenta, actualiza el mercado/garaje y no repitas la compra a ciegas. El servidor procesa cada anuncio una sola vez.</li>
+<li>Para una incidencia, ten a mano el ID <code>MKT-…</code> del anuncio, tu ID de cuenta visible en Ajustes, la hora aproximada y si eras comprador o vendedor. Nunca nos envíes credenciales ni códigos de recuperación.</li>
+<li><strong>No hagas ventas fuera del mercado del juego ni envíes TON/Stars directamente a otro jugador esperando que te entregue un coche.</strong> Solo el botón de compra del mercado mueve el activo y los $CR en la misma operación del servidor.</li>
+</ul>
+<p>Las apuestas/duelos con saldo y el torneo semanal con entrada siguen pausados porque aún no tienen su propia liquidación segura. Abrir esas pantallas no descuenta saldo.</p>
+<p>La <strong>acuñación NFT en TON también está pausada</strong>. En la versión 1.0.6 puedes ver la serie global y preparar o cancelar la conversión de un coche elegible, pero eso no crea un NFT, no pide tu wallet y no cobra TON. Desconfía de cualquier pantalla o persona que te pida enviar TON o revelar tu frase semilla para “activar” el coche.</p>
 
 <h2>8. Contactar</h2>
 <ul>

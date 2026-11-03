@@ -229,10 +229,10 @@ function createTelegramMock() {
         await waitFor(() => mock.getUpdatesOffsets.length > 0, 'el bot empieza el polling contra el mock');
 
         let result = await requestJson(base, '/healthz');
-        check(result.status === 200 && result.data.version === '1.0.5', '/healthz anuncia la v1.0.5', result.data);
+        check(result.status === 200 && result.data.version === '1.0.6', '/healthz anuncia la v1.0.6', result.data);
 
         result = await requestJson(base, '/api/config');
-        check(result.status === 200 && result.data.version === '1.0.5', '/api/config anuncia la v1.0.5', result.data);
+        check(result.status === 200 && result.data.version === '1.0.6', '/api/config anuncia la v1.0.6', result.data);
         check(result.data.features.telegramStarsPurchasesEnabled === true
             && result.data.features.nftEntitlementsEnabled === true
             && result.data.features.nftMintingEnabled === false,

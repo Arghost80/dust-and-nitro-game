@@ -18,10 +18,10 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <main><section class="card">
 <p><a href="/">← Volver al juego</a></p>
 <h1>Términos del juego</h1>
-<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.5</p>
+<p class="muted">Dust &amp; Nitro / Apex Motorsport · Versión 1.0.6</p>
 <nav><a href="/support.html">Soporte</a><a href="/privacy.html">Privacidad</a><a href="/">Jugar</a></nav>
 
-<div class="notice ok"><strong>Resumen claro:</strong> los $CR, coches, piezas, nitros y demás objetos son contenido virtual de este juego. No son dinero, no pueden retirarse a Telegram Stars, TON, euros u otra moneda, y un coche solo será un NFT cuando su ficha muestre expresamente una acuñación confirmada y su dirección en TON. En la versión 1.0.5 la acuñación sigue desactivada: preparar la conversión no crea todavía ningún NFT.</div>
+<div class="notice ok"><strong>Resumen claro:</strong> los $CR, coches, piezas, nitros y demás objetos son contenido virtual de este juego. No son dinero, no pueden retirarse a Telegram Stars, TON, euros u otra moneda, y un coche solo será un NFT cuando su ficha muestre expresamente una acuñación confirmada y su dirección en TON. En la versión 1.0.6 la acuñación sigue desactivada: preparar la conversión no crea todavía ningún NFT.</div>
 
 <h2>1. El servicio</h2>
 <p>Dust &amp; Nitro / Apex Motorsport es un videojuego de carreras accesible desde navegador y como Mini App de Telegram. Al usarlo aceptas estos términos y las reglas mostradas dentro del juego. Si no estás de acuerdo, deja de usar el servicio.</p>
@@ -40,8 +40,22 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <ul>
 <li>Los $CR son una unidad interna sin valor monetario garantizado.</li>
 <li>No existe retirada de $CR a Telegram Stars, TON, dinero fiduciario ni otros criptoactivos.</li>
-<li>Los objetos virtuales no son transferibles fuera del juego salvo que una función futura lo indique expresamente.</li>
-<li>El mercado entre jugadores, las apuestas/duelos con saldo y el torneo semanal con entrada permanecen en pausa hasta que exista una liquidación autoritativa segura.</li>
+<li>Los objetos virtuales no son transferibles fuera del juego salvo que una función habilitada dentro del servicio lo indique expresamente. El mercado interno permite transferirlos entre cuentas del propio servidor a cambio de $CR, sin crear un derecho de retirada ni equivalencia con dinero o criptoactivos.</li>
+<li>Las apuestas/duelos con saldo y el torneo semanal con entrada permanecen en pausa hasta que exista su propia liquidación autoritativa segura.</li>
+</ul>
+
+<h3>Mercado entre jugadores</h3>
+<p>Cuando el operador active el mercado, podrá pausarlo temporalmente por seguridad, mantenimiento o cumplimiento normativo. Estas reglas se aplican a cada anuncio y compra:</p>
+<ul>
+<li>Al publicar un coche o piezas, el activo sale de tu garaje o inventario y queda retenido por el servidor en custodia interna (<em>escrow</em>). Mientras el anuncio esté activo no podrás usar, equipar, modificar, convertir ni volver a publicar ese activo.</li>
+<li>Antes de confirmar, la interfaz muestra el activo, el precio bruto en $CR y, para el vendedor, la comisión y el importe neto que recibirá. La comisión vigente es la anunciada en esa pantalla; por defecto es el 7,5 %. La cotización aceptada queda registrada con el anuncio.</li>
+<li>Al comprarse, el servidor liquida la operación de forma atómica: descuenta el precio bruto al comprador, acredita el neto al vendedor y entrega el activo. En un coche se transfiere el mismo vehículo con su nivel, experiencia, piezas, hitos, color, energía y registro global mostrados en el anuncio; solo puede cambiar un identificador interno si fuera necesario para evitar una colisión en la cuenta compradora.</li>
+<li>El coche inicial no puede venderse y debes conservar al menos un coche jugable. Un coche con una acuñación ya enviada o confirmada no se transfiere por este mercado interno hasta que exista un flujo on-chain verificado; vender un coche off-chain tampoco lo convierte en NFT.</li>
+<li>Puedes retirar un anuncio activo para recuperar el activo. Si caduca sin venderse, el servidor lo devuelve. Aunque el mercado se pause, se mantendrá, salvo imposibilidad técnica o exigencia legal, una vía para consultar tu historial y retirar tu propio escrow.</li>
+<li>Tu nombre de piloto y los datos públicos del anuncio serán visibles para otros jugadores; no publicamos tu ID persistente de cuenta en el escaparate.</li>
+<li>Una compra completada es, con carácter general, definitiva dentro del juego. Podremos corregir, revertir o cancelar anuncios y operaciones afectadas por error manifiesto, fraude, abuso, duplicidad técnica o uso de una cuenta comprometida, y resolver incidencias conforme a la normativa aplicable.</li>
+<li>No puedes restablecer la cuenta mientras mantengas anuncios activos: retíralos antes o espera a que caduquen.</li>
+<li>No garantizamos que un anuncio se venda, que exista liquidez ni que un coche, pieza o futuro NFT mantenga o alcance un valor determinado fuera del uso interno en $CR.</li>
 </ul>
 
 <h2>4. Cofres y elementos aleatorios</h2>
@@ -75,7 +89,7 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <ul>
 <li>El coche inicial es un vehículo de serie y no puede convertirse en NFT.</li>
 <li>“Preparar conversión” reserva una única solicitud para ese coche, pero no lo acuña, no transfiere ningún activo y no cobra TON. El coche sigue siendo jugable y la preparación puede cancelarse mientras no exista una acuñación enviada.</li>
-<li>En la versión 1.0.5 la acuñación está desactivada. Si se activa en el futuro, requerirá una wallet TON cuya titularidad se haya verificado, tu firma expresa y el pago desde esa wallet de los costes de red y reservas mostrados antes de firmar.</li>
+<li>En la versión 1.0.6 la acuñación está desactivada. Si se activa en el futuro, requerirá una wallet TON cuya titularidad se haya verificado, tu firma expresa y el pago desde esa wallet de los costes de red y reservas mostrados antes de firmar.</li>
 <li>La continuidad de un NFT y de sus metadatos dependerá de la red TON, del saldo de almacenamiento de sus contratos y de la disponibilidad permanente de los metadatos enlazados. Ningún NFT garantiza valor, liquidez, reventa, rentabilidad ni utilidad futura.</li>
 <li>Las regalías de colección solo podrán percibirse cuando la plataforma o el mecanismo de venta las respete; las transferencias gratuitas, directas o realizadas fuera de mercados compatibles pueden no generar regalía.</li>
 <li>La importación jugable de un NFT transferido a otra wallet no estará activa hasta que el juego la anuncie expresamente y verifique la titularidad de la wallet receptora.</li>

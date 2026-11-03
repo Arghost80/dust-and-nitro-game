@@ -332,10 +332,22 @@
         if (_timer) { clearTimeout(_timer); _timer = null; }
         _dirty = false;
         _pending = false;
-        try { localStorage.removeItem(META_KEY); } catch (e) {}
-        return fetchWithTimeout('/api/save/' + encodeURIComponent(getUserId()), { method: 'DELETE', headers: headers() }, 2500)
-            .then(function () { return true; })
-            .catch(function () { return false; });
+        return fetchWithTimeout('/api/save/' + encodeURIComponent(getUserId()), { method: 'DELETE', headers: headers() }, 5000)
+            .then(function (response) {
+                return response.json().catch(function () { return null; }).then(function (data) {
+                    var ok = response.ok && data && data.ok === true;
+                    // Solo se olvida el metadato de sincronización si el servidor
+                    // confirma el borrado. Un 409 por anuncios en escrow (u otro
+                    // error) debe conservar la partida local y remota intactas.
+                    if (ok) {
+                        try { localStorage.removeItem(META_KEY); } catch (e) {}
+                    }
+                    return { ok: ok, status: response.status, data: data };
+                });
+            })
+            .catch(function () {
+                return { ok: false, status: 0, data: { ok: false, error: 'network_unavailable' } };
+            });
     }
 
     window.CloudSave = {
