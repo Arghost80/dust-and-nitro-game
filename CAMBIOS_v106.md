@@ -129,6 +129,7 @@ También se incorporan `/readyz`, estado de salud del polling del bot para readi
 
 Variables nuevas o actualizadas en `.env.example`, `render.yaml` y README:
 
+- Runtime fijado a Node **22.22.0** con `.node-version`, `NODE_VERSION` y `engines >=20.0.0 <23.0.0`. El anterior `>=18` sin límite hizo que Render resolviera Node 26, incompatible con el binario/compilación de `better-sqlite3@11.10.0` usado por esta versión.
 - `ENABLE_MARKETPLACE=false` inicialmente.
 - `MARKETPLACE_FEE_BPS=750`.
 - `MARKETPLACE_MIN_CAR_PRICE_CR=50`.

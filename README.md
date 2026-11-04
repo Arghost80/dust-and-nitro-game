@@ -6,7 +6,7 @@ Versión actual: **1.0.6**. Consulta `CAMBIOS_v106.md` para el mercado real entr
 
 ## Ejecutar en local
 
-Requiere Node.js 18 o superior.
+Requiere Node.js 20 o 22. El repositorio fija **22.22.0** para Render mediante `.node-version`, `engines` con límite superior y `NODE_VERSION`; no uses Node 23+ con la versión actual de `better-sqlite3` sin revalidar antes su binario nativo.
 
 ```bash
 npm install
