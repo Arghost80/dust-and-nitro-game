@@ -9,7 +9,7 @@
 - Las dos cuentas internas de equipo recibieron su dotación única.
 - Adsgram quedó configurado en producción y un anuncio real ya acreditó nitro; tras desplegar la v1.0.7 debe repetirse la prueba porque el cliente aplicará la nueva puerta `adsgram.ready`.
 - La acuñación NFT, las apuestas con saldo y el torneo semanal siguen desactivados.
-- La v1.0.7 local endurece identidad/Adsgram, añade tickets privados de soporte en el bot y herramientas de verificación; no debe anunciarse como desplegada hasta completar su push y despliegue.
+- La v1.0.7 local endurece identidad/Adsgram, añade tickets privados de soporte en el bot y herramientas de verificación; también corrige la dirección por tiempo real y la conversión de físicas de coches maximizados, con `test_driving.js` y secuencias integradas en `test_dom.js` en verde. No debe anunciarse como desplegada hasta completar su push y despliegue.
 
 ## Puerta 0 — Desplegar la v1.0.7
 
@@ -74,6 +74,7 @@ Si una vía no se prueba, desactivarla antes de invitar público.
 ## Puerta 4 — QA con cuentas y dispositivos reales
 
 - [ ] Cuenta nueva normal, no de equipo: primera apertura, carrera completa, recompensas, taller, cofre, cierre/reapertura y sincronización.
+- [ ] Conducción en teléfonos reales tras desplegar: en Android e iOS, con cuenta normal y cuenta de equipo, probar botones y joystick. Un toque corto debe corregir solo unos pocos grados; mantener aprox. 0,5 s debe tomar una curva fuerte sin trompo. Repetir a baja/alta velocidad, con drift y marcha atrás.
 - [ ] Android dentro de Telegram.
 - [ ] iOS dentro de Telegram.
 - [ ] Cuenta de navegador: crear código de recuperación y recuperarla en otro navegador/dispositivo.
@@ -107,6 +108,6 @@ Si una vía no se prueba, desactivarla antes de invitar público.
 
 ## Criterio Go / No-Go
 
-**Go para soft launch** solo si el smoke estricto pasa, existe restauración externa probada, los métodos de pago activos han superado una compra real, la venta de coche en producción está verificada y hay soporte humano.
+**Go para soft launch** solo si el smoke estricto pasa, existe restauración externa probada, la conducción táctil se ha repetido sin trompos en teléfonos reales, los métodos de pago activos han superado una compra real, la venta de coche en producción está verificada y hay soporte humano.
 
-**No-Go** si falta el token Admin, Adsgram promete recompensas sin webhook, los tickets/contacto de soporte no llegan a una persona, no existe copia fuera de Render, un método de pago activo no se ha probado con dinero real o la comunicación sugiere que ya existen NFT acuñados.
+**No-Go** si un toque corto de dirección sigue girando el coche de forma descontrolada en un teléfono real, falta el token Admin, Adsgram promete recompensas sin webhook, los tickets/contacto de soporte no llegan a una persona, no existe copia fuera de Render, un método de pago activo no se ha probado con dinero real o la comunicación sugiere que ya existen NFT acuñados.

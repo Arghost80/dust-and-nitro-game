@@ -36,7 +36,7 @@ npm run check
 npm test
 ```
 
-La suite incluye lógica/DOM del hub, guardado seguro con SQLite temporal, cambio de cuenta en un mismo dispositivo sin mezclar guardados locales, regresiones HTTP de seguridad, economía sellada, Adsgram reclamable una sola vez y bloqueado en cliente cuando el webhook no está listo, ranking por circuito, compras TON con libro ficticio y cotización fijada solo para las pruebas, Telegram Stars y tickets privados de soporte con un mock local de Bot API, registro/preparación NFT off-chain, dotación privada de cuentas de equipo, mercado P2P real contra HTTP/SQLite con varias cuentas y reinicios, verificación de copias SQLite, validación de circuitos y tiles.
+La suite incluye pruebas cuantitativas de conducción (rangos de físicas por progresión, pulsaciones de dirección a 30/60/120 FPS, drift/marcha atrás y vueltas completas con un piloto de botones), lógica/DOM del hub, guardado seguro con SQLite temporal, cambio de cuenta en un mismo dispositivo sin mezclar guardados locales, regresiones HTTP de seguridad, economía sellada, Adsgram reclamable una sola vez y bloqueado en cliente cuando el webhook no está listo, ranking por circuito, compras TON con libro ficticio y cotización fijada solo para las pruebas, Telegram Stars y tickets privados de soporte con un mock local de Bot API, registro/preparación NFT off-chain, dotación privada de cuentas de equipo, mercado P2P real contra HTTP/SQLite con varias cuentas y reinicios, verificación de copias SQLite, validación de circuitos y tiles.
 
 ## Arquitectura v107
 

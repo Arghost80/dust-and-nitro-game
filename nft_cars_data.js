@@ -686,11 +686,35 @@ function calculateCarPerformance(car) {
 
     const totalPoints = Object.values(eff).reduce((sum, v) => sum + v, 0);
 
+    // Las estadísticas efectivas pueden crecer mucho con nivel, piezas e
+    // hitos (un coche de equipo a nivel 50 supera 30 puntos por estadística).
+    // Para convertirlas a físicas se usa una curva de rendimiento decreciente:
+    // hasta 8 puntos el valor es lineal; a partir de ahí tiende a 12. Así un
+    // coche maximizado sigue siendo el más rápido, pero no pasa de ~630 px/s
+    // ni convierte el manejo en un trompo instantáneo. Los puntos totales y
+    // las estadísticas mostradas no cambian.
+    const physicsStat = (value) => {
+        const v = Math.max(0, Number(value) || 0);
+        return v <= 8 ? v : 8 + 4 * (1 - Math.exp(-(v - 8) / 6));
+    };
+    const phys = {
+        potencia: physicsStat(eff.potencia),
+        velocidad: physicsStat(eff.velocidad),
+        aceleracion: physicsStat(eff.aceleracion),
+        agarre: physicsStat(eff.agarre),
+        frenada: physicsStat(eff.frenada),
+        manejo: physicsStat(eff.manejo),
+        turbo: physicsStat(eff.turbo),
+        downforce: physicsStat(eff.downforce),
+        traccion: physicsStat(eff.traccion),
+        ligereza: physicsStat(eff.ligereza)
+    };
+
     // Conversión matemática a físicas para el motor del juego
-    const speedKmh = Math.round(280 + (eff.potencia * 10) + (eff.velocidad * 14) + (eff.turbo * 6));
-    const accelVal = Math.round(180 + (eff.aceleracion * 14) + (eff.traccion * 12) + (eff.turbo * 8));
-    const handlingVal = parseFloat((3.2 + (eff.agarre * 0.18) + (eff.manejo * 0.14) + (eff.downforce * 0.10)).toFixed(2));
-    const brakingVal = parseFloat((2.5 + (eff.frenada * 0.25) + (eff.ligereza * 0.15)).toFixed(2));
+    const speedKmh = Math.round(280 + (phys.potencia * 10) + (phys.velocidad * 14) + (phys.turbo * 6));
+    const accelVal = Math.round(180 + (phys.aceleracion * 14) + (phys.traccion * 12) + (phys.turbo * 8));
+    const handlingVal = parseFloat((3.2 + (phys.agarre * 0.18) + (phys.manejo * 0.14) + (phys.downforce * 0.10)).toFixed(2));
+    const brakingVal = parseFloat((2.5 + (phys.frenada * 0.25) + (phys.ligereza * 0.15)).toFixed(2));
 
     return {
         effectiveStats: eff,

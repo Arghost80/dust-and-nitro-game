@@ -679,6 +679,7 @@ let weatherParticles = [];
 let keys = {};
 let touchLeft = false, touchRight = false, touchGas = false, touchBrake = false, touchHandbrake = false;
 let touchJoyGas = false, touchJoyBrake = false, touchSteerAmount = 1.0;
+let playerSteerInput = 0; // Dirección suavizada: -1 izquierda, +1 derecha
 let currentTouchControlMode = 'joystick';
 let raceStartTime = 0;
 let currentRaceSessionPromise = null;
@@ -691,6 +692,96 @@ let driftSlipAngle = 0; // Ángulo de deslizamiento lateral en derrapes de alta 
 let driftTrajectoryAngle = null; // Inercia de trayectoria estabilizada anti-trompos
 let raceNitrosRemaining = 2; // Máximo 2 por carrera
 let nitroBoostTimer = 0; // Duración 4.0s de extra velocidad N2O
+
+// ===== DIRECCIÓN EN TIEMPO REAL (independiente de FPS) =====
+// El valor histórico `handling` se sumaba en grados por fotograma: a 60 FPS
+// un coche normal ya giraba 220-270°/s y uno maximizado podía superar
+// 480°/s. Ahora se convierte a una velocidad de guiñada acotada en °/s y se
+// integra con dt. La entrada digital además sube/baja en ~0,1 s para que un
+// toque corto corrija unos pocos grados en vez de aplicar bloqueo instantáneo.
+const PLAYER_STEERING_CONFIG = Object.freeze({
+    baseYawDegPerSec: 150,
+    handlingBonusDegPerSec: 65,
+    handlingReference: 3.2,
+    handlingScale: 3.2,
+    maxYawDegPerSec: 215,
+    inputAttackPerSec: 9,
+    inputReleasePerSec: 13,
+    lowSpeedFullAuthorityPxPerSec: 45,
+    highSpeedStabilityStartPxPerSec: 220,
+    highSpeedStabilityScalePxPerSec: 850,
+    maxSteeringDtSec: 0.05
+});
+
+function clampSteeringNumber(value, min, max, fallback = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+}
+
+function handlingYawRateDegPerSec(handling) {
+    const safeHandling = Math.max(0, Number(handling) || 0);
+    const bonus = PLAYER_STEERING_CONFIG.handlingBonusDegPerSec
+        * (1 - Math.exp(-Math.max(0, safeHandling - PLAYER_STEERING_CONFIG.handlingReference)
+            / PLAYER_STEERING_CONFIG.handlingScale));
+    return Math.min(
+        PLAYER_STEERING_CONFIG.maxYawDegPerSec,
+        PLAYER_STEERING_CONFIG.baseYawDegPerSec + bonus
+    );
+}
+
+function smoothPlayerSteerInput(currentInput, desiredInput, dt) {
+    const current = clampSteeringNumber(currentInput, -1, 1, 0);
+    const desired = clampSteeringNumber(desiredInput, -1, 1, 0);
+    const safeDt = clampSteeringNumber(dt, 0, PLAYER_STEERING_CONFIG.maxSteeringDtSec, 0);
+    if (safeDt <= 0 || current === desired) return desired === 0 ? 0 : current;
+    const changingDirection = current !== 0 && desired !== 0 && Math.sign(current) !== Math.sign(desired);
+    const rate = (desired === 0 || changingDirection)
+        ? PLAYER_STEERING_CONFIG.inputReleasePerSec
+        : PLAYER_STEERING_CONFIG.inputAttackPerSec;
+    const maxDelta = rate * safeDt;
+    if (Math.abs(desired - current) <= maxDelta) return desired;
+    return current + Math.sign(desired - current) * maxDelta;
+}
+
+function playerSteeringStepDeg(options = {}) {
+    const safeDt = clampSteeringNumber(options.dt, 0, PLAYER_STEERING_CONFIG.maxSteeringDtSec, 0);
+    if (safeDt <= 0) return 0;
+    const speed = Number(options.speed) || 0;
+    const absSpeed = Math.abs(speed);
+    const lowSpeedFactor = clampSteeringNumber(
+        absSpeed / PLAYER_STEERING_CONFIG.lowSpeedFullAuthorityPxPerSec,
+        0,
+        1,
+        0
+    );
+    const highSpeedFactor = 1 / (1 + Math.max(
+        0,
+        absSpeed - PLAYER_STEERING_CONFIG.highSpeedStabilityStartPxPerSec
+    ) / PLAYER_STEERING_CONFIG.highSpeedStabilityScalePxPerSec);
+    const grip = clampSteeringNumber(options.grip, 0, 1, 1);
+    const gripFactor = 0.72 + 0.28 * grip;
+    // Al dar marcha atrás, la guiñada del morro se invierte como en un coche
+    // real, pero con la misma autoridad acotada que hacia adelante.
+    const travelDirection = speed < -5 ? -1 : 1;
+    const steerInput = clampSteeringNumber(options.steerInput, -1, 1, 0);
+    return handlingYawRateDegPerSec(options.handling)
+        * lowSpeedFactor
+        * highSpeedFactor
+        * gripFactor
+        * travelDirection
+        * steerInput
+        * safeDt;
+}
+
+if (typeof window !== 'undefined') {
+    window.ApexDrivingPhysics = Object.freeze({
+        PLAYER_STEERING_CONFIG,
+        handlingYawRateDegPerSec,
+        smoothPlayerSteerInput,
+        playerSteeringStepDeg
+    });
+}
 
 // ===== PRELOAD: CARGA DE ASSETS ORIGINALES DE DUSTRACING2D =====
 function dustPreload() {
@@ -2744,6 +2835,7 @@ function resetAllTouchInputs() {
     touchJoyGas = false;
     touchJoyBrake = false;
     touchSteerAmount = 1.0;
+    playerSteerInput = 0;
     try {
         document.querySelectorAll('.btn-touch.is-pressed').forEach(el => el.classList.remove('is-pressed'));
         const stick = document.getElementById('joystick-stick');
@@ -4611,6 +4703,7 @@ function startRace(scene, trackId, carIdx = 0, timeOfDay = 'day', isStory = fals
     driftBoostTimer = 0;
     driftSlipAngle = 0;
     driftTrajectoryAngle = null;
+    playerSteerInput = 0;
     raceStartTime = 0;
 
     // Coche del Jugador (Pole Position, colocado detrás de la línea de meta)
@@ -5321,6 +5414,9 @@ function respawnPlayerOnTrack(track) {
     playerCar.angle = spawnAngleDeg;
     playerCar.setVelocity(0, 0);
     playerSpeed = 0;
+    playerSteerInput = 0;
+    driftTrajectoryAngle = null;
+    driftSlipAngle = 0;
     offTrackTimer = 0;
 
     if (raceScene && raceScene.cameras && raceScene.cameras.main && typeof raceScene.cameras.main.flash === 'function') {
@@ -5579,8 +5675,22 @@ function updatePlayer(dt, track) {
             }
         }
 
-        // Control de Dirección y Drift Estabilizado Arcade (Anti-Trompo)
-        const steerBase = cData.handling * (playerSpeed > 40 ? 1 : playerSpeed / 40) * (typeof touchSteerAmount === 'number' && touchSteerAmount > 0 ? touchSteerAmount : 1.0);
+        // Control de Dirección y Drift Estabilizado Arcade (Anti-Trompo).
+        // La magnitud analógica solo procede del joystick; botones y teclado
+        // son digitales. Si el joystick está en zona muerta (cantidad 0) pero
+        // hay una tecla/botón activo, se usa magnitud completa como antes.
+        const analogSteerAmount = (typeof touchSteerAmount === 'number' && touchSteerAmount > 0)
+            ? clampSteeringNumber(touchSteerAmount, 0, 1, 1)
+            : 1.0;
+        const desiredSteerInput = (right ? analogSteerAmount : 0) - (left ? analogSteerAmount : 0);
+        playerSteerInput = smoothPlayerSteerInput(playerSteerInput, desiredSteerInput, dt);
+        const steerStepDeg = playerSteeringStepDeg({
+            handling: cData.handling,
+            speed: playerSpeed,
+            dt,
+            steerInput: playerSteerInput,
+            grip
+        });
 
         if (handbrake && Math.abs(playerSpeed) > 60) {
             // MODO DRIFT ESTABILIZADO (ARCADE POWER-SLIDE CON ASISTENCIA ANTI-SPIN)
@@ -5588,21 +5698,21 @@ function updatePlayer(dt, track) {
                 driftTrajectoryAngle = playerCar.angle;
             }
 
-            // 1. Giro suave y progresivo (1.30x en vez de 2.65x para evitar que el coche gire bruscamente o se descontrole)
-            const yawMultiplier = 1.30;
-            const driftSteer = steerBase * yawMultiplier;
+            // La trayectoria gira casi como en conducción normal; la carrocería
+            // gana solo un 22% extra para construir el ángulo de derrape sin
+            // convertir una pulsación en un trompo.
+            driftTrajectoryAngle += steerStepDeg * 0.92;
+            playerCar.angle += steerStepDeg * 1.22;
 
-            // 2. La trayectoria de avance sigue la curva de forma limpia y natural
-            if (left) {
-                driftTrajectoryAngle -= steerBase * 0.95;
-                playerCar.angle -= driftSteer;
-            } else if (right) {
-                driftTrajectoryAngle += steerBase * 0.95;
-                playerCar.angle += driftSteer;
+            // Al soltar la dirección dentro del drift, el morro vuelve hacia
+            // la trayectoria a una velocidad finita y predecible.
+            if (Math.abs(playerSteerInput) < 0.03) {
+                const alignDiff = Phaser.Math.Angle.WrapDegrees(driftTrajectoryAngle - playerCar.angle);
+                const maxAlignStep = 170 * Math.min(Math.max(dt || 0, 0), PLAYER_STEERING_CONFIG.maxSteeringDtSec);
+                playerCar.angle += Math.sign(alignDiff) * Math.min(Math.abs(alignDiff), maxAlignStep);
             }
 
-            // 3. BLOQUEO ANTI-TROMPO: El coche JAMÁS puede girar más de 26° respecto a su trayectoria de avance
-            // Esto hace FÍSICAMENTE IMPOSIBLE que el coche haga un trompo o se dé la vuelta (180° / 360°)
+            // BLOQUEO ANTI-TROMPO: El coche JAMÁS puede girar más de 26° respecto a su trayectoria de avance
             const MAX_DRIFT_SLIP = 26;
             const diff = Phaser.Math.Angle.WrapDegrees(playerCar.angle - driftTrajectoryAngle);
             if (diff > MAX_DRIFT_SLIP) {
@@ -5620,20 +5730,18 @@ function updatePlayer(dt, track) {
         } else {
             // Conducción con agarre normal (o salida de derrape)
             if (driftTrajectoryAngle !== null) {
-                // Al soltar el drift, el coche se alinea suavemente con la dirección de avance
                 playerCar.angle = Phaser.Math.Angle.WrapDegrees(driftTrajectoryAngle);
                 driftTrajectoryAngle = null;
             }
             driftSlipAngle = 0;
-
-            if (left) playerCar.angle -= steerBase;
-            if (right) playerCar.angle += steerBase;
+            playerCar.angle += steerStepDeg;
 
             const rad = Phaser.Math.DegToRad(playerCar.angle);
             playerCar.setVelocity(Math.cos(rad) * playerSpeed, Math.sin(rad) * playerSpeed);
         }
     } else {
         playerSpeed = 0;
+        playerSteerInput = 0;
         driftSlipAngle = 0;
         driftTrajectoryAngle = null;
     }
@@ -5824,8 +5932,12 @@ function updateAiCar(ai, dt, track) {
     const targetDeg = Phaser.Math.RadToDeg(angleRad);
     const diff = wrapAngleDeg(targetDeg - ai.angle);
 
-    // Giro reactivo y preciso
-    const turnStep = ai.carData.handling * (profile.handlingFactor || 1.0) * (isSharpTurn ? 1.20 : 1.08);
+    // Giro reactivo y preciso, también en grados por segundo para que la IA
+    // no gire el doble en pantallas de alta frecuencia.
+    const turnStep = handlingYawRateDegPerSec(ai.carData.handling)
+        * (profile.handlingFactor || 1.0)
+        * (isSharpTurn ? 1.20 : 1.08)
+        * clampSteeringNumber(dt, 0, PLAYER_STEERING_CONFIG.maxSteeringDtSec, 0);
     ai.angle += Math.sign(diff) * Math.min(Math.abs(diff), turnStep);
 
     // 4. Velocidad y Rebufo para Adelantar

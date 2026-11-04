@@ -9,7 +9,20 @@ Fecha local: 4 de noviembre de 2026.
 
 ## Objetivo
 
-La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento del mercado introducido en la v106. Es una pasada de fiabilidad y honestidad operativa antes de invitar a más público: identidad de cuenta, anuncios recompensados, soporte humano mediante tickets privados, copias de seguridad, enlaces del bot, textos visibles y herramientas repetibles de verificación.
+La v107 no cambia precios, reglas económicas, estadísticas base del catálogo ni el funcionamiento del mercado introducido en la v106. Es una pasada de fiabilidad y honestidad operativa antes de invitar a más público: identidad de cuenta, anuncios recompensados, soporte humano mediante tickets privados, copias de seguridad, enlaces del bot, textos visibles y herramientas repetibles de verificación. Además corrige un bloqueante preexistente de conducción que los coches muy mejorados hacían especialmente visible.
+
+## Corrección bloqueante de dirección y físicas
+
+- `dustrac_game.js` no había cambiado entre la v1.0.6 desplegada y los dos primeros commits locales de la v1.0.7: el giro excesivo no lo introdujeron la pasada de identidad/Adsgram ni los tickets. La causa era histórica y se hacía extrema con coches de nivel alto o de equipo.
+- Antes, `updatePlayer` sumaba `handling` en grados una vez por actualización, sin multiplicar por `dt`. A 60 actualizaciones/s, un coche inicial giraba unos 217–268°/s y un nivel 50 maximizado podía acercarse a 1.000°/s; en una cadencia real de 120 actualizaciones/s el resultado se duplicaba.
+- La dirección ahora:
+  - convierte `handling` a una guiñada acotada de 150–215°/s con rendimiento decreciente;
+  - integra el giro con el tiempo real transcurrido y limita un fotograma bloqueado a 50 ms de dirección;
+  - suaviza botones/teclado/joystick con ataque de aprox. 111 ms y liberación de aprox. 77 ms;
+  - no gira con el coche parado, reduce autoridad a alta velocidad y sobre superficies de poco agarre, e invierte la guiñada del morro marcha atrás como un coche real;
+  - aplica el mismo paso temporal a conducción normal, drift y giro de la IA, manteniendo el límite anti-trompo de 26° entre carrocería y trayectoria.
+- Con esa calibración, a 300 px/s un toque de 0,10 s corrige aprox. 11,5° en un coche normal y 14,1° en uno maximizado; 0,25 s da 35°/43° y 0,50 s da 73°/89°. El mismo resultado se repite a 30, 60 y 120 FPS dentro de la tolerancia de los tests.
+- `calculateCarPerformance` conserva estadísticas efectivas y puntos totales, pero convierte a físicas las estadísticas por encima de 8 con rendimiento decreciente hasta tender a 12. Los coches de nivel 1 quedan exactamente igual; un nivel 50 maximizado pasa de 1.180–1.274 a 637–638 px/s, de 1.200–1.268 a 585–586 de aceleración y de 15,80–16,64 a 8,20–8,21 de manejo. Sigue siendo mucho más rápido que un coche inicial y que la IA, pero ya no cruza el circuito a una escala ingobernable.
 
 ## Identidad de Telegram y guardados locales
 
@@ -85,6 +98,8 @@ La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento de
 
 ## Pruebas nuevas o ampliadas
 
+- Nuevo `test_driving.js`, incluido al principio de `npm test`: verifica los rangos de físicas de los 90 modelos en nivel 1/10/50, mide toques y pulsaciones sostenidas a 30/60/120 FPS, coche parado, alta velocidad, marcha atrás y fotogramas bloqueados, y completa vueltas siguiendo las polilíneas oficiales de los 28 circuitos con un piloto de botones y coches de nivel 1 y 50.
+- `test_dom.js` ya no exige que un único fotograma de drift gire de forma contundente; ahora ejecuta `updatePlayer` durante secuencias completas y comprueba el toque de 0,10 s a 30/60/120 FPS, la pulsación de 0,50 s y que el drift no supere los 26° de deslizamiento.
 - `test_cloud_identity.js` simula CloudSave en una VM y demuestra que:
   - el remoto de la cuenta Telegram actual gana aunque otra cuenta dejara una foto local más nueva;
   - no hay ningún PUT cruzado tras cambiar de cuenta;
@@ -99,7 +114,7 @@ La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento de
 ## Validación local ejecutada
 
 - `npm run check`: correcto.
-- `npm test`: correcto, incluyendo DOM, CloudSave, identidad/cambio de cuenta, seguridad, compras TON, Telegram Stars/NFT, dotación de equipo, mercado P2P, verificador de copias, circuitos y esquinas.
+- `npm test`: correcto, incluyendo conducción cuantitativa y vueltas simuladas, DOM, CloudSave, identidad/cambio de cuenta, seguridad, compras TON, Telegram Stars/NFT, dotación de equipo, mercado P2P, verificador de copias, circuitos y esquinas. Se completaron las 56 vueltas automáticas (28 circuitos × 2 coches), con desviación máxima de 42,2–65,6 px respecto a la polilínea oficial según circuito/coche.
 - Smoke no estricto contra la producción todavía v1.0.6 con `--skip-version`: servicio sano y esquema 106; Adsgram ya devuelve `403` sin secreto y un anuncio real acreditó nitro. La v1.0.6 aún no anuncia el estado Adsgram/tickets de la v1.0.7; continúan los avisos de Admin sin token y soporte humano público sin configurar.
 
 ## Despliegue y rollback
@@ -119,6 +134,6 @@ Siguen requiriendo acción del operador o una fase posterior:
 - copiar una BD de producción fuera de Render y restaurar esa copia en aislamiento;
 - compras reales mínimas de Stars y TON web;
 - venta/cancelación de un coche en producción;
-- QA con cuenta normal nueva en Android/iOS y recuperación en otro navegador;
+- QA con cuenta normal nueva en Android/iOS y recuperación en otro navegador, incluyendo repetir en teléfonos reales toques cortos, curvas sostenidas, drift y marcha atrás con botones y joystick en una cuenta normal y una de equipo;
 - bot público definitivo y revisión legal/fiscal;
 - contratos NFT, `ton_proof`, metadatos permanentes, testnet, indexación de transferencias e importación por compradores.

@@ -465,28 +465,105 @@ freshUser.garage[0].energy = 10;
 vm.runInContext(`saveNftUserData(${JSON.stringify(freshUser)})`, ctx);
 vm.runInContext(`launchRaceDirectly('rookie_ring')`, ctx);
 
-// Simular estado de carrera activa
+// Simular estado de carrera activa y secuencias reales de fotogramas.
+// La antigua prueba de un solo frame premiaba sumar varios grados por
+// fotograma, justo el comportamiento que hacía el coche ingobernable.
 vm.runInContext('gameState = "RACE"', ctx);
-vm.runInContext('playerSpeed = 250', ctx);
+const drivingIntegration = vm.runInContext(`(() => {
+    const track = window.DustracTracks["rookie_ring"];
+    const originalHandling = playerCar.carData ? playerCar.carData.handling : 4.0;
 
-// Probar giro normal
-const initAngle1 = vm.runInContext('playerCar.angle', ctx);
-vm.runInContext('touchLeft = true; touchHandbrake = false; updatePlayer(0.016, window.DustracTracks["rookie_ring"]);', ctx);
-const normalTurnDelta = Math.abs(vm.runInContext('playerCar.angle', ctx) - initAngle1);
+    function resetSteering(speed, handling) {
+        keys = {};
+        touchLeft = false;
+        touchRight = false;
+        touchGas = false;
+        touchBrake = false;
+        touchHandbrake = false;
+        touchJoyGas = false;
+        touchJoyBrake = false;
+        touchSteerAmount = 1.0;
+        playerSteerInput = 0;
+        driftTrajectoryAngle = null;
+        driftSlipAngle = 0;
+        driftCharge = 0;
+        driftBoostTimer = 0;
+        playerCar.angle = 0;
+        playerSpeed = speed;
+        if (playerCar.carData) playerCar.carData = { ...playerCar.carData, handling };
+    }
 
-// Probar giro con freno de mano (derrape)
-const initAngle2 = vm.runInContext('playerCar.angle', ctx);
-vm.runInContext('touchLeft = true; touchHandbrake = true; updatePlayer(0.016, window.DustracTracks["rookie_ring"]);', ctx);
-const driftTurnDelta = Math.abs(vm.runInContext('playerCar.angle', ctx) - initAngle2);
+    function runButton({ fps, holdSec, settleSec = 0.30, speed, handling, handbrake = false }) {
+        resetSteering(speed, handling);
+        const dt = 1 / fps;
+        const totalFrames = Math.round((holdSec + settleSec) * fps);
+        const holdFrames = Math.round(holdSec * fps);
+        let maxSlip = 0;
+        for (let frame = 0; frame < totalFrames; frame++) {
+            touchLeft = frame < holdFrames;
+            touchHandbrake = handbrake;
+            // Aislar la dirección de aceleración/fricción para medir solo el botón.
+            playerSpeed = speed;
+            updatePlayer(dt, track);
+            if (driftTrajectoryAngle !== null) {
+                maxSlip = Math.max(maxSlip, Math.abs(Phaser.Math.Angle.WrapDegrees(playerCar.angle - driftTrajectoryAngle)));
+            }
+        }
+        return {
+            angle: playerCar.angle,
+            trajectory: driftTrajectoryAngle,
+            maxSlip,
+            charge: driftCharge
+        };
+    }
 
-console.log(`Giro estándar por frame: ${normalTurnDelta.toFixed(3)}° | Giro con derrape/freno de mano: ${driftTurnDelta.toFixed(3)}°`);
-if (driftTurnDelta <= normalTurnDelta * 1.5) {
-    throw new Error('El freno de mano debe incrementar la rotación/yaw de forma contundente (+85%) para horquillas cerradas');
+    const result = {
+        tap30: runButton({ fps: 30, holdSec: 0.10, speed: 300, handling: 8.2 }),
+        tap60: runButton({ fps: 60, holdSec: 0.10, speed: 300, handling: 8.2 }),
+        tap120: runButton({ fps: 120, holdSec: 0.10, speed: 300, handling: 8.2 }),
+        halfSecond: runButton({ fps: 60, holdSec: 0.50, speed: 300, handling: 4.0 }),
+        driftHalfSecond: runButton({ fps: 60, holdSec: 0.50, settleSec: 0, speed: 280, handling: 8.2, handbrake: true })
+    };
+
+    resetSteering(200, originalHandling);
+    return result;
+})()`, ctx);
+
+const tapMagnitudes = [drivingIntegration.tap30, drivingIntegration.tap60, drivingIntegration.tap120].map(r => Math.abs(r.angle));
+const tapSpread = Math.max(...tapMagnitudes) - Math.min(...tapMagnitudes);
+console.log(`Toque de 0,10 s integrado a 30/60/120 FPS: ${tapMagnitudes.map(v => v.toFixed(1) + '°').join(' / ')}`);
+if (!tapMagnitudes.every(v => v >= 10 && v <= 18) || tapSpread > 4) {
+    throw new Error(`Un toque corto debe corregir 10–18° igual a 30/60/120 FPS: ${JSON.stringify({ tapMagnitudes, tapSpread })}`);
 }
-console.log('✓ Freno de mano amplifica la rotación de horquilla correctamente');
 
-// Verificar acumulación de driftCharge y boost al soltar freno de mano
-vm.runInContext('playerSpeed = 200; touchHandbrake = true; touchLeft = true; updatePlayer(0.5, window.DustracTracks["rookie_ring"]);', ctx);
+const halfSecondDelta = Math.abs(drivingIntegration.halfSecond.angle);
+console.log(`Pulsación integrada de 0,50 s en coche normal: ${halfSecondDelta.toFixed(1)}°`);
+if (halfSecondDelta < 62 || halfSecondDelta > 105) {
+    throw new Error(`Mantener el botón 0,50 s debe dar una curva fuerte y controlable (62–105°), no ${halfSecondDelta.toFixed(1)}°`);
+}
+
+const driftTrajectoryDelta = Math.abs(drivingIntegration.driftHalfSecond.trajectory || 0);
+const driftBodyDelta = Math.abs(drivingIntegration.driftHalfSecond.angle);
+console.log(`Drift integrado 0,50 s: trayectoria ${driftTrajectoryDelta.toFixed(1)}°, carrocería ${driftBodyDelta.toFixed(1)}°, deslizamiento máximo ${drivingIntegration.driftHalfSecond.maxSlip.toFixed(1)}°`);
+if (driftTrajectoryDelta < 65 || driftTrajectoryDelta > 105 || driftBodyDelta < 80 || driftBodyDelta > 130 || drivingIntegration.driftHalfSecond.maxSlip > 26.01) {
+    throw new Error(`El drift debe ayudar en la horquilla sin superar 26° de deslizamiento: ${JSON.stringify(drivingIntegration.driftHalfSecond)}`);
+}
+console.log('✓ Dirección integrada por tiempo real: toque corto pequeño, curva sostenida útil y drift anti-trompo');
+
+// Verificar acumulación de driftCharge y boost al soltar freno de mano con
+// treinta fotogramas reales de 60 FPS (no un salto artificial de 0,5 s).
+vm.runInContext(`
+    driftCharge = 0;
+    driftBoostTimer = 0;
+    driftTrajectoryAngle = null;
+    playerSteerInput = 0;
+    touchHandbrake = true;
+    touchLeft = true;
+    for (let frame = 0; frame < 30; frame++) {
+        playerSpeed = 200;
+        updatePlayer(1 / 60, window.DustracTracks["rookie_ring"]);
+    }
+`, ctx);
 const charge = vm.runInContext('driftCharge', ctx);
 console.log(`Carga de derrape acumulada: ${charge.toFixed(2)}`);
 if (charge <= 0.3) {
