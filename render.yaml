@@ -40,7 +40,7 @@ services:
       - key: ENABLE_WAGER_STAKES
         value: "false"
       - key: ENABLE_MARKETPLACE
-        value: "false"
+        value: "true"
       - key: MARKETPLACE_FEE_BPS
         value: "750"
       - key: MARKETPLACE_MIN_CAR_PRICE_CR
