@@ -1,7 +1,8 @@
-// ===== APEX MOTORSPORT - BOT DE TELEGRAM (v106) =====
+// ===== APEX MOTORSPORT - BOT DE TELEGRAM (v107) =====
 // Usa long polling para no requerir túneles HTTPS en desarrollo local y el
 // cliente compartido de Bot API para facturas/pagos Telegram Stars.
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const db = require('./database');
@@ -25,6 +26,35 @@ const WEBAPP_URL = process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || 
 const WEBAPP_BASE_URL = String(WEBAPP_URL || '').replace(/\/+$/, '');
 const SUPPORT_CONTACT = String(process.env.SUPPORT_CONTACT || '').trim().slice(0, 120);
 const SUPPORT_URL = String(process.env.SUPPORT_URL || '').trim().slice(0, 300);
+function parseTelegramUserIds(...values) {
+    const ids = [];
+    for (const value of values) {
+        String(value || '').split(/[\s,;]+/).map(item => item.trim()).forEach(item => {
+            if (/^\d{3,20}$/.test(item) && !ids.includes(item)) ids.push(item);
+        });
+    }
+    return ids.slice(0, 5);
+}
+function parseSupportTicketCooldownMs() {
+    const raw = process.env.SUPPORT_TICKET_COOLDOWN_SEC ?? process.env.SUPPORT_TICKET_COOLDOWN_SECONDS;
+    if (raw == null || String(raw).trim() === '') return 10 * 1000;
+    const seconds = Number(raw);
+    if (!Number.isFinite(seconds) || seconds < 0) return 10 * 1000;
+    return Math.floor(Math.min(3600, seconds)) * 1000;
+}
+const SUPPORT_OPERATOR_IDS = parseTelegramUserIds(
+    process.env.SUPPORT_OPERATOR_TELEGRAM_IDS,
+    process.env.SUPPORT_OPERATOR_TELEGRAM_ID
+);
+const SUPPORT_TICKET_CHAT_ID = /^-?\d{3,24}$/.test(String(process.env.SUPPORT_TICKET_CHAT_ID || '').trim())
+    ? String(process.env.SUPPORT_TICKET_CHAT_ID).trim()
+    : (SUPPORT_OPERATOR_IDS[0] || '');
+const SUPPORT_TICKETS_ENABLED = ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.ENABLE_SUPPORT_TICKETS || '').trim().toLowerCase()
+) && SUPPORT_OPERATOR_IDS.length > 0 && Boolean(SUPPORT_TICKET_CHAT_ID);
+const SUPPORT_TICKET_COOLDOWN_MS = parseSupportTicketCooldownMs();
+const SUPPORT_TICKET_MAX_PER_DAY = 20;
+const pendingSupportTicketPrompts = new Map();
 const TELEGRAM_TON_PURCHASES_ENABLED = ['1', 'true', 'yes', 'on'].includes(String(process.env.TELEGRAM_TON_PURCHASES_ENABLED || '').trim().toLowerCase());
 const TELEGRAM_STARS_PURCHASES_ENABLED = telegramStars.starsPurchasesEnabled();
 
@@ -79,6 +109,374 @@ function supportContactLine() {
     if (SUPPORT_CONTACT) parts.push(escapeHtml(SUPPORT_CONTACT));
     if (SUPPORT_URL) parts.push(escapeHtml(SUPPORT_URL));
     return parts.length ? `\n📬 <b>Contacto adicional:</b> ${parts.join(' · ')}` : '';
+}
+
+function supportTicketsEnabled() {
+    return SUPPORT_TICKETS_ENABLED;
+}
+
+function isSupportOperator(userId) {
+    return SUPPORT_OPERATOR_IDS.includes(String(userId || ''));
+}
+
+function normalizeSupportTicketId(value) {
+    const ticketId = String(value || '').trim().toUpperCase();
+    return /^SUP-[0-9A-F]{8}$/.test(ticketId) ? ticketId : '';
+}
+
+function supportTicketMetaKey(ticketId) {
+    return `supportTicket:${normalizeSupportTicketId(ticketId)}`;
+}
+
+function supportTicketUserMetaKey(userId) {
+    return `supportTicketOpenByUser:${String(userId || '')}`;
+}
+
+function getSupportTicket(ticketId) {
+    const normalized = normalizeSupportTicketId(ticketId);
+    if (!normalized) return null;
+    try {
+        const ticket = db.getMetaValue(supportTicketMetaKey(normalized), null);
+        return ticket && typeof ticket === 'object' && normalizeSupportTicketId(ticket.id) === normalized
+            ? ticket
+            : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function saveSupportTicket(ticket) {
+    db.setMetaValue(supportTicketMetaKey(ticket.id), ticket);
+    const userKey = supportTicketUserMetaKey(ticket.userId);
+    if (ticket.status === 'open') {
+        db.setMetaValue(userKey, ticket.id);
+    } else {
+        try {
+            if (normalizeSupportTicketId(db.getMetaValue(userKey, '')) === ticket.id) {
+                db.setMetaValue(userKey, null);
+            }
+        } catch (e) {}
+    }
+    return ticket;
+}
+
+function createSupportTicketId() {
+    for (let attempt = 0; attempt < 10; attempt++) {
+        const ticketId = `SUP-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        if (!getSupportTicket(ticketId)) return ticketId;
+    }
+    throw new Error('support_ticket_id_unavailable');
+}
+
+function getOpenSupportTicketForUser(userId) {
+    let ticketId = '';
+    try { ticketId = normalizeSupportTicketId(db.getMetaValue(supportTicketUserMetaKey(userId), '')); } catch (e) {}
+    if (!ticketId) return null;
+    const ticket = getSupportTicket(ticketId);
+    if (!ticket || String(ticket.userId) !== String(userId) || ticket.status !== 'open') {
+        try { db.setMetaValue(supportTicketUserMetaKey(userId), null); } catch (e) {}
+        return null;
+    }
+    const createdAt = Date.parse(ticket.createdAt || '');
+    if (Number.isFinite(createdAt) && Date.now() - createdAt > 7 * 24 * 60 * 60 * 1000) {
+        ticket.status = 'expired';
+        ticket.closedAt = new Date().toISOString();
+        ticket.updatedAt = ticket.closedAt;
+        try { saveSupportTicket(ticket); } catch (e) {}
+        return null;
+    }
+    return ticket;
+}
+
+function consumeSupportTicketRate(userId) {
+    const now = Date.now();
+    const day = new Date(now).toISOString().slice(0, 10);
+    const key = `supportTicketRate:${String(userId || '')}`;
+    let state = null;
+    try { state = db.getMetaValue(key, null); } catch (e) {}
+    if (!state || typeof state !== 'object' || state.day !== day) {
+        state = { day, count: 0, lastAt: 0 };
+    }
+    if (SUPPORT_TICKET_COOLDOWN_MS > 0 && now - Number(state.lastAt || 0) < SUPPORT_TICKET_COOLDOWN_MS) {
+        return { ok: false, error: 'support_ticket_cooldown' };
+    }
+    if (Number(state.count || 0) >= SUPPORT_TICKET_MAX_PER_DAY) {
+        return { ok: false, error: 'support_ticket_daily_limit' };
+    }
+    state.count = Number(state.count || 0) + 1;
+    state.lastAt = now;
+    db.setMetaValue(key, state);
+    return { ok: true };
+}
+
+function telegramDisplayName(from) {
+    if (from && from.username) return `@${String(from.username).replace(/^@/, '')}`;
+    const name = [from && from.first_name, from && from.last_name].filter(Boolean).join(' ').trim();
+    return name || 'Piloto';
+}
+
+function prunePendingSupportTicketPrompts(now = Date.now()) {
+    for (const [userId, pending] of pendingSupportTicketPrompts.entries()) {
+        if (!pending || Number(pending.expiresAt || 0) <= now) {
+            pendingSupportTicketPrompts.delete(userId);
+        }
+    }
+}
+
+async function promptSupportTicket(chatId, userId, chatType = 'private') {
+    if (!supportTicketsEnabled()) {
+        await sendMessage(chatId,
+            `✉️ El envío privado de tickets todavía no está activado en este servidor.` +
+            supportContactLine());
+        return false;
+    }
+    if (isSupportOperator(userId)) {
+        await sendMessage(chatId,
+            `🎫 <b>MODO OPERADOR DE SOPORTE</b>\n\n` +
+            `Los tickets de los jugadores te llegarán a este chat con una referencia <code>SUP-XXXXXXXX</code>.\n` +
+            `• Responder: <code>/reply SUP-XXXXXXXX tu respuesta</code>\n` +
+            `• Cerrar: <code>/close SUP-XXXXXXXX</code>`);
+        return false;
+    }
+    if (chatType !== 'private') {
+        await sendMessage(chatId, '🔒 Por privacidad, abre un chat privado conmigo y usa allí <code>/ticket</code>.');
+        return false;
+    }
+    prunePendingSupportTicketPrompts();
+    const delivery = await sendMessage(chatId,
+        `✉️ <b>ESCRIBIR A SOPORTE</b>\n\n` +
+        `Escribe ahora tu problema en <b>un solo mensaje</b>. Incluye, si aplica, el ID del pedido <code>APEX-…</code>, el ID del anuncio <code>MKT-…</code> y la hora aproximada.\n\n` +
+        `⛔ No envíes contraseñas, frase semilla, claves privadas, credenciales ni códigos de recuperación.`);
+    if (!delivery || delivery.ok !== true) return false;
+    pendingSupportTicketPrompts.set(String(userId), {
+        chatId: String(chatId),
+        expiresAt: Date.now() + 10 * 60 * 1000
+    });
+    return true;
+}
+
+async function submitSupportTicketMessage(msg, rawMessage) {
+    const chatId = msg && msg.chat ? msg.chat.id : null;
+    const userId = msg && msg.from ? String(msg.from.id) : '';
+    if (chatId == null || !userId) return false;
+    if (!supportTicketsEnabled()) {
+        await sendMessage(chatId,
+            `✉️ El envío privado de tickets todavía no está activado en este servidor.` +
+            supportContactLine());
+        return false;
+    }
+    if (isSupportOperator(userId)) {
+        await promptSupportTicket(chatId, userId, msg.chat.type || 'private');
+        return false;
+    }
+    if ((msg.chat.type || 'private') !== 'private') {
+        await sendMessage(chatId, '🔒 Por privacidad, abre un chat privado conmigo y usa allí <code>/ticket</code>.');
+        return false;
+    }
+
+    const message = String(rawMessage || '').trim().slice(0, 1000);
+    if (message.length < 5) {
+        await sendMessage(chatId, '✉️ Describe el problema con un poco más de detalle, por favor.');
+        return false;
+    }
+
+    let rate;
+    try {
+        rate = consumeSupportTicketRate(userId);
+    } catch (e) {
+        rate = { ok: false, error: 'support_ticket_storage_unavailable' };
+    }
+    if (!rate.ok) {
+        await sendMessage(chatId, rate.error === 'support_ticket_daily_limit'
+            ? '🕐 Has alcanzado el límite diario de mensajes de soporte. Inténtalo mañana salvo que sea una incidencia de pago ya abierta.'
+            : '🕐 Espera unos segundos antes de enviar otro mensaje de soporte.');
+        return false;
+    }
+
+    const nowIso = new Date().toISOString();
+    let ticket = null;
+    let isNew = false;
+    try {
+        ticket = getOpenSupportTicketForUser(userId);
+        if (!ticket) {
+            isNew = true;
+            ticket = {
+                id: createSupportTicketId(),
+                userId,
+                playerChatId: String(chatId),
+                status: 'open',
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                messageCount: 0
+            };
+        }
+    } catch (e) {
+        await sendMessage(chatId, '⚠️ No he podido crear el ticket ahora. Inténtalo de nuevo en unos minutos.');
+        return false;
+    }
+
+    const operatorText = `${isNew ? '🎫 <b>NUEVO TICKET DE SOPORTE</b>' : '🎫 <b>NUEVO MENSAJE EN UN TICKET</b>'}\n\n` +
+        `🧾 <b>Referencia:</b> <code>${escapeHtml(ticket.id)}</code>\n` +
+        `👤 <b>Jugador:</b> ${escapeHtml(telegramDisplayName(msg.from))}\n` +
+        `🆔 <b>ID de cuenta:</b> <code>${escapeHtml(userId)}</code>\n\n` +
+        `💬 ${escapeHtml(message)}\n\n` +
+        `↩️ Responder: <code>/reply ${escapeHtml(ticket.id)} tu respuesta</code>\n` +
+        `✅ Cerrar: <code>/close ${escapeHtml(ticket.id)}</code>`;
+
+    if (isNew) {
+        try {
+            saveSupportTicket(ticket);
+        } catch (e) {
+            await sendMessage(chatId, '⚠️ No he podido crear el ticket ahora. Inténtalo de nuevo en unos minutos.');
+            return false;
+        }
+    }
+
+    let delivery = null;
+    try { delivery = await sendMessage(SUPPORT_TICKET_CHAT_ID, operatorText); } catch (e) {}
+    if (!delivery || delivery.ok !== true) {
+        if (isNew) {
+            ticket.status = 'delivery_failed';
+            ticket.updatedAt = new Date().toISOString();
+            try { saveSupportTicket(ticket); } catch (e) {}
+        }
+        try { db.recordAuditEvent(userId, 'SUPPORT_TICKET_DELIVERY_FAILED', { ticketId: ticket.id }); } catch (e) {}
+        await sendMessage(chatId, '⚠️ No he podido entregar tu mensaje a soporte ahora. Inténtalo de nuevo en unos minutos.');
+        return false;
+    }
+
+    ticket.playerChatId = String(chatId);
+    ticket.updatedAt = new Date().toISOString();
+    ticket.lastPlayerMessageAt = ticket.updatedAt;
+    ticket.messageCount = Number(ticket.messageCount || 0) + 1;
+    try {
+        saveSupportTicket(ticket);
+        db.recordAuditEvent(userId, isNew ? 'SUPPORT_TICKET_CREATED' : 'SUPPORT_TICKET_FOLLOWUP', {
+            ticketId: ticket.id,
+            messageCount: ticket.messageCount
+        });
+    } catch (e) {}
+
+    pendingSupportTicketPrompts.delete(userId);
+    await sendMessage(chatId, isNew
+        ? `✅ <b>Ticket creado: <code>${escapeHtml(ticket.id)}</code></b>\n\nTu mensaje ha llegado a soporte. Te responderemos en este mismo chat. Si necesitas añadir datos, usa de nuevo <code>/ticket</code>.`
+        : `✅ <b>Mensaje añadido al ticket <code>${escapeHtml(ticket.id)}</code>.</b> Te responderemos en este mismo chat.`);
+    return true;
+}
+
+async function supportTicketFromCommand(chatId, ticketId) {
+    const ticket = getSupportTicket(ticketId);
+    if (!ticket) {
+        await sendMessage(chatId, `⚠️ No encuentro el ticket <code>${escapeHtml(ticketId || '')}</code>.`);
+        return null;
+    }
+    return ticket;
+}
+
+function isSupportOperatorCommandChat(msg) {
+    if (!msg || !msg.chat) return false;
+    if ((msg.chat.type || 'private') === 'private') return true;
+    return String(msg.chat.id) === String(SUPPORT_TICKET_CHAT_ID || '');
+}
+
+async function handleSupportReplyCommand(msg, text) {
+    const chatId = msg.chat.id;
+    const userId = String(msg.from.id);
+    if (!isSupportOperator(userId)) {
+        try { db.recordAuditEvent(userId, 'SUPPORT_TICKET_REPLY_UNAUTHORIZED', {}); } catch (e) {}
+        await sendMessage(chatId, '🔒 Ese comando solo puede usarlo el operador de soporte.');
+        return false;
+    }
+    if (!isSupportOperatorCommandChat(msg)) {
+        await sendMessage(chatId, '🔒 Por privacidad, usa ese comando en tu chat privado conmigo o en el chat de tickets configurado.');
+        return false;
+    }
+    const match = /^\/(?:reply|responder)(?:@\w+)?\s+(\S+)\s+([\s\S]+)$/i.exec(String(text || '').trim());
+    if (!match) {
+        await sendMessage(chatId, 'Uso: <code>/reply SUP-XXXXXXXX tu respuesta</code>');
+        return false;
+    }
+    const ticketId = normalizeSupportTicketId(match[1]);
+    const reply = String(match[2] || '').trim().slice(0, 1000);
+    const ticket = ticketId ? await supportTicketFromCommand(chatId, ticketId) : null;
+    if (!ticket) {
+        if (!ticketId) await sendMessage(chatId, '⚠️ La referencia debe tener el formato <code>SUP-XXXXXXXX</code>.');
+        return false;
+    }
+    if (ticket.status !== 'open') {
+        await sendMessage(chatId, `⚠️ El ticket <code>${escapeHtml(ticket.id)}</code> ya no está abierto.`);
+        return false;
+    }
+
+    let delivery = null;
+    try {
+        delivery = await sendMessage(ticket.playerChatId,
+            `💬 <b>RESPUESTA DE SOPORTE</b> · <code>${escapeHtml(ticket.id)}</code>\n\n${escapeHtml(reply)}\n\n` +
+            `Si necesitas añadir algo, usa <code>/ticket tu mensaje</code>.`);
+    } catch (e) {}
+    if (!delivery || delivery.ok !== true) {
+        await sendMessage(chatId, `⚠️ No he podido entregar la respuesta del ticket <code>${escapeHtml(ticket.id)}</code>.`);
+        return false;
+    }
+
+    ticket.updatedAt = new Date().toISOString();
+    ticket.lastOperatorReplyAt = ticket.updatedAt;
+    try {
+        saveSupportTicket(ticket);
+        db.recordAuditEvent(ticket.userId, 'SUPPORT_TICKET_REPLIED', { ticketId: ticket.id, operatorId: userId });
+    } catch (e) {}
+    await sendMessage(chatId, `✅ Respuesta enviada al jugador del ticket <code>${escapeHtml(ticket.id)}</code>.`);
+    return true;
+}
+
+async function handleSupportCloseCommand(msg, text) {
+    const chatId = msg.chat.id;
+    const userId = String(msg.from.id);
+    if (!isSupportOperator(userId)) {
+        try { db.recordAuditEvent(userId, 'SUPPORT_TICKET_CLOSE_UNAUTHORIZED', {}); } catch (e) {}
+        await sendMessage(chatId, '🔒 Ese comando solo puede usarlo el operador de soporte.');
+        return false;
+    }
+    if (!isSupportOperatorCommandChat(msg)) {
+        await sendMessage(chatId, '🔒 Por privacidad, usa ese comando en tu chat privado conmigo o en el chat de tickets configurado.');
+        return false;
+    }
+    const match = /^\/(?:close|cerrar)(?:@\w+)?\s+(\S+)(?:\s+([\s\S]+))?$/i.exec(String(text || '').trim());
+    if (!match) {
+        await sendMessage(chatId, 'Uso: <code>/close SUP-XXXXXXXX [nota opcional]</code>');
+        return false;
+    }
+    const ticketId = normalizeSupportTicketId(match[1]);
+    const ticket = ticketId ? await supportTicketFromCommand(chatId, ticketId) : null;
+    if (!ticket) {
+        if (!ticketId) await sendMessage(chatId, '⚠️ La referencia debe tener el formato <code>SUP-XXXXXXXX</code>.');
+        return false;
+    }
+    if (ticket.status !== 'open') {
+        await sendMessage(chatId, `ℹ️ El ticket <code>${escapeHtml(ticket.id)}</code> ya estaba cerrado.`);
+        return false;
+    }
+
+    ticket.status = 'closed';
+    ticket.closedAt = new Date().toISOString();
+    ticket.updatedAt = ticket.closedAt;
+    try {
+        saveSupportTicket(ticket);
+        db.recordAuditEvent(ticket.userId, 'SUPPORT_TICKET_CLOSED', { ticketId: ticket.id, operatorId: userId });
+    } catch (e) {}
+
+    const note = String(match[2] || '').trim().slice(0, 500);
+    let notified = false;
+    try {
+        const delivery = await sendMessage(ticket.playerChatId,
+            `✅ <b>TICKET CERRADO</b> · <code>${escapeHtml(ticket.id)}</code>` +
+            `${note ? `\n\n${escapeHtml(note)}` : ''}\n\nSi el problema vuelve, abre un ticket nuevo con <code>/ticket</code>.`);
+        notified = Boolean(delivery && delivery.ok === true);
+    } catch (e) {}
+    await sendMessage(chatId, notified
+        ? `✅ Ticket <code>${escapeHtml(ticket.id)}</code> cerrado y jugador avisado.`
+        : `✅ Ticket <code>${escapeHtml(ticket.id)}</code> cerrado; no pude avisar al jugador.`);
+    return true;
 }
 
 function telegramRequest(method, data = {}) {
@@ -196,8 +594,16 @@ async function handleRefundedStarsPayment(msg) {
 }
 
 async function sendSupport(chatId, userId) {
+    const ticketLine = isSupportOperator(userId)
+        ? (supportTicketsEnabled()
+            ? `• <b>Operador:</b> los tickets nuevos te llegarán a este chat; responde con <code>/reply SUP-XXXXXXXX texto</code>.\n`
+            : `• <b>Operador:</b> tu cuenta está configurada, pero los tickets privados están desactivados en este servidor.\n`)
+        : (supportTicketsEnabled()
+            ? `• <b>Hablar con soporte:</b> pulsa “Escribir a soporte” o usa <code>/ticket tu problema</code>. Tu mensaje llega en privado al operador y la respuesta volverá a este chat.\n`
+            : `• <b>Tickets privados:</b> todavía no están activados en este servidor.\n`);
     const text = `🆘 <b>SOPORTE APEX MOTORSPORT</b>\n\n` +
         `👤 <b>Tu ID de cuenta de Telegram:</b> <code>${escapeHtml(userId)}</code>\n\n` +
+        ticketLine +
         `• <b>Compra con Stars:</b> se crea desde la billetera dentro del juego; usa <code>/paysupport APEX-ID-DEL-PEDIDO</code> y conserva el recibo de Telegram.\n` +
         `• <b>Compra TON web:</b> usa el mismo comando y conserva el hash público de la transacción.\n` +
         `• <b>Recuperar pedidos:</b> entra con esta misma cuenta, abre la billetera del juego y comprueba el pedido pendiente.\n` +
@@ -205,16 +611,20 @@ async function sendSupport(chatId, userId) {
         `• <b>Anuncios:</b> la recompensa se acredita solo tras la confirmación de Adsgram en servidor.\n\n` +
         `⛔ Nunca envíes tu frase semilla, claves privadas, contraseñas, credencial de dispositivo ni código de recuperación.` +
         supportContactLine();
-    await sendMessage(chatId, text, {
-        inline_keyboard: [
-            [{ text: '🎮 Abrir el juego', web_app: { url: WEBAPP_URL } }],
-            [
-                { text: '🆘 Soporte web', url: webUrl('/support.html') },
-                { text: '📜 Términos', url: webUrl('/terms.html') }
-            ],
-            [{ text: '🔐 Privacidad', url: webUrl('/privacy.html') }]
-        ]
-    });
+    const keyboard = [
+        [{ text: '🎮 Abrir el juego', web_app: { url: WEBAPP_URL } }]
+    ];
+    if (supportTicketsEnabled() && !isSupportOperator(userId)) {
+        keyboard.push([{ text: '✉️ Escribir a soporte', callback_data: 'cmd_ticket' }]);
+    }
+    keyboard.push(
+        [
+            { text: '🆘 Soporte web', url: webUrl('/support.html') },
+            { text: '📜 Términos', url: webUrl('/terms.html') }
+        ],
+        [{ text: '🔐 Privacidad', url: webUrl('/privacy.html') }]
+    );
+    await sendMessage(chatId, text, { inline_keyboard: keyboard });
 }
 
 async function sendPaySupport(chatId, userId, rawOrderId) {
@@ -301,6 +711,39 @@ async function handleMessage(msg) {
     const username = msg.from.username || msg.from.first_name || 'Piloto';
     const text = String(msg.text || '').trim().slice(0, 1000);
     const command = text.split(/\s+/)[0].split('@')[0].toLowerCase();
+
+    if (command === '/reply' || command === '/responder') {
+        await handleSupportReplyCommand(msg, text);
+        return;
+    }
+
+    if (command === '/close' || command === '/cerrar') {
+        await handleSupportCloseCommand(msg, text);
+        return;
+    }
+
+    if (command === '/ticket' || command === '/soporte') {
+        const body = text.replace(/^\/\w+(?:@\w+)?\s*/, '').trim();
+        if (!body) await promptSupportTicket(chatId, userId, msg.chat.type || 'private');
+        else await submitSupportTicketMessage(msg, body);
+        return;
+    }
+
+    if (text && !text.startsWith('/')) {
+        const chatType = msg.chat.type || 'private';
+        if (chatType === 'private' && !isSupportOperator(userId)) {
+            prunePendingSupportTicketPrompts();
+            const pending = pendingSupportTicketPrompts.get(String(userId));
+            if (pending && String(pending.chatId) === String(chatId) && pending.expiresAt > Date.now()) {
+                pendingSupportTicketPrompts.delete(String(userId));
+                await submitSupportTicketMessage(msg, text);
+            } else if (supportTicketsEnabled()) {
+                await sendMessage(chatId,
+                    `👋 Si necesitas ayuda, usa <code>/ticket tu problema</code> o pulsa Soporte y después “Escribir a soporte”.`);
+            }
+        }
+        return;
+    }
 
     if (command === '/start') {
         const user = db.getUser(userId, username);
@@ -416,6 +859,8 @@ async function handleCallbackQuery(cq) {
         await sendMessage(chatId, text);
     } else if (data === 'cmd_support') {
         await sendSupport(chatId, userId);
+    } else if (data === 'cmd_ticket') {
+        await promptSupportTicket(chatId, userId, cq.message.chat.type || 'private');
     }
 }
 
@@ -525,6 +970,7 @@ async function startPolling() {
                 { command: 'ranking', description: 'Mejores tiempos en Rookie Ring' },
                 { command: 'tracks', description: 'Circuitos oficiales' },
                 { command: 'support', description: 'Ayuda y recuperación' },
+                { command: 'ticket', description: 'Enviar un mensaje privado a soporte' },
                 { command: 'paysupport', description: 'Estado de un pedido Stars o TON: /paysupport APEX-ID' },
                 { command: 'terms', description: 'Términos del juego' },
                 { command: 'privacy', description: 'Política de privacidad' }
@@ -617,6 +1063,12 @@ module.exports = {
         handleSuccessfulStarsPayment,
         handleRefundedStarsPayment,
         sendPaySupport,
+        handleMessage,
+        handleCallbackQuery,
+        submitSupportTicketMessage,
+        handleSupportReplyCommand,
+        handleSupportCloseCommand,
+        supportTicketsEnabled,
         isPaymentUpdate,
         botHealth,
         markBotPollSuccess,

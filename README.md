@@ -36,18 +36,18 @@ npm run check
 npm test
 ```
 
-La suite incluye lógica/DOM del hub, guardado seguro con SQLite temporal, cambio de cuenta en un mismo dispositivo sin mezclar guardados locales, regresiones HTTP de seguridad, economía sellada, Adsgram reclamable una sola vez y bloqueado en cliente cuando el webhook no está listo, ranking por circuito, compras TON con libro ficticio y cotización fijada solo para las pruebas, Telegram Stars con un mock local de Bot API, registro/preparación NFT off-chain, dotación privada de cuentas de equipo, mercado P2P real contra HTTP/SQLite con varias cuentas y reinicios, verificación de copias SQLite, validación de circuitos y tiles.
+La suite incluye lógica/DOM del hub, guardado seguro con SQLite temporal, cambio de cuenta en un mismo dispositivo sin mezclar guardados locales, regresiones HTTP de seguridad, economía sellada, Adsgram reclamable una sola vez y bloqueado en cliente cuando el webhook no está listo, ranking por circuito, compras TON con libro ficticio y cotización fijada solo para las pruebas, Telegram Stars y tickets privados de soporte con un mock local de Bot API, registro/preparación NFT off-chain, dotación privada de cuentas de equipo, mercado P2P real contra HTTP/SQLite con varias cuentas y reinicios, verificación de copias SQLite, validación de circuitos y tiles.
 
 ## Arquitectura v107
 
-- `server.js`: HTTP, autenticación, CORS/CSP, API, sesiones y resultados de carrera, compras TON y Telegram Stars, metadatos/registro NFT, mercado P2P en escrow, Adsgram, referidos, recuperación, copias, auditoría y `/readyz`. `/api/config` anuncia también la identidad pública configurable del bot y si Adsgram está realmente listo; la readiness administrativa resume la última copia SQLite. Si existe `BOT_TOKEN`, arranca también el bot en el mismo proceso.
+- `server.js`: HTTP, autenticación, CORS/CSP, API, sesiones y resultados de carrera, compras TON y Telegram Stars, metadatos/registro NFT, mercado P2P en escrow, Adsgram, referidos, recuperación, copias, auditoría y `/readyz`. `/api/config` anuncia también la identidad pública configurable del bot, si Adsgram está realmente listo y si los tickets privados de soporte están listos (sin exponer el ID del operador); la readiness administrativa resume la última copia SQLite. Si existe `BOT_TOKEN`, arranca también el bot en el mismo proceso.
 - `database.js`: SQLite con WAL, claves foráneas, tiempo de espera ante bloqueos, permisos `0600`, transacciones, libro económico, pedidos, cargos externos procesados una sola vez, registro global de coches, claims de conversión, anuncios/trades de mercado y custodia de activos en escrow; conserva la migración automática desde el JSON de v103. El esquema actual es **106**.
 - `economy_engine.js`: ejecuta las reglas económicas compartidas en una VM aislada con aleatoriedad criptográfica y una lista cerrada de acciones; también contiene las acciones internas no expuestas para abonar Stars y aplicar la dotación de equipo.
 - `telegram_api.js`: cliente compartido de Telegram Bot API con token solo desde entorno, host oficial obligatorio en producción y mock únicamente fuera de producción.
 - `telegram_stars.js`: catálogo, pedidos, facturas `XTR`, recuperación de entrega y reembolsos guardados de Telegram Stars.
 - `cloud_save.js`: sincroniza historia/ajustes y aplica siempre el garaje autoritativo que devuelve el servidor. Refresca la identidad Telegram actual y conserva instantáneas locales separadas por cuenta para que un cambio de usuario en el mismo dispositivo no herede ni suba el guardado de otra cuenta.
 - `game_hub.js`, `dustrac_game.js` y `nft_cars_data.js`: interfaz, carreras y catálogos/reglas compartidas. En producción, las mutaciones económicas del cliente están bloqueadas o redirigidas a la API.
-- `bot.js`: bot de Telegram con perfil/garaje de servidor, ranking, circuitos, soporte por proveedor, `pre_checkout_query`, pagos Stars correctos/reembolsados y offset persistente.
+- `bot.js`: bot de Telegram con perfil/garaje de servidor, ranking, circuitos, soporte por proveedor, tickets privados jugador→operador con referencia `SUP-…`, comandos de operador `/reply` y `/close`, `pre_checkout_query`, pagos Stars correctos/reembolsados y offset persistente.
 - `scripts/verify_backup.js`: comprueba integridad, claves foráneas, esquema, JSON y coherencia básica de mercado/NFT en una copia SQLite sin imprimir IDs de usuario.
 - `scripts/production_smoke.js`: smoke público sin credenciales de salud, versión/assets, legal, rutas sensibles, interruptores, soporte, Admin y Adsgram.
 - `.github/workflows/`: CI en Node 22.22.0 para `npm run check`/`npm test` y un smoke programado de producción.
@@ -90,7 +90,8 @@ Variables importantes:
 - `ALLOWED_ORIGINS`: lista opcional de orígenes externos permitidos, separados por comas. El acceso same-origin no necesita comodines.
 - `TRUST_PROXY`: actívalo solo tras un proxy de confianza como Render.
 - `ALLOW_INSECURE_DEV_AUTH`: solo para desarrollo local; se ignora en producción.
-- `SUPPORT_CONTACT` y `SUPPORT_URL`: canal público de soporte devuelto por `/api/config` y mostrado en soporte. Para un lanzamiento comercial debe existir al menos uno y estar vigilado por una persona.
+- `ENABLE_SUPPORT_TICKETS`, `SUPPORT_OPERATOR_TELEGRAM_IDS`/`SUPPORT_OPERATOR_TELEGRAM_ID`, `SUPPORT_TICKET_CHAT_ID` y `SUPPORT_TICKET_COOLDOWN_SEC`: activación explícita de los tickets privados del bot. El operador debe abrir antes un chat privado con el bot y poner su ID numérico (visible en `/support`); sin `SUPPORT_TICKET_CHAT_ID`, los tickets llegan a ese chat privado. No subir IDs reales a Git.
+- `SUPPORT_CONTACT` y `SUPPORT_URL`: contacto/URL públicos extra devueltos por `/api/config` y mostrados en soporte. Para un lanzamiento comercial debe existir al menos un canal humano vigilado: tickets listos, contacto o URL.
 - `TELEGRAM_BOT_API_BASE_URL`: solo para mocks locales fuera de producción. En producción el código exige el host oficial de Telegram aunque esta variable apunte a otro sitio.
 - `TELEGRAM_STARS_PURCHASES_ENABLED`: activa el catálogo/facturación Stars si además hay `BOT_TOKEN` válido y el bot está procesando pagos.
 - `NFT_ENTITLEMENTS_ENABLED`: activa registro global, sincronización, preparación/cancelación y consulta de claims off-chain.
@@ -211,10 +212,13 @@ Comandos principales del bot:
 - `/ranking`: mejores tiempos de Rookie Ring.
 - `/tracks`: circuitos oficiales.
 - `/support`, `/help` o `/ayuda`: ayuda y recuperación.
+- `/ticket <problema>`: abre o continúa un ticket privado con referencia `SUP-XXXXXXXX`. También puede usarse `/ticket` o el botón “Escribir a soporte” y escribir el problema en el siguiente mensaje.
 - `/paysupport APEX-XXXXXXXXXXXX`: estado de un pedido propio; no revela pedidos ajenos.
 - `/terms` y `/privacy`: enlaces legales.
 
 El bot también procesa los eventos de pago de Telegram Stars y persiste su offset de actualizaciones para no reprocesar cargos al reiniciar. `/paysupport` distingue pedidos TON y Stars y muestra al propietario el siguiente paso seguro sin revelar datos de otra cuenta.
+
+Los tickets solo se aceptan en chats privados. El bot guarda en SQLite la referencia, el enrutamiento y el estado, pero no el texto del mensaje ni de la respuesta; el contenido viaja por Telegram al operador configurado. Solo los IDs de operador pueden usar `/reply SUP-XXXXXXXX <texto>` y `/close SUP-XXXXXXXX [nota]`, y únicamente desde su chat privado con el bot o desde el chat de tickets configurado. Hay cooldown configurable y un máximo de 20 mensajes de soporte por cuenta y día.
 
 Las páginas `/support.html`, `/terms.html` y `/privacy.html` explican la naturaleza virtual de `$CR`/coches, el uso de Stars dentro de Telegram y de TON solo en el flujo web habilitado, las reglas del escrow y la comisión del mercado, que los coches registrados todavía no están acuñados, la verificación de pagos y anuncios, los datos guardados y cómo pedir ayuda o un reembolso sin revelar secretos.
 
@@ -227,9 +231,9 @@ Antes de publicar:
 1. Despliega cliente y servidor de la misma versión juntos.
 2. Mantén una sola instancia mientras SQLite local sea la fuente de verdad.
 3. Comprueba que `DATA_DIR=/var/data` y que las copias caen en el disco persistente.
-4. Configura `BOT_TOKEN`, `WEBAPP_URL`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_APP_SHORT_NAME`, `SERVER_SECRET_KEY`, `ADMIN_AUDIT_TOKEN`, `ADSGRAM_WEBHOOK_SECRET`, `ADSGRAM_BLOCK_ID`, un canal de soporte humano y las claves de indexadores.
+4. Configura `BOT_TOKEN`, `WEBAPP_URL`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_APP_SHORT_NAME`, `SERVER_SECRET_KEY`, `ADMIN_AUDIT_TOKEN`, `ADSGRAM_WEBHOOK_SECRET`, `ADSGRAM_BLOCK_ID`, los tickets privados (`ENABLE_SUPPORT_TICKETS=true` y el ID del operador), un contacto/URL público de respaldo y las claves de indexadores.
 5. En el primer despliegue deja `TELEGRAM_TON_PURCHASES_ENABLED=false`, `TON_NFT_MINTING_ENABLED=false`, `TON_NFT_NETWORK=ton-testnet`, `TON_NFT_COLLECTION_ADDRESS=` vacío, `ENABLE_WAGER_STAKES=false`, `ENABLE_MARKETPLACE=false` y `ENABLE_WEEKLY_TOURNAMENT=false`. Revisa también `MARKETPLACE_FEE_BPS=750` y los límites `MARKETPLACE_*`. Configura `TEAM_BOOTSTRAP_TELEGRAM_IDS` solo en el panel de Render si quieres activar la dotación interna; no lo subas con valores al repositorio.
-6. Ejecuta `npm run smoke:production -- https://dust-and-nitro-game.onrender.com --strict` y revisa además los metadatos de colección y una carrera completa en Android e iOS dentro de Telegram. Confirma que la versión es `1.0.7`, el esquema es `106`, Stars está activo, TON directo en Telegram y mint están desactivados, Adsgram solo se anuncia listo si su webhook funciona, el bot responde y los assets se cargan con `?v=107`.
+6. Ejecuta `npm run smoke:production -- https://dust-and-nitro-game.onrender.com --strict` y revisa además los metadatos de colección, una carrera completa en Android e iOS dentro de Telegram y un ticket `/ticket` real desde otra cuenta (el operador debe recibir la referencia, responder con `/reply` y cerrar con `/close`). Confirma que la versión es `1.0.7`, el esquema es `106`, Stars está activo, TON directo en Telegram y mint están desactivados, Adsgram solo se anuncia listo si su webhook funciona, el bot responde y los assets se cargan con `?v=107`.
 7. En web, haz compras TON reales controladas del paquete mínimo y del cofre Rookie; en Telegram, compra el paquete Stars de 100 ⭐ con una cuenta de prueba/propietario. Verifica un único abono, que repetir status/claim no duplica nada y que `/paysupport` recupera el pedido.
 8. Verifica una copia con `npm run verify-backup -- <copia.sqlite>` y prueba su restauración en un entorno separado. Comprueba además que existe una copia externa al disco de Render: las copias en el mismo disco no protegen frente a la pérdida del propio disco.
 9. Si el mercado aún no está activo, solo entonces pon `ENABLE_MARKETPLACE=true` y redespliega/reinicia la **única** instancia. Con dos cuentas de control publica y compra una pieza y un coche de bajo valor; verifican bruto/neto, que el coche conserva nivel/piezas/serie, que repetir la compra no duplica y que retirar otro anuncio devuelve exactamente el activo. Deja documentados los IDs de anuncio/trade de la prueba.

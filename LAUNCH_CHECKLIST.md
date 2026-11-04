@@ -7,12 +7,13 @@
 - Producción ejecuta la v1.0.6 con esquema SQLite 106.
 - El mercado P2P está activo y ya se completó una venta real de bujías entre dos teléfonos.
 - Las dos cuentas internas de equipo recibieron su dotación única.
+- Adsgram quedó configurado en producción y un anuncio real ya acreditó nitro; tras desplegar la v1.0.7 debe repetirse la prueba porque el cliente aplicará la nueva puerta `adsgram.ready`.
 - La acuñación NFT, las apuestas con saldo y el torneo semanal siguen desactivados.
-- La v1.0.7 local endurece identidad/Adsgram y añade herramientas de verificación; no debe anunciarse como desplegada hasta completar su push y despliegue.
+- La v1.0.7 local endurece identidad/Adsgram, añade tickets privados de soporte en el bot y herramientas de verificación; no debe anunciarse como desplegada hasta completar su push y despliegue.
 
 ## Puerta 0 — Desplegar la v1.0.7
 
-1. Subir el commit v1.0.7 a `main`.
+1. Subir los commits v1.0.7 a `main`.
 2. Desplegar en Render la única instancia y esperar a **Live**.
 3. Ejecutar:
 
@@ -28,13 +29,14 @@
 Hacer los cambios en una sola edición de **Environment Variables** para provocar un único redespliegue. No enviar capturas con valores secretos.
 
 - [ ] `ADMIN_AUDIT_TOKEN`: secreto aleatorio nuevo de al menos 32 caracteres, guardado en un gestor de contraseñas. No reutilizar otra clave.
-- [ ] `SUPPORT_CONTACT` o `SUPPORT_URL`: canal humano real y vigilado. Una página informativa y un bot automático no sustituyen a una persona para incidencias de pago o cuenta.
+- [ ] Tickets privados de soporte, tras desplegar la v1.0.7: abrir un chat privado con el bot, mirar tu ID con `/support` y fijar `ENABLE_SUPPORT_TICKETS=true` y `SUPPORT_OPERATOR_TELEGRAM_ID=<tu ID>`. Dejar `SUPPORT_TICKET_CHAT_ID` vacío para recibirlos en tu propio chat con el bot. Probar después `/ticket` desde otra cuenta y responder/cerrar con `/reply SUP-…` y `/close SUP-…`.
+- [ ] `SUPPORT_CONTACT` o `SUPPORT_URL`: contacto público de respaldo vigilado por una persona. Los tickets listos ya satisfacen la readiness, pero un respaldo público ayuda si Telegram o el bot fallan.
 - [ ] Comprobar que `SERVER_SECRET_KEY` existe, tiene al menos 32 caracteres y es estable. No rotarlo sin un plan: participa en seudónimos y firmas internas.
-- [ ] Adsgram, una de estas dos rutas:
-  - Configurar `ADSGRAM_WEBHOOK_SECRET` con un secreto aleatorio y usar **el mismo** en la Reward URL de Adsgram, por ejemplo:
-    `https://dust-and-nitro-game.onrender.com/api/ad-reward?userid=[userId]&reward=generic&secret=<EL_MISMO_SECRETO>`
-  - O lanzar sin recompensas por anuncio (`ENABLE_AD_REWARDS=false`). Con la v1.0.7 el cliente no mostrará un anuncio si el servidor no anuncia Adsgram como listo.
-- [ ] `ADSGRAM_BLOCK_ID`: debe ser el bloque aprobado (por defecto `54054`).
+- [x] Adsgram en producción: Render y la Reward URL usan el mismo secreto; una llamada sin secreto devuelve `403` y un anuncio real ya acreditó nitro. La forma de la URL es:
+  `https://dust-and-nitro-game.onrender.com/api/ad-reward?userid=[userId]&reward=generic&secret=<EL_MISMO_SECRETO>`
+  Si el secreto se rota, hay que cambiar Render y Adsgram a la vez; nunca pegarlo en Git ni en capturas.
+- [ ] Tras desplegar la v1.0.7, confirmar `/api/config` → `adsgram.ready=true` y repetir un anuncio real completo. Si algún día se decide lanzar sin anuncios, usar `ENABLE_AD_REWARDS=false`.
+- [x] `ADSGRAM_BLOCK_ID`: bloque aprobado `54054` (también es el valor por defecto).
 - [ ] Al menos una de `TONCENTER_API_KEY` o `TONAPI_KEY` si se aceptan compras TON web.
 - [ ] Confirmar una sola instancia, disco persistente en `/var/data`, `DATA_DIR=/var/data` y Node 22.22.0.
 
@@ -64,7 +66,7 @@ Registrar fecha, cuenta de prueba, ID de pedido y resultado; no registrar secret
 
 - [ ] Telegram Stars: paquete de 100 ⭐ con una cuenta controlada. Verificar un único abono, cierre/reapertura, recuperación y `/paysupport APEX-…`.
 - [ ] TON web: paquete mínimo y cofre Rookie con comentario exacto del pedido. Verificar una única entrega y que repetir la comprobación no duplica.
-- [ ] Adsgram: anuncio real completo, webhook recibido y una sola recompensa reclamada.
+- [x] Adsgram en la v1.0.6: anuncio real completo y nitro acreditado una vez. Pendiente repetir la comprobación tras desplegar la v1.0.7.
 - [ ] Referidos: invitación entre dos cuentas distintas, sin auto-referido ni doble recompensa.
 
 Si una vía no se prueba, desactivarla antes de invitar público.
@@ -85,7 +87,7 @@ Si una vía no se prueba, desactivarla antes de invitar público.
 
 - [ ] Decidir el bot definitivo antes de invitar público. El actual contiene `test_bot` en su usuario.
 - [ ] Si se cambia de bot: nuevo `BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, short name de Mini App, URL/dominio en BotFather, avatar, descripción, comandos y nueva prueba completa de Stars.
-- [ ] Canal o cuenta de soporte humana enlazada desde la configuración.
+- [ ] Ticket real entre dos teléfonos: la segunda cuenta abre `/ticket`, el operador recibe la referencia `SUP-…`, responde con `/reply` y cierra con `/close`; la respuesta y el cierre llegan al jugador. Configurar también el contacto/URL público de respaldo si se decide publicarlo.
 - [ ] Revisión legal/fiscal para España/UE: identidad y contacto del responsable, privacidad, consumo y reembolsos, IVA/impuestos, moneda virtual sin retirada, cofres aleatorios, menores y mercado entre jugadores.
 - [ ] No anunciar coches como NFT acuñados ni revendibles on-chain. En esta fase son coches internos registrados/preparados; la acuñación está apagada y no hay colección desplegada.
 
@@ -100,10 +102,11 @@ Si una vía no se prueba, desactivarla antes de invitar público.
   - `TELEGRAM_STARS_PURCHASES_ENABLED=false`: detiene nuevas compras Stars.
   - `TON_PURCHASES_ENABLED=false`: detiene nuevas compras TON web.
   - `ECONOMY_ACTIONS_ENABLED=false`: detiene acciones económicas ordinarias del cliente.
+  - `ENABLE_SUPPORT_TICKETS=false`: detiene la creación de tickets nuevos del bot.
 - [ ] Confirmar que se conoce el procedimiento de rollback de Render. La v1.0.7 no cambia el esquema 106.
 
 ## Criterio Go / No-Go
 
 **Go para soft launch** solo si el smoke estricto pasa, existe restauración externa probada, los métodos de pago activos han superado una compra real, la venta de coche en producción está verificada y hay soporte humano.
 
-**No-Go** si falta el token Admin, Adsgram promete recompensas sin webhook, no existe copia fuera de Render, un método de pago activo no se ha probado con dinero real o la comunicación sugiere que ya existen NFT acuñados.
+**No-Go** si falta el token Admin, Adsgram promete recompensas sin webhook, los tickets/contacto de soporte no llegan a una persona, no existe copia fuera de Render, un método de pago activo no se ha probado con dinero real o la comunicación sugiere que ya existen NFT acuñados.

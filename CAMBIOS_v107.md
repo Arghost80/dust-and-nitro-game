@@ -5,11 +5,11 @@ Fecha local: 4 de noviembre de 2026.
 - Versión de aplicación y paquete: `1.0.7`
 - Esquema SQLite: **106**, sin migración nueva
 - Assets principales: `?v=107`
-- Estado al cerrar este documento: cambio local preparado para commit; producción sigue en v1.0.6 hasta que se haga push y despliegue manual en Render.
+- Estado al cerrar este documento: la v1.0.7 sigue en local, sin push ni despliegue; producción continúa en v1.0.6 hasta el despliegue manual en Render.
 
 ## Objetivo
 
-La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento del mercado introducido en la v106. Es una pasada de fiabilidad y honestidad operativa antes de invitar a más público: identidad de cuenta, anuncios recompensados, copias de seguridad, enlaces del bot, textos visibles y herramientas repetibles de verificación.
+La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento del mercado introducido en la v106. Es una pasada de fiabilidad y honestidad operativa antes de invitar a más público: identidad de cuenta, anuncios recompensados, soporte humano mediante tickets privados, copias de seguridad, enlaces del bot, textos visibles y herramientas repetibles de verificación.
 
 ## Identidad de Telegram y guardados locales
 
@@ -41,6 +41,16 @@ La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento de
 - Los enlaces de duelo y referidos se construyen desde la identidad pública del bot anunciada por el servidor, conservando el bot actual solo como fallback.
 - Se eliminó del anuncio local inactivo la afirmación de ganar criptoactivos en torneos ranked.
 
+## Tickets privados de soporte en el bot
+
+- El bot existente acepta `/ticket <problema>` en un chat privado o, con `/ticket` sin texto o el botón “Escribir a soporte”, consume el siguiente mensaje del jugador como cuerpo del ticket.
+- Cada jugador conserva como máximo un ticket abierto: los mensajes posteriores se adjuntan a la misma referencia `SUP-XXXXXXXX` hasta que el operador lo cierra o caduca a los 7 días.
+- El operador recibe jugador, ID de cuenta y mensaje en su chat privado con el bot (o en `SUPPORT_TICKET_CHAT_ID` si se configura). Solo los IDs autorizados pueden usar `/reply SUP-XXXXXXXX <texto>` y `/close SUP-XXXXXXXX [nota]`, y únicamente desde su chat privado con el bot o desde el chat de tickets configurado.
+- La activación es explícita con `ENABLE_SUPPORT_TICKETS=true` y `SUPPORT_OPERATOR_TELEGRAM_IDS` o `SUPPORT_OPERATOR_TELEGRAM_ID`. `/api/config` anuncia `support.tickets.ready` sin exponer el ID del operador, y la readiness considera el canal listo también si existe contacto/URL público de respaldo.
+- La entrega al operador se confirma solo si Telegram responde `ok:true`. El ticket se persiste antes de entregarlo y, si la entrega inicial falla, queda marcado como `delivery_failed` en lugar de fingir que llegó.
+- SQLite guarda solo referencia, chat de destino, estado, fechas, contador y límites antiabuso; no guarda el texto de tickets ni respuestas. La auditoría registra eventos y referencias, no cuerpos de mensaje. El cooldown predeterminado es 10 segundos y hay un máximo de 20 mensajes por cuenta y día.
+- Los tickets desde grupos se rechazan sin reenviar su contenido y `/support`, `support.html`, términos y privacidad explican el flujo y la prohibición de enviar secretos.
+
 ## Copias, readiness y operación
 
 - `/api/admin/launch-readiness` incluye un resumen `backups` con activación, intervalo, retención, número de copias, tamaño total, fecha de la última copia y antigüedad.
@@ -63,7 +73,7 @@ La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento de
   - CI en Node 22.22.0 con `npm ci`, `npm run check` y `npm test`;
   - smoke público programado cada 30 minutos y ejecución manual opcional en modo estricto.
 - Nuevo `LAUNCH_CHECKLIST.md` con las puertas manuales Go/No-Go: Render, copia externa/restauración, pagos reales, QA en dispositivos, bot/soporte/legal y soft launch.
-- `.env.example` y `render.yaml` documentan el bloque Adsgram y la identidad pública configurable del bot, sin valores secretos.
+- `.env.example` y `render.yaml` documentan el bloque Adsgram, la identidad pública configurable del bot y las variables de operador/tickets, sin IDs reales ni valores secretos. El smoke público distingue entre tickets listos, respaldo estático y ausencia de canal humano.
 
 ## Textos visibles más precisos
 
@@ -82,6 +92,7 @@ La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento de
   - la foto de la cuenta previa queda preservada bajo su propio ID.
 - `test_dom.js` demuestra que Adsgram no se inicializa cuando `/api/config` dice `ready=false`, se detiene tras un único reintento si la configuración sigue sin responder y sí usa el `blockId` público cuando está listo.
 - `test_security.js` cubre `/api/config.adsgram` en un servidor configurado y en el servidor fallback sin secreto.
+- `test_stars_nft.js` ejerce el bot contra un mock de Telegram: `/api/config.support.tickets.ready`, botón de soporte, prompt de un solo mensaje, entrega al operador, follow-up en el mismo `SUP-…`, respuesta autorizada, cierre, rechazo de no-operadores, de tickets en grupos y de respuestas del operador desde chats no configurados, y ausencia del texto privado en SQLite/auditoría.
 - `test_backup_tools.js` genera una copia real con la API de SQLite, la verifica, comprueba que el informe no filtra el ID de prueba y rechaza JSON corrupto y archivos no SQLite.
 - Las expectativas de versión pasan a `1.0.7`; el esquema esperado se mantiene en `106`.
 
@@ -89,21 +100,22 @@ La v107 no cambia precios, reglas económicas, catálogo ni el funcionamiento de
 
 - `npm run check`: correcto.
 - `npm test`: correcto, incluyendo DOM, CloudSave, identidad/cambio de cuenta, seguridad, compras TON, Telegram Stars/NFT, dotación de equipo, mercado P2P, verificador de copias, circuitos y esquinas.
-- Smoke no estricto contra la producción todavía v1.0.6 con `--skip-version`: servicio sano y esquema 106; continúan únicamente los avisos conocidos de soporte sin configurar, `/api/config` antiguo sin estado Adsgram, Admin sin token y Adsgram sin secreto.
+- Smoke no estricto contra la producción todavía v1.0.6 con `--skip-version`: servicio sano y esquema 106; Adsgram ya devuelve `403` sin secreto y un anuncio real acreditó nitro. La v1.0.6 aún no anuncia el estado Adsgram/tickets de la v1.0.7; continúan los avisos de Admin sin token y soporte humano público sin configurar.
 
 ## Despliegue y rollback
 
-1. Hacer push del commit v1.0.7 cuando exista autorización de GitHub.
+1. Hacer push de los commits v1.0.7 cuando exista autorización de GitHub.
 2. Desplegar manualmente en Render la única instancia; no asumir auto-deploy ni sincronización de variables desde `render.yaml` en el servicio gestionado por panel.
-3. Revisar primero el smoke sin `--strict` si aún faltan variables manuales y después repetirlo con `--strict` al cerrarlas.
-4. Como no hay migración de base de datos, el rollback de código a la v1.0.6 no requiere bajar el esquema 106. No restaurar una BD antigua salvo incidente real y procedimiento controlado.
+3. Tras el despliegue, fijar `ENABLE_SUPPORT_TICKETS=true` y `SUPPORT_OPERATOR_TELEGRAM_ID` con el ID que `/support` muestra al operador, dejando `SUPPORT_TICKET_CHAT_ID` vacío para recibir los tickets en su chat privado con el bot. Configurar también `TELEGRAM_BOT_USERNAME`/`TELEGRAM_BOT_APP_SHORT_NAME` del bot elegido.
+4. Revisar primero el smoke sin `--strict` si aún faltan variables manuales y después repetirlo con `--strict` al cerrarlas. Probar un ticket real desde una segunda cuenta y una recompensa Adsgram completa tras la nueva puerta de configuración.
+5. Como no hay migración de base de datos, el rollback de código a la v1.0.6 no requiere bajar el esquema 106; la v1.0.6 simplemente ignorará los metadatos `supportTicket…` de `meta`. No restaurar una BD antigua salvo incidente real y procedimiento controlado.
 
 ## Fuera de esta versión
 
 Siguen requiriendo acción del operador o una fase posterior:
 
-- fijar `ADMIN_AUDIT_TOKEN` y un canal humano de soporte;
-- configurar y probar la Reward URL real de Adsgram o lanzar con los anuncios desactivados;
+- fijar `ADMIN_AUDIT_TOKEN`, activar el ID de operador de tickets en Render y completar un ticket real entre dos cuentas;
+- repetir tras desplegar la v1.0.7 la prueba ya superada de Reward URL/Adsgram en la v1.0.6;
 - copiar una BD de producción fuera de Render y restaurar esa copia en aislamiento;
 - compras reales mínimas de Stars y TON web;
 - venta/cancelación de un coche en producción;

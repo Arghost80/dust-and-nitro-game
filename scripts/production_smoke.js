@@ -6,7 +6,7 @@
 //   node scripts/production_smoke.js https://... --skip-version
 //
 // En modo --strict, la configuración incompleta de lanzamiento (Admin,
-// soporte humano o Adsgram) se considera fallo. Sin --strict se reporta
+// canal humano de soporte o Adsgram) se considera fallo. Sin --strict se reporta
 // como aviso, pero una caída del servicio o un interruptor peligroso sí
 // sigue siendo fallo.
 const fs = require('fs');
@@ -121,8 +121,9 @@ function checkVersion(label, actual) {
             else fail(`${label} debería seguir desactivada`, `${key}=${String(features[key])}`);
         }
 
-        if (config.support && (config.support.contact || config.support.url)) pass('Contacto/URL de soporte configurado');
-        else warn('Falta SUPPORT_CONTACT o SUPPORT_URL');
+        if (config.support && config.support.tickets && config.support.tickets.ready === true) pass('Tickets privados de soporte listos');
+        else if (config.support && (config.support.contact || config.support.url)) warn('Soporte público configurado, pero los tickets privados del bot no están listos');
+        else warn('Falta activar tickets privados de soporte o SUPPORT_CONTACT/SUPPORT_URL');
 
         if (config.adsgram && config.adsgram.enabled === false) pass('Adsgram desactivado deliberadamente; el cliente no mostrará anuncios');
         else if (config.adsgram && config.adsgram.ready === true) pass('Adsgram listo según /api/config');

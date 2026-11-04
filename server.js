@@ -147,6 +147,35 @@ function telegramPublicConfig() {
     };
 }
 
+function configuredTelegramIds(...values) {
+    const ids = [];
+    for (const value of values) {
+        String(value || '').split(/[\s,;]+/).map(item => item.trim()).forEach(item => {
+            if (/^\d{3,20}$/.test(item) && !ids.includes(item)) ids.push(item);
+        });
+    }
+    return ids;
+}
+
+function supportTicketsConfig() {
+    const operatorIds = configuredTelegramIds(
+        process.env.SUPPORT_OPERATOR_TELEGRAM_IDS,
+        process.env.SUPPORT_OPERATOR_TELEGRAM_ID
+    );
+    const configuredTicketChatId = String(process.env.SUPPORT_TICKET_CHAT_ID || '').trim();
+    const ticketChatId = /^-?\d{3,24}$/.test(configuredTicketChatId)
+        ? configuredTicketChatId
+        : (operatorIds[0] || '');
+    const enabled = envFlag('ENABLE_SUPPORT_TICKETS', false);
+    const configured = Boolean(BOT_TOKEN && operatorIds.length && /^-?\d{3,24}$/.test(ticketChatId));
+    return {
+        enabled,
+        configured,
+        ready: Boolean(enabled && configured),
+        mode: 'telegram_bot_private_tickets'
+    };
+}
+
 function databaseBackupStatus() {
     const status = {
         enabled: DB_BACKUP_ENABLED,
@@ -188,7 +217,8 @@ function telegramBotHealth() {
 
 function launchReadiness() {
     const webAppUrl = String(process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || '').trim();
-    const supportConfigured = Boolean(SUPPORT_CONTACT || SUPPORT_URL);
+    const supportTickets = supportTicketsConfig();
+    const supportConfigured = Boolean(supportTickets.ready || SUPPORT_CONTACT || SUPPORT_URL);
     const backups = databaseBackupStatus();
     const checks = {
         productionMode: IS_PRODUCTION,
@@ -199,6 +229,7 @@ function launchReadiness() {
         botHealth: telegramBotHealth(),
         webAppUrlHttps: webAppUrl.startsWith('https://'),
         supportConfigured,
+        supportTicketsReady: supportTickets.ready,
         adsgramConfigured: !FEATURES.adRewardsEnabled || adsgramPublicConfig().configured,
         tonIndexersConfigured: Boolean(process.env.TONCENTER_API_KEY || process.env.TONAPI_KEY),
         databaseBackupsEnabled: DB_BACKUP_ENABLED,
@@ -220,7 +251,7 @@ function launchReadiness() {
     if (!checks.adminTokenConfigured) blockers.push('ADMIN_AUDIT_TOKEN_missing_or_short');
     if (!checks.botTokenConfigured) blockers.push('BOT_TOKEN_missing');
     if (!checks.webAppUrlHttps) blockers.push('WEBAPP_URL_missing_or_not_https');
-    if (!checks.supportConfigured) blockers.push('SUPPORT_CONTACT_or_SUPPORT_URL_missing');
+    if (!checks.supportConfigured) blockers.push('support_channel_missing_enable_bot_tickets_or_set_contact_or_url');
     if (!checks.adsgramConfigured) blockers.push('ADSGRAM_WEBHOOK_SECRET_missing');
     if (!checks.telegramTonDisabled) blockers.push('TELEGRAM_TON_PURCHASES_should_remain_disabled');
     if (!checks.nftMintingDisabled && !NFT_CONFIG.collectionAddress) blockers.push('NFT_minting_enabled_without_collection');
@@ -230,6 +261,7 @@ function launchReadiness() {
     if (!checks.productionMode) warnings.push('not_running_in_production_mode');
     if (!checks.tonIndexersConfigured) warnings.push('TONCENTER_API_KEY_and_TONAPI_KEY_missing');
     if (!checks.botHealth || !checks.botHealth.lastSuccessAt) warnings.push('telegram_bot_polling_not_yet_confirmed');
+    if (!checks.supportTicketsReady && supportConfigured) warnings.push('support_falls_back_to_static_contact_or_url');
     if (!checks.marketplaceEnabled) warnings.push('marketplace_kill_switch_off');
     if (!checks.teamBootstrapConfigured) warnings.push('team_bootstrap_not_configured');
     const backupStaleAfterSeconds = Math.round(DB_BACKUP_INTERVAL_MS / 1000) + (2 * 60 * 60);
@@ -1642,7 +1674,8 @@ const server = http.createServer((req, res) => {
             support: {
                 contact: SUPPORT_CONTACT || null,
                 url: SUPPORT_URL || null,
-                botCommand: '/paysupport'
+                botCommand: '/paysupport',
+                tickets: supportTicketsConfig()
             },
             legal: { termsUrl: '/terms.html', privacyUrl: '/privacy.html', supportUrl: '/support.html' }
         });

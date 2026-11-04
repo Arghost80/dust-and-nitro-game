@@ -24,6 +24,7 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 
 <div class="notice danger"><strong>Nunca compartas</strong> tu frase semilla, claves privadas, contraseña de Telegram o wallet, credencial de dispositivo ni código de recuperación. Soporte puede trabajar con tu ID de cuenta, ID del pedido, recibo o identificador del cargo de Telegram Stars y hash público de una transacción TON; no necesita tus secretos.</div>
 
+<div id="support-ticket-box" class="notice hidden" style="margin-top:14px"><strong>Ticket privado disponible:</strong> Abre un chat privado con el bot del juego y usa <code>/ticket tu problema</code>, o pulsa <code>/support</code> → “Escribir a soporte”. El bot te dará una referencia <code>SUP-XXXXXXXX</code>; el operador responde en el mismo chat. No incluyas secretos.</div>
 <div id="support-contact-box" class="notice hidden" style="margin-top:14px"></div>
 
 <h2>1. Pagué con TON y no veo mis $CR o mi cofre</h2>
@@ -92,6 +93,7 @@ code{background:#020617;border:1px solid var(--border);border-radius:6px;padding
 <h2>8. Contactar</h2>
 <ul>
 <li>Compras con Telegram Stars o TON: <code>/paysupport APEX-ID-DEL-PEDIDO</code> en el bot.</li>
+<li>Ticket privado: <code>/ticket tu problema</code> en un chat privado con el bot. Guarda la referencia <code>SUP-XXXXXXXX</code>; la respuesta llega al mismo chat.</li>
 <li>Ayuda general: <code>/support</code> en el bot.</li>
 <li>Consulta también los <a href="/terms.html">términos</a> y la <a href="/privacy.html">política de privacidad</a>.</li>
 </ul>
@@ -102,6 +104,10 @@ fetch('/api/config', { headers: { Accept: 'application/json' } })
   .then(function (response) { return response.json(); })
   .then(function (data) {
     var support = data && data.support ? data.support : {};
+    if (support.tickets && support.tickets.ready === true) {
+      var ticketBox = document.getElementById('support-ticket-box');
+      if (ticketBox) ticketBox.classList.remove('hidden');
+    }
     var box = document.getElementById('support-contact-box');
     if (!box || (!support.contact && !support.url)) return;
     box.textContent = '';

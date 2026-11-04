@@ -75,6 +75,16 @@ services:
         sync: false
       - key: SUPPORT_URL
         sync: false
+      - key: ENABLE_SUPPORT_TICKETS
+        value: "false"
+      - key: SUPPORT_OPERATOR_TELEGRAM_IDS
+        sync: false
+      - key: SUPPORT_OPERATOR_TELEGRAM_ID
+        sync: false
+      - key: SUPPORT_TICKET_CHAT_ID
+        sync: false
+      - key: SUPPORT_TICKET_COOLDOWN_SEC
+        value: "10"
       - key: BOT_TOKEN
         sync: false
       - key: WEBAPP_URL

@@ -18,6 +18,7 @@ const BOT_TOKEN = '123456:TEST_TOKEN_FOR_STARS_NFT';
 const ADMIN_TOKEN = 'test-admin-token-v105';
 const TELEGRAM_USER = { id: 123456789, first_name: 'Piloto', username: 'piloto_stars' };
 const OUTSIDER_USER = { id: 987654321, first_name: 'Otro', username: 'otro_piloto' };
+const SUPPORT_OPERATOR_USER = { id: 555123456, first_name: 'Operador', username: 'operador_soporte' };
 const BROWSER_USER_ID = 'usr_test_browser_v105';
 
 function check(condition, message, detail) {
@@ -190,6 +191,11 @@ function createTelegramMock() {
             BOT_TOKEN,
             TELEGRAM_BOT_API_BASE_URL: `http://127.0.0.1:${mockPort}`,
             WEBAPP_URL: 'https://apex.example.test',
+            ENABLE_SUPPORT_TICKETS: 'true',
+            SUPPORT_OPERATOR_TELEGRAM_IDS: '',
+            SUPPORT_OPERATOR_TELEGRAM_ID: String(SUPPORT_OPERATOR_USER.id),
+            SUPPORT_TICKET_CHAT_ID: '',
+            SUPPORT_TICKET_COOLDOWN_SEC: '0',
             ADMIN_AUDIT_TOKEN: ADMIN_TOKEN,
             ALLOW_INSECURE_DEV_AUTH: 'false',
             ENABLE_LEGACY_WAGER_API: 'false',
@@ -592,6 +598,123 @@ function createTelegramMock() {
         check(result.data.order.status === 'claimed' && (await economyCredits()) === creditsAfterSecondOrder,
             'un reembolso tras entregar no hace clawback automático: queda para revisión', result.data.order);
 
+        // ===== Tickets privados de soporte en el bot =====
+        result = await requestJson(base, '/api/config');
+        check(result.status === 200 && result.data.support && result.data.support.tickets
+            && result.data.support.tickets.ready === true,
+            '/api/config anuncia tickets privados listos sin filtrar el ID del operador', result.data.support);
+        check(!JSON.stringify(result.data.support).includes(String(SUPPORT_OPERATOR_USER.id)),
+            '/api/config no expone el ID del operador de soporte');
+
+        const privateMessage = (user, messageId, text) => ({
+            message: {
+                message_id: messageId,
+                date: Math.floor(Date.now() / 1000),
+                chat: { id: user.id, type: 'private' },
+                from: { id: user.id, first_name: user.first_name, username: user.username },
+                text
+            }
+        });
+        const supportSecretText = 'TicketSupportPrivateBodyXYZ';
+        const followupSecretText = 'TicketFollowupPrivateBodyXYZ';
+        const operatorSecretReply = 'OperatorReplyPrivateBodyXYZ';
+
+        mock.enqueue(privateMessage(TELEGRAM_USER, 88, '/support'));
+        const supportMenu = await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === userId
+            && String(call.body.text || '').includes('Hablar con soporte')
+            && JSON.stringify(call.body.reply_markup || {}).includes('cmd_ticket')), 'menú de soporte con botón de ticket');
+        check(Boolean(supportMenu), '/support ofrece “Escribir a soporte” cuando los tickets están listos');
+        mock.enqueue({
+            callback_query: {
+                id: 'callback_ticket_prompt',
+                from: { id: TELEGRAM_USER.id, first_name: TELEGRAM_USER.first_name, username: TELEGRAM_USER.username },
+                message: { message_id: 89, chat: { id: TELEGRAM_USER.id, type: 'private' } },
+                data: 'cmd_ticket'
+            }
+        });
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === userId
+            && String(call.body.text || '').includes('ESCRIBIR A SOPORTE')), 'el botón pide el texto del ticket en un solo mensaje');
+
+        mock.enqueue(privateMessage(TELEGRAM_USER, 90, `${supportSecretText} necesito ayuda con una compra`));
+        const operatorDelivery = await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === String(SUPPORT_OPERATOR_USER.id)
+            && String(call.body.text || '').includes('NUEVO TICKET DE SOPORTE')
+            && String(call.body.text || '').includes(supportSecretText)), 'entrega del ticket al operador');
+        const ticketMatch = /SUP-[0-9A-F]{8}/.exec(String(operatorDelivery.body.text || ''));
+        check(Boolean(ticketMatch), 'el operador recibe una referencia SUP-…', operatorDelivery.body);
+        const supportTicketId = ticketMatch[0];
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === userId
+            && String(call.body.text || '').includes('Ticket creado')
+            && String(call.body.text || '').includes(supportTicketId)), 'confirmación del ticket al jugador');
+
+        mock.enqueue(privateMessage(TELEGRAM_USER, 91, `/ticket ${followupSecretText} añado más datos al mismo problema`));
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === String(SUPPORT_OPERATOR_USER.id)
+            && String(call.body.text || '').includes(followupSecretText)
+            && String(call.body.text || '').includes(supportTicketId)), 'el follow-up usa el mismo ticket abierto');
+
+        mock.enqueue(privateMessage(OUTSIDER_USER, 92, `/reply ${supportTicketId} respuesta no autorizada`));
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === outsiderId
+            && String(call.body.text || '').includes('solo puede usarlo el operador')), 'un no-operador no puede responder tickets');
+
+        const wrongChatSecretReply = 'OperatorReplyFromWrongChatXYZ';
+        mock.enqueue({
+            message: {
+                message_id: 96,
+                date: Math.floor(Date.now() / 1000),
+                chat: { id: -100777888999, type: 'group' },
+                from: { id: SUPPORT_OPERATOR_USER.id, first_name: SUPPORT_OPERATOR_USER.first_name, username: SUPPORT_OPERATOR_USER.username },
+                text: `/reply ${supportTicketId} ${wrongChatSecretReply}`
+            }
+        });
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === '-100777888999'
+            && String(call.body.text || '').includes('usa ese comando en tu chat privado')), 'el operador no puede responder desde un grupo no configurado');
+        check(!mock.callsFor('sendMessage').some(call =>
+            String(call.body.chat_id) === userId
+            && String(call.body.text || '').includes(wrongChatSecretReply)),
+            'una respuesta desde un grupo no configurado no llega al jugador');
+
+        mock.enqueue(privateMessage(SUPPORT_OPERATOR_USER, 93, `/reply ${supportTicketId} ${operatorSecretReply} ya lo estamos revisando`));
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === userId
+            && String(call.body.text || '').includes('RESPUESTA DE SOPORTE')
+            && String(call.body.text || '').includes(operatorSecretReply)), 'respuesta del operador entregada al jugador');
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === String(SUPPORT_OPERATOR_USER.id)
+            && String(call.body.text || '').includes('Respuesta enviada al jugador')), 'acuse de respuesta al operador');
+
+        mock.enqueue(privateMessage(SUPPORT_OPERATOR_USER, 94, `/close ${supportTicketId} Incidencia revisada en el servidor`));
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === userId
+            && String(call.body.text || '').includes('TICKET CERRADO')
+            && String(call.body.text || '').includes(supportTicketId)), 'cierre del ticket avisado al jugador');
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === String(SUPPORT_OPERATOR_USER.id)
+            && String(call.body.text || '').includes('cerrado y jugador avisado')), 'acuse de cierre al operador');
+
+        const groupSecretText = 'GroupTicketMustNotBeForwardedXYZ';
+        mock.enqueue({
+            message: {
+                message_id: 95,
+                date: Math.floor(Date.now() / 1000),
+                chat: { id: -100777888999, type: 'group' },
+                from: { id: TELEGRAM_USER.id, first_name: TELEGRAM_USER.first_name, username: TELEGRAM_USER.username },
+                text: `/ticket ${groupSecretText}`
+            }
+        });
+        await waitFor(() => mock.callsFor('sendMessage').find(call =>
+            String(call.body.chat_id) === '-100777888999'
+            && String(call.body.text || '').includes('Por privacidad')), 'los tickets solo se aceptan en chat privado');
+        check(!mock.callsFor('sendMessage').some(call =>
+            String(call.body.chat_id) === String(SUPPORT_OPERATOR_USER.id)
+            && String(call.body.text || '').includes(groupSecretText)),
+            'un intento desde grupo no reenvía el cuerpo al operador');
+
         const lastUpdateId = mock.lastUpdateId();
         await waitFor(() => mock.getUpdatesOffsets.some(offset => offset > lastUpdateId), 'el polling confirma el último update');
         await stopChild(proc);
@@ -617,6 +740,20 @@ function createTelegramMock() {
                 'el offset del bot queda persistido para no reprocesar pagos al reiniciar', offsetRow);
             const rawDbText = diskDb.prepare('SELECT garage_json FROM economy_profiles WHERE user_id = ?').get(userId).garage_json;
             check(!rawDbText.includes(BOT_TOKEN), 'el BOT_TOKEN no se guarda en el perfil');
+            const supportTicketRow = diskDb.prepare('SELECT value_json FROM meta WHERE key = ?').get(`supportTicket:${supportTicketId}`);
+            const supportTicket = supportTicketRow ? JSON.parse(supportTicketRow.value_json) : null;
+            check(Boolean(supportTicket && supportTicket.status === 'closed' && supportTicket.messageCount === 2),
+                'SQLite conserva solo metadatos/estado del ticket cerrado', supportTicket);
+            const serializedSupportState = JSON.stringify({
+                meta: diskDb.prepare("SELECT key, value_json FROM meta WHERE key LIKE 'supportTicket%'").all(),
+                audit: diskDb.prepare("SELECT event, details_json FROM audit_events WHERE event LIKE 'SUPPORT_TICKET%'").all()
+            });
+            check(!serializedSupportState.includes(supportSecretText)
+                && !serializedSupportState.includes(followupSecretText)
+                && !serializedSupportState.includes(operatorSecretReply),
+                'el texto de tickets/respuestas no se guarda en SQLite ni en auditoría');
+            check(serializedSupportState.includes('SUPPORT_TICKET_REPLY_UNAUTHORIZED'),
+                'un intento de respuesta no autorizado queda auditado sin su texto');
         } finally {
             diskDb.close();
         }
