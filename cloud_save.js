@@ -28,6 +28,8 @@
         'dustrac_graphics', 'dustrac_controls', 'dust_touch_mode',
         'dustrac_tournament_state', 'apex_launch_epoch'
     ];
+    var ACCOUNT_SNAPSHOT_PREFIX = 'apex_cloud_account_snapshot:';
+    var ACCOUNT_EXTRA_KEYS = ['apex_pilot_name', 'dustrac_tournament_state', 'apex_launch_epoch'];
 
     var _readyPromise = null;
     var _suppressUpload = true;   // hasta que init() termine (evita que un móvil
@@ -50,6 +52,9 @@
     }
     function lsSet(key, value) {
         try { localStorage.setItem(key, value); } catch (e) {}
+    }
+    function lsRemove(key) {
+        try { localStorage.removeItem(key); } catch (e) {}
     }
     function generateDeviceId() {
         try {
@@ -107,7 +112,8 @@
         if (initData) h['X-Telegram-Init-Data'] = initData;
         // Para cuentas usr_..., el ID puede verse en salas; la credencial es
         // este secreto separado, persistente solo en este dispositivo.
-        if (typeof _cachedUserId === 'string' && _cachedUserId.indexOf('usr_') === 0) {
+        var currentUserId = getUserId();
+        if (typeof currentUserId === 'string' && currentUserId.indexOf('usr_') === 0) {
             var deviceSecret = getDeviceSecret();
             if (deviceSecret) h['X-Device-Secret'] = deviceSecret;
         }
@@ -138,13 +144,17 @@
 
     // ---------- Identidad ----------
     function getUserId() {
-        if (_cachedUserId) return _cachedUserId;
+        // Telegram puede terminar de cargar después de una primera lectura
+        // local. Cuando su usuario ya está disponible, es la identidad que
+        // el servidor valida con initData y debe sustituir cualquier caché
+        // de dispositivo o de una cuenta abierta antes en este terminal.
         var wa = telegramWebApp();
         var tgUser = wa && wa.initDataUnsafe && wa.initDataUnsafe.user;
-        if (tgUser && tgUser.id) {
+        if (tgUser && tgUser.id && /^\d{5,20}$/.test(String(tgUser.id))) {
             _cachedUserId = String(tgUser.id);
             return _cachedUserId;
         }
+        if (_cachedUserId) return _cachedUserId;
         var garage = safeParse(lsGet(GARAGE_KEY));
         if (garage && garage.userId && String(garage.userId) !== 'usr_guest_local') {
             _cachedUserId = String(garage.userId);
@@ -178,6 +188,68 @@
         });
         return { garage: garage, story: story, extra: extra, updatedAt: localUpdatedAt(garage, story) };
     }
+    function accountSnapshotKey(userId) {
+        return ACCOUNT_SNAPSHOT_PREFIX + String(userId || '');
+    }
+    function storeAccountSnapshot(userId, bundle) {
+        if (!userId || !bundle || (!bundle.garage && !bundle.story)) return;
+        lsSet(accountSnapshotKey(userId), JSON.stringify({
+            garage: bundle.garage || null,
+            story: bundle.story || null,
+            extra: bundle.extra || {},
+            updatedAt: Number(bundle.updatedAt) || localUpdatedAt(bundle.garage, bundle.story)
+        }));
+    }
+    function readAccountSnapshot(userId) {
+        var snapshot = safeParse(lsGet(accountSnapshotKey(userId)));
+        if (!snapshot || typeof snapshot !== 'object') return null;
+        return {
+            garage: snapshot.garage && typeof snapshot.garage === 'object' ? snapshot.garage : null,
+            story: snapshot.story && typeof snapshot.story === 'object' ? snapshot.story : null,
+            extra: snapshot.extra && typeof snapshot.extra === 'object' ? snapshot.extra : {},
+            updatedAt: Number(snapshot.updatedAt) || 0
+        };
+    }
+    function writeBundleToLocal(bundle) {
+        _applyingRemote = true;
+        try {
+            if (bundle && bundle.garage && typeof bundle.garage === 'object') lsSet(GARAGE_KEY, JSON.stringify(bundle.garage));
+            else lsRemove(GARAGE_KEY);
+            if (bundle && bundle.story && typeof bundle.story === 'object') lsSet(STORY_KEY, JSON.stringify(bundle.story));
+            else lsRemove(STORY_KEY);
+            EXTRA_KEYS.forEach(function (k) {
+                if (bundle && bundle.extra && typeof bundle.extra[k] === 'string') lsSet(k, bundle.extra[k]);
+                else if (ACCOUNT_EXTRA_KEYS.indexOf(k) >= 0) lsRemove(k);
+                // Idioma, audio, gráficos y controles son preferencias del
+                // dispositivo: se conservan al cambiar de cuenta.
+            });
+        } finally {
+            _applyingRemote = false;
+        }
+    }
+    function prepareLocalForAccount(userId, local) {
+        var meta = getMeta();
+        var previousAccountId = typeof meta.accountUserId === 'string' ? meta.accountUserId : '';
+        if (!previousAccountId && local && local.garage && local.garage.userId) {
+            previousAccountId = String(local.garage.userId);
+        }
+        if (!previousAccountId || previousAccountId === userId) {
+            setMeta({ accountUserId: userId });
+            return { bundle: local, switched: false };
+        }
+        // La foto local pertenece a otra identidad. Se conserva separada en
+        // este dispositivo, pero jamás se sube como si fuera de la cuenta
+        // actual; si esta ya tenía foto propia, se restaura esa.
+        storeAccountSnapshot(previousAccountId, local);
+        var own = readAccountSnapshot(userId) || { garage: null, story: null, extra: {}, updatedAt: 0 };
+        writeBundleToLocal(own);
+        setMeta({
+            accountUserId: userId,
+            lastRemoteUpdatedAt: 0,
+            localUpdatedAt: Number(own.updatedAt) || 0
+        });
+        return { bundle: own, switched: true };
+    }
     function applyRemote(save) {
         if (!save) return;
         _applyingRemote = true;
@@ -189,11 +261,12 @@
                     if (typeof save.extra[k] === 'string') lsSet(k, save.extra[k]);
                 });
             }
-            setMeta({ lastSyncAt: Date.now(), lastRemoteUpdatedAt: Number(save.updatedAt) || 0, localUpdatedAt: Number(save.updatedAt) || 0 });
+            setMeta({ accountUserId: getUserId(), lastSyncAt: Date.now(), lastRemoteUpdatedAt: Number(save.updatedAt) || 0, localUpdatedAt: Number(save.updatedAt) || 0 });
             appliedRemote = true;
         } finally {
             _applyingRemote = false;
         }
+        storeAccountSnapshot(getUserId(), readLocalBundle());
     }
     function notifyApplied() {
         try { window.dispatchEvent(new CustomEvent('apex-cloud-applied')); } catch (e) {}
@@ -216,11 +289,14 @@
 
     // ---------- Subida ----------
     function uploadNow(useKeepalive) {
-        var bundle = readLocalBundle();
+        var currentUserId = getUserId();
+        var prepared = prepareLocalForAccount(currentUserId, readLocalBundle());
+        var bundle = prepared.bundle;
         if (!bundle.garage && !bundle.story) return Promise.resolve(false);
+        storeAccountSnapshot(currentUserId, bundle);
         if (!bundle.updatedAt) bundle.updatedAt = Date.now();
         var sentTs = bundle.updatedAt;
-        var url = '/api/save/' + encodeURIComponent(getUserId());
+        var url = '/api/save/' + encodeURIComponent(currentUserId);
         var opts = { method: 'PUT', headers: headers(), body: JSON.stringify(bundle) };
         if (useKeepalive) opts.keepalive = true;
         return fetchWithTimeout(url, opts, 4000).then(function (res) {
@@ -289,6 +365,9 @@
                 await waitForTelegram(900);
                 try { if (telegramWebApp() && telegramWebApp().ready) telegramWebApp().ready(); } catch (e) {}
                 var id = getUserId();
+                var preparedLocal = prepareLocalForAccount(id, local);
+                local = preparedLocal.bundle;
+                if (preparedLocal.switched) notifyApplied();
                 var res = await fetchWithTimeout('/api/save/' + encodeURIComponent(id), { method: 'GET', headers: headers() }, 3000);
                 if (res.status === 404) {
                     // Primera vez con guardado en servidor: subir lo local (migración v99 -> v100)
@@ -340,6 +419,7 @@
                     // confirma el borrado. Un 409 por anuncios en escrow (u otro
                     // error) debe conservar la partida local y remota intactas.
                     if (ok) {
+                        lsRemove(accountSnapshotKey(getUserId()));
                         try { localStorage.removeItem(META_KEY); } catch (e) {}
                     }
                     return { ok: ok, status: response.status, data: data };

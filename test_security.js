@@ -153,7 +153,7 @@ function removeIfExists(file) {
 
         // Salud y cabeceras
         let result = await requestJson(base, '/healthz');
-        check(result.status === 200 && result.data.ok === true && result.data.version === '1.0.6', '/healthz responde sin exponer datos internos', result.data);
+        check(result.status === 200 && result.data.ok === true && result.data.version === '1.0.7', '/healthz responde sin exponer datos internos', result.data);
         check(String(result.headers.get('cache-control') || '').includes('no-store'), '/healthz usa Cache-Control: no-store');
         const head = await rawRequest(34672, { method: 'HEAD', path: '/healthz' });
         check(head.status === 200 && head.body === '', 'HEAD /healthz funciona para el health check');
@@ -215,6 +215,11 @@ function removeIfExists(file) {
         result = await requestJson(base, '/api/security/audit', { headers: { 'x-admin-token': ADMIN_TOKEN } });
         check(result.status === 200 && result.data.status === 'admin_only' && !('logs' in result.data), 'La auditoría autorizada solo devuelve un resumen', result.data);
 
+        result = await requestJson(base, '/api/config');
+        check(result.status === 200 && result.data.adsgram && result.data.adsgram.ready === true
+            && result.data.adsgram.configured === true && result.data.adsgram.blockId === '54054'
+            && result.data.telegram && result.data.telegram.botAppShortName === 'game',
+            '/api/config anuncia Adsgram listo solo cuando el webhook está configurado', result.data);
         result = await requestJson(base, '/api/ad-reward?userid=usr_ads_test');
         check(result.status === 403, 'El webhook de anuncios rechaza llamadas sin secreto');
         result = await requestJson(base, '/api/ad-reward?userid=usr_ads_test', { headers: { 'x-adsgram-secret': ADS_SECRET } });
@@ -533,6 +538,10 @@ function removeIfExists(file) {
         check(result.status === 503 && result.data.error === 'auth_not_configured', 'Sin BOT_TOKEN, Telegram falla cerrado (503)', result.data);
         result = await requestJson(fallbackServer.base, '/api/security/audit');
         check(result.status === 503 && result.data.error === 'admin_not_configured', 'Sin ADMIN_AUDIT_TOKEN, la auditoría queda deshabilitada', result.data);
+        result = await requestJson(fallbackServer.base, '/api/config');
+        check(result.status === 200 && result.data.adsgram && result.data.adsgram.ready === false
+            && result.data.adsgram.configured === false,
+            '/api/config permite al cliente no mostrar anuncios sin webhook', result.data);
         result = await requestJson(fallbackServer.base, '/api/ad-reward?userid=usr_ads_test');
         check(result.status === 503 && result.data.error === 'ad_reward_not_configured', 'Sin ADSGRAM_WEBHOOK_SECRET, el webhook queda deshabilitado', result.data);
         result = await requestJson(fallbackServer.base, '/api/multiplayer/public/join', jsonOptions({

@@ -328,7 +328,7 @@ function seedProfiles(dbFile) {
         const cancelListing = (userId, listingId) => post(userId, `/api/marketplace/listings/${listingId}/cancel`, {});
 
         let result = await requestJson(base, '/healthz');
-        check(result.status === 200 && result.data.version === '1.0.6', '/healthz anuncia la v1.0.6', result.data);
+        check(result.status === 200 && result.data.version === '1.0.7', '/healthz anuncia la v1.0.7', result.data);
         result = await requestJson(base, '/readyz');
         check(result.status === 200 && result.data.ready === true && result.data.schemaVersion === 106, '/readyz confirma BD y esquema 106', result.data);
         result = await requestJson(base, '/api/config');
@@ -588,7 +588,7 @@ function seedProfiles(dbFile) {
         result = await requestJson(base, '/api/admin/marketplace');
         check(result.status === 403, 'las estadísticas/admin del mercado exigen token', result.data);
         result = await requestJson(base, '/api/admin/launch-readiness', { headers: { 'X-Admin-Token': ADMIN_TOKEN } });
-        check(result.status === 200 && result.data.launch.version === '1.0.6'
+        check(result.status === 200 && result.data.launch.version === '1.0.7'
             && result.data.launch.marketplace.config.feeBps === 750,
             'launch-readiness admin expone versión y estado agregado sin secretos', result.data.launch);
         result = await requestJson(base, '/api/admin/marketplace/cancel', {

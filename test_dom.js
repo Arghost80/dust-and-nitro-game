@@ -1670,7 +1670,7 @@ if (!missionCard || !missionCard.innerHTML.includes(expectedTrackName) || !missi
 if (!missionCard.innerHTML.includes('btn-story-launch-race')) {
     throw new Error('El panel de misión debe incluir el botón de acción para salir a pista');
 }
-console.log('✓ Panel de misión con desglose de 3 estrellas, recompensas ($CR, XP, Drop NFT) verificado');
+console.log('✓ Panel de misión con desglose de 3 estrellas, recompensas ($CR, XP, coche virtual) verificado');
 
 // 7. Probar cambio a Capítulo 2
 vm.runInContext('setStoryMapChapter(1)', ctx);
@@ -2138,6 +2138,35 @@ if (weeklyProdRes.success || weeklyProdRes.reason !== 'weekly_tournament_disable
     throw new Error('En producción, inscribirse al torneo semanal local debe estar bloqueado sin cobrar la entrada');
 }
 console.log('✓ Torneo semanal de producción bloqueado sin cobrar entrada');
+
+// Adsgram debe fallar cerrado en producción si el servidor no tiene el
+// webhook configurado: enseñar el anuncio sin poder acreditarlo sería
+// engañar al jugador. Cuando /api/config anuncia ready, sí debe abrirse.
+sandbox.fetch = () => Promise.resolve({ json: () => Promise.resolve(null) });
+vm.runInContext(`
+    window.__adsgramInitCalls = 0;
+    window.__adsgramLastBlockId = null;
+    window.Adsgram = { init(opts) { window.__adsgramInitCalls++; window.__adsgramLastBlockId = opts.blockId; return { show: () => Promise.resolve({ done: true }) }; } };
+    apexServerConfig = { adsgram: { enabled: true, configured: false, ready: false, blockId: '54054' } };
+`, ctx);
+const adsgramBlockedResult = vm.runInContext('launchAdsgramRewardedAd(() => { throw new Error("no debe completar sin webhook"); })', ctx);
+if (adsgramBlockedResult !== false || vm.runInContext('window.__adsgramInitCalls', ctx) !== 0) {
+    throw new Error('Adsgram no debe inicializarse cuando /api/config dice que el webhook no está listo');
+}
+vm.runInContext('apexServerConfig = { adsgram: { enabled: true, configured: true, ready: true, blockId: "98765" } };', ctx);
+const adsgramReadyResult = vm.runInContext('launchAdsgramRewardedAd(() => {})', ctx);
+if (adsgramReadyResult !== true || vm.runInContext('window.__adsgramInitCalls', ctx) !== 1
+    || vm.runInContext('window.__adsgramLastBlockId', ctx) !== '98765') {
+    throw new Error('Adsgram debe inicializarse con el blockId público cuando el servidor está listo');
+}
+vm.runInContext('apexServerConfig = null; window.__adsgramInitCalls = 0;', ctx);
+const adsgramUnknownAfterRetryResult = vm.runInContext('launchAdsgramRewardedAd(() => {}, () => {}, true)', ctx);
+if (adsgramUnknownAfterRetryResult !== false || vm.runInContext('window.__adsgramInitCalls', ctx) !== 0) {
+    throw new Error('Adsgram debe detenerse tras un único reintento si /api/config sigue sin responder');
+}
+vm.runInContext('apexServerConfig = null; window.Adsgram = undefined;', ctx);
+delete sandbox.fetch;
+console.log('✓ Adsgram falla cerrado sin webhook y se abre solo cuando el servidor está listo');
 
 // Restaurar desarrollo explícito solo para el resto de la suite local
 vm.runInContext('localStorage.setItem("apex_dev_mode", "1")', ctx);

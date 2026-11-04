@@ -29,7 +29,7 @@ const PlayableTracksCatalog = Object.values(RaceTracksCatalog || {})
         worldHeight: Number(track.worldHeight) || 0
     }));
 
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7';
 const PORT = process.env.PORT || 3000;
 
 function envFlag(name, defaultValue) {
@@ -70,6 +70,15 @@ const ALLOW_INSECURE_DEV_AUTH = process.env.ALLOW_INSECURE_DEV_AUTH === 'true' &
 const ENABLE_LEGACY_WAGER_API = process.env.ENABLE_LEGACY_WAGER_API === 'true';
 const ADMIN_AUDIT_TOKEN = process.env.ADMIN_AUDIT_TOKEN || '';
 const ADSGRAM_WEBHOOK_SECRET = process.env.ADSGRAM_WEBHOOK_SECRET || '';
+const ADSGRAM_BLOCK_ID = /^\d{1,20}$/.test(String(process.env.ADSGRAM_BLOCK_ID || '').trim())
+    ? String(process.env.ADSGRAM_BLOCK_ID).trim()
+    : '54054';
+const TELEGRAM_BOT_USERNAME = /^[A-Za-z0-9_]{5,32}$/.test(String(process.env.TELEGRAM_BOT_USERNAME || '').trim())
+    ? String(process.env.TELEGRAM_BOT_USERNAME).trim()
+    : null;
+const TELEGRAM_BOT_APP_SHORT_NAME = /^[A-Za-z0-9_]{1,32}$/.test(String(process.env.TELEGRAM_BOT_APP_SHORT_NAME || '').trim())
+    ? String(process.env.TELEGRAM_BOT_APP_SHORT_NAME).trim()
+    : 'game';
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true' || Boolean(process.env.RENDER_EXTERNAL_URL);
 const MAX_API_BODY_BYTES = 64 * 1024;
 // Solo para la suite local: permite no esperar la duración física mínima de
@@ -120,6 +129,54 @@ function marketplacePublicConfig() {
     };
 }
 
+function adsgramPublicConfig() {
+    const configured = Boolean(ADSGRAM_WEBHOOK_SECRET && ADSGRAM_BLOCK_ID);
+    return {
+        enabled: FEATURES.adRewardsEnabled,
+        configured,
+        ready: FEATURES.adRewardsEnabled && configured,
+        blockId: ADSGRAM_BLOCK_ID || null,
+        rewardTypes: ['energy', 'nitro']
+    };
+}
+
+function telegramPublicConfig() {
+    return {
+        botUsername: TELEGRAM_BOT_USERNAME,
+        botAppShortName: TELEGRAM_BOT_APP_SHORT_NAME
+    };
+}
+
+function databaseBackupStatus() {
+    const status = {
+        enabled: DB_BACKUP_ENABLED,
+        intervalHours: Math.round((DB_BACKUP_INTERVAL_MS / (60 * 60 * 1000)) * 100) / 100,
+        retention: DB_BACKUP_RETENTION,
+        count: 0,
+        totalBytes: 0,
+        latestBackupAt: null,
+        latestAgeSeconds: null
+    };
+    try {
+        const files = fs.readdirSync(DB_BACKUP_DIR)
+            .filter(name => /^apex-sqlite-.*\.sqlite$/.test(name))
+            .map(name => {
+                const stat = fs.statSync(path.join(DB_BACKUP_DIR, name));
+                return { mtimeMs: stat.mtimeMs, size: stat.size };
+            })
+            .sort((a, b) => b.mtimeMs - a.mtimeMs);
+        status.count = files.length;
+        status.totalBytes = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+        if (files[0]) {
+            status.latestBackupAt = new Date(files[0].mtimeMs).toISOString();
+            status.latestAgeSeconds = Math.max(0, Math.round((Date.now() - files[0].mtimeMs) / 1000));
+        }
+    } catch (e) {
+        status.error = 'backup_directory_unavailable';
+    }
+    return status;
+}
+
 function telegramBotHealth() {
     try {
         const health = global.__APEX_TELEGRAM_BOT_HEALTH__;
@@ -132,6 +189,7 @@ function telegramBotHealth() {
 function launchReadiness() {
     const webAppUrl = String(process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || '').trim();
     const supportConfigured = Boolean(SUPPORT_CONTACT || SUPPORT_URL);
+    const backups = databaseBackupStatus();
     const checks = {
         productionMode: IS_PRODUCTION,
         persistentDataDir: Boolean(process.env.DATA_DIR || process.env.DB_FILE),
@@ -141,7 +199,7 @@ function launchReadiness() {
         botHealth: telegramBotHealth(),
         webAppUrlHttps: webAppUrl.startsWith('https://'),
         supportConfigured,
-        adsgramConfigured: !FEATURES.adRewardsEnabled || Boolean(ADSGRAM_WEBHOOK_SECRET),
+        adsgramConfigured: !FEATURES.adRewardsEnabled || adsgramPublicConfig().configured,
         tonIndexersConfigured: Boolean(process.env.TONCENTER_API_KEY || process.env.TONAPI_KEY),
         databaseBackupsEnabled: DB_BACKUP_ENABLED,
         telegramStarsEnabled: FEATURES.telegramStarsPurchasesEnabled,
@@ -174,6 +232,11 @@ function launchReadiness() {
     if (!checks.botHealth || !checks.botHealth.lastSuccessAt) warnings.push('telegram_bot_polling_not_yet_confirmed');
     if (!checks.marketplaceEnabled) warnings.push('marketplace_kill_switch_off');
     if (!checks.teamBootstrapConfigured) warnings.push('team_bootstrap_not_configured');
+    const backupStaleAfterSeconds = Math.round(DB_BACKUP_INTERVAL_MS / 1000) + (2 * 60 * 60);
+    if (DB_BACKUP_ENABLED && process.uptime() > 180
+        && (!backups.latestBackupAt || Number(backups.latestAgeSeconds) > backupStaleAfterSeconds)) {
+        warnings.push('database_backup_missing_or_stale');
+    }
     return {
         ready: blockers.length === 0,
         version: APP_VERSION,
@@ -181,7 +244,8 @@ function launchReadiness() {
         blockers,
         warnings,
         marketplace: db.getMarketplaceStats(),
-        database: db.getDatabaseHealth()
+        database: db.getDatabaseHealth(),
+        backups
     };
 }
 
@@ -1570,7 +1634,9 @@ const server = http.createServer((req, res) => {
             ok: true,
             version: APP_VERSION,
             features: FEATURES,
+            telegram: telegramPublicConfig(),
             telegramStars: telegramStars.publicStarsCatalog(),
+            adsgram: adsgramPublicConfig(),
             marketplace: marketplacePublicConfig(),
             nft: nftPublicConfig(req),
             support: {

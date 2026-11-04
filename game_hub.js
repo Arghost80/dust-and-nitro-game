@@ -84,7 +84,21 @@ function apexApiHeaders(extraHeaders = {}) {
     return headers;
 }
 
+function getCurrentTelegramUserId() {
+    try {
+        const tg = (typeof window !== 'undefined' && window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+        const user = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+        if (user && user.id && /^\d{5,20}$/.test(String(user.id))) return String(user.id);
+    } catch (e) {}
+    return '';
+}
+
 function getApexUserId() {
+    // La identidad firmada en initData es la misma que valida el servidor y
+    // la que muestra /support en el bot. Tiene prioridad sobre cualquier ID
+    // heredado en localStorage de una cuenta o sesión anterior.
+    const telegramUserId = getCurrentTelegramUserId();
+    if (telegramUserId) return telegramUserId;
     try {
         if (typeof window !== 'undefined' && window.CloudSave && typeof window.CloudSave.getUserId === 'function') {
             const cloudId = window.CloudSave.getUserId();
@@ -218,9 +232,13 @@ function loadApexServerConfig() {
         .then(data => {
             if (data && data.features) apexServerFeatures = data.features;
             if (data && typeof data === 'object') apexServerConfig = data;
+            else apexServerConfigPromise = null; // permite un reintento posterior real
             return data;
         })
-        .catch(() => null);
+        .catch(() => {
+            apexServerConfigPromise = null;
+            return null;
+        });
     return apexServerConfigPromise;
 }
 
@@ -239,6 +257,36 @@ function getNftPublicConfig() {
 
 function getMarketplacePublicConfig() {
     return apexServerConfig && apexServerConfig.marketplace ? apexServerConfig.marketplace : null;
+}
+
+function getAdsgramPublicConfig() {
+    return apexServerConfig && apexServerConfig.adsgram ? apexServerConfig.adsgram : null;
+}
+
+function adsgramRewardStatus() {
+    if (!authoritativeEconomyEnabled()) return 'local';
+    const config = getAdsgramPublicConfig();
+    if (!config) return apexServerConfig ? 'unavailable' : 'unknown';
+    if (config.ready === true) return 'ready';
+    if (config.enabled === true && config.configured === true) return 'ready';
+    return 'unavailable';
+}
+
+function adsgramBlockId() {
+    const config = getAdsgramPublicConfig();
+    const value = config && config.blockId != null ? String(config.blockId) : '';
+    return /^\d{1,20}$/.test(value) ? value : '54054';
+}
+
+function telegramBotShareBaseUrl() {
+    const config = apexServerConfig && apexServerConfig.telegram ? apexServerConfig.telegram : null;
+    const username = config && /^[A-Za-z0-9_]{5,32}$/.test(String(config.botUsername || ''))
+        ? String(config.botUsername)
+        : 'argho_racing_test_bot';
+    const shortName = config && /^[A-Za-z0-9_]{1,32}$/.test(String(config.botAppShortName || ''))
+        ? String(config.botAppShortName)
+        : 'game';
+    return `https://t.me/${username}/${shortName}`;
 }
 
 function marketplaceUiEnabled() {
@@ -620,7 +668,7 @@ function renderHubHeader() {
                         <button class="btn-edit-pilot-name" id="btn-edit-name-header" title="${t('settings_edit_name') || 'Editar Nombre'}" onclick="event.stopPropagation(); promptChangePilotName();">✏️</button>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                        <span class="wallet-tag ${userData.walletConnected ? 'wallet-connected' : 'wallet-disconnected'}" title="Gestionar Billetera Web3 TON Connect" onclick="event.stopPropagation(); openWeb3WalletModal();">
+                        <span class="wallet-tag ${userData.walletConnected ? 'wallet-connected' : 'wallet-disconnected'}" title="Abrir compras de $CR con Stars o TON" onclick="event.stopPropagation(); openWeb3WalletModal();">
                             ${userData.walletConnected ? `💎 SIM ${escapeHtml(userData.walletAddress || '')}` : '💎 TON · COMPRAR $CR'}
                         </span>
                         <span class="beta-badge-pill" style="font-size: 9.5px; font-weight: 800; background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(59, 130, 246, 0.25)); border: 1px solid #06b6d4; color: #38bdf8; padding: 2px 7px; border-radius: 999px; letter-spacing: 0.5px; cursor: pointer;" onclick="event.stopPropagation(); openWeb3WalletModal();" title="Temporada 1 Fase Beta: Acumulación de $CR activa">⚡ BETA S1</span>
@@ -929,7 +977,7 @@ function renderStoryMissionCardHtml(chapter, track, trackStars, isUnlocked) {
         <div class="mission-rewards-row">
             <div class="reward-pill">${crCoinIconHtml()} <strong>+${crReward} $CR</strong><br><span style="font-size: 9px; color: #94a3b8;">Tokens Recompensa</span></div>
             <div class="reward-pill">⚡ <strong>+${xpReward} XP</strong><br><span style="font-size: 9px; color: #94a3b8;">Nivel Coche</span></div>
-            <div class="reward-pill">⚙️ <strong>Drop NFT</strong><br><span style="font-size: 9px; color: #fde047;">${rarityName.toUpperCase()}</span></div>
+            <div class="reward-pill">⚙️ <strong>Coche virtual</strong><br><span style="font-size: 9px; color: #fde047;">${rarityName.toUpperCase()}</span></div>
         </div>
 
         <div class="mission-cta-wrap">
@@ -2252,7 +2300,7 @@ function renderCratesView() {
             <!-- Caja Oro (Apex Pro NFT) -->
             <div class="crate-box-card crate-gold">
                 <div class="crate-header">
-                    <span class="crate-level-tag highlight-gold">WEB3 ELITE</span>
+                    <span class="crate-level-tag highlight-gold">APEX ELITE</span>
                     <h3 class="crate-name">${t('crate_gold_title')}</h3>
                 </div>
                 <div class="crate-visual-chest chest-gold">
@@ -2583,16 +2631,37 @@ function buyEnergyPackShop(packKey) {
 }
 
 // ===== INTEGRACIÓN OFICIAL ADSGRAM (REWARDED VIDEO ADS) =====
-const ADSGRAM_BLOCK_ID = '54054';
-// Activado: Bloque 54054 aprobado por Adsgram
-const ADSGRAM_ACTIVE = true;
+const ADSGRAM_FALLBACK_BLOCK_ID = '54054';
+// En producción el anuncio solo se abre si /api/config confirma que el
+// webhook de Adsgram está configurado. Así ningún jugador ve un anuncio
+// cuya recompensa el servidor todavía no puede acreditar.
+let adsgramConfigRetryInFlight = false;
 
-function launchAdsgramRewardedAd(onSuccess, onFallback) {
-    if (ADSGRAM_ACTIVE && window.Adsgram && typeof window.Adsgram.init === 'function') {
+function launchAdsgramRewardedAd(onSuccess, onFallback, configRetried = false) {
+    if (authoritativeEconomyEnabled()) {
+        const status = adsgramRewardStatus();
+        if (status === 'unknown' && !configRetried && !adsgramConfigRetryInFlight) {
+            adsgramConfigRetryInFlight = true;
+            showHubToast('📺 Comprobando la disponibilidad de anuncios…');
+            loadApexServerConfig()
+                .catch(() => null)
+                .then(() => {
+                    adsgramConfigRetryInFlight = false;
+                    launchAdsgramRewardedAd(onSuccess, onFallback, true);
+                });
+            return false;
+        }
+        if (status !== 'ready') {
+            alert('📺 Las recompensas por anuncio están temporalmente desactivadas en el servidor. No se mostrará un anuncio que no pueda acreditarse.');
+            return false;
+        }
+    }
+    const blockId = typeof adsgramBlockId === 'function' ? adsgramBlockId() : ADSGRAM_FALLBACK_BLOCK_ID;
+    if (window.Adsgram && typeof window.Adsgram.init === 'function') {
         try {
-            console.log('🎬 Inicializando anuncio de Adsgram con blockId:', ADSGRAM_BLOCK_ID);
+            console.log('🎬 Inicializando anuncio de Adsgram con blockId:', blockId);
             const AdController = window.Adsgram.init({
-                blockId: ADSGRAM_BLOCK_ID
+                blockId
             });
             AdController.show().then((result) => {
                 console.log('✅ Anuncio Adsgram completado con éxito:', result);
@@ -2684,7 +2753,7 @@ function showLocalAdModalForEnergy(car) {
                 <div class="ad-sponsor-logo">🚀 APEX SPEEDPASS • TON WEB3</div>
                 <div class="ad-sponsor-body">
                     <h3>¡CONDUCE EN EL METAVERSO DE TELEGRAM!</h3>
-                    <p>Colecciona más de 80 bólidos GT3, tunea piezas mecánicas de competición y gana criptoactivos en torneos ranked.</p>
+                    <p>Colecciona más de 80 bólidos GT, tunea piezas mecánicas de competición y compite en los circuitos oficiales.</p>
                     <div class="ad-progress-track">
                         <div class="ad-progress-bar" id="ad-progress-bar" style="width: 0%;"></div>
                     </div>
@@ -4450,9 +4519,9 @@ function renderDuelWaitingModal(duel, isHost) {
 
     const slots = duel.slots || [];
     const isReady = slots.length >= 2;
-    const botUsername = 'argho_racing_test_bot';
+    const botShareBaseUrl = telegramBotShareBaseUrl();
 
-    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=duel_${duel.code}`)}&text=${encodeURIComponent(`🏎️ ¡Te reto a un duelo directo 1 vs 1 en APEX MOTORSPORT! Apuesta: ${duel.betAmount} $CR en ${duel.circuit.name}. Código: ${duel.code} 🏁`)}`;
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`${botShareBaseUrl}?startapp=duel_${duel.code}`)}&text=${encodeURIComponent(`🏎️ ¡Te reto a un duelo directo 1 vs 1 en APEX MOTORSPORT! Apuesta: ${duel.betAmount} $CR en ${duel.circuit.name}. Código: ${duel.code} 🏁`)}`;
 
     const grossPot = duel.betAmount * 2;
     const winnerPrize = Math.round(grossPot * 0.95);
@@ -4911,7 +4980,7 @@ function openSettingsModal() {
                         </button>
                     </div>
                     <div style="font-size: 10.5px; color: #94a3b8; margin-top: 5px;">
-                        ${userData.email ? `<span style="color: #34d399; font-weight: 800;">✔ Correo vinculado: ${escapeHtml(userData.email)}</span>` : 'Vincula tu email para asegurar tu cuenta y ganar +2 Nitro N₂O.'}
+                        ${userData.email ? `<span style="color: #34d399; font-weight: 800;">✔ Correo vinculado: ${escapeHtml(userData.email)}</span>` : 'Guarda un correo de contacto y gana +2 Nitro N₂O. No sustituye el código de recuperación.'}
                     </div>
                 </div>
 
@@ -6800,7 +6869,7 @@ function renderInventoryView() {
                                     <span class="badge-rarity badge-rarity-${def.rarity}">${def.rarity.toUpperCase()}</span>
                                 </div>
                             </div>
-                            <div class="inv-part-cat">${def.category.replace('_', ' ').toUpperCase()} • 💎 WEB3 NFT</div>
+                            <div class="inv-part-cat">${def.category.replace('_', ' ').toUpperCase()} • 💎 PIEZA VIRTUAL</div>
                             <h4 class="inv-part-name">${def.name}</h4>
                             <p class="inv-part-desc">${def.desc || ''}</p>
                             <div class="inv-part-actions">
@@ -8219,8 +8288,8 @@ function openReferralTournamentModal() {
         userCode: 'APEX-TEST', invitedBy: null, email: null, leaderboard: []
     };
 
-    const botUsername = 'argho_racing_test_bot';
-    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=ref_${tData.userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${tData.userCode} para ganar +2 Nitros N₂O (4s de boost) de bienvenida gratis. 🏁🏆`)}`;
+    const botShareBaseUrl = telegramBotShareBaseUrl();
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`${botShareBaseUrl}?startapp=ref_${tData.userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${tData.userCode} para ganar +2 Nitros N₂O (4s de boost) de bienvenida gratis. 🏁🏆`)}`;
 
     modal.innerHTML = `
         <div class="settings-dialog" style="max-width: 680px; width: 95%;">
@@ -8327,7 +8396,7 @@ function openReferralTournamentModal() {
                 <!-- VINCULAR CORREO ELECTRÓNICO -->
                 <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 12px; padding: 12px 14px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-size: 12px; font-weight: 800; color: #38bdf8;">📧 VINCULAR CORREO ELECTRÓNICO (SEGURIDAD WEB3)</span>
+                        <span style="font-size: 12px; font-weight: 800; color: #38bdf8;">📧 VINCULAR CORREO ELECTRÓNICO (CONTACTO)</span>
                         ${tData.email ? `<span style="font-size: 10px; color: #34d399; font-weight: 800;">✔ VINCULADO</span>` : `<span style="font-size: 10px; color: #38bdf8; font-weight: 800;">+2 NITRO N₂O DE REGALO</span>`}
                     </div>
                     <div style="display: flex; gap: 8px;">
@@ -8337,7 +8406,7 @@ function openReferralTournamentModal() {
                         </button>
                     </div>
                     <p style="font-size: 10px; color: #94a3b8; margin: 6px 0 0;">
-                        Recibe notificaciones de finalización de torneos, drops exclusivos y seguridad de tu perfil.
+                        Se guarda como contacto de tu cuenta. No sustituye el código de recuperación.
                     </p>
                 </div>
 
@@ -8383,8 +8452,8 @@ function openReferralTournamentModal() {
 function renderServerReferralModal(modal) {
     const userData = loadNftUserData();
     const userCode = userData.referralCode || 'APEX-CÓDIGO';
-    const botUsername = 'argho_racing_test_bot';
-    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}/game?startapp=ref_${userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${userCode} para ganar +2 Nitros N₂O de bienvenida.`)}`;
+    const botShareBaseUrl = telegramBotShareBaseUrl();
+    const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(`${botShareBaseUrl}?startapp=ref_${userCode}`)}&text=${encodeURIComponent(`🏎️ ¡Únete a mi escudería en APEX MOTORSPORT! Usa mi código ${userCode} para ganar +2 Nitros N₂O de bienvenida.`)}`;
     modal.innerHTML = `
         <div class="settings-dialog" style="max-width: 580px;">
             <div class="settings-header" style="background: linear-gradient(135deg, rgba(236,72,153,0.25), rgba(139,92,246,0.25)); border-bottom: 1px solid rgba(236,72,153,0.4);">
